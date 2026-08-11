@@ -30,11 +30,11 @@
 
 | 항목 | 버전 |
 | --- | --- |
-| Java | 21 (LTS) |
-| Spring Boot | 3.5.16 |
+| Java | 17 (LTS) |
+| Spring Boot | 4.0 |
 | 영속성 | Spring Data JPA (Hibernate) |
 | 동적 쿼리 | QueryDSL 5.1.0 |
-| DB | MySQL 8 |
+| DB | PostgreSQL 18 |
 | 인증 | Spring Security + JWT (jjwt 0.12.6) |
 | API 문서 | springdoc-openapi (Swagger UI) |
 | 엑셀 | Apache POI (취업통계, 운영현황) |
