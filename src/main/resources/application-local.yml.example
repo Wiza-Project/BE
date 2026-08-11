@@ -1,0 +1,11 @@
+# 복사해서 application-local.yml 로 사용하세요 (git 미추적)
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url:
+    username: scms
+    password: CHANGE_ME
+  jpa:
+    hibernate:
+      ddl-auto: update      # 로컬 개발 중에만. 절대 운영에 쓰지 말 것
+    show-sql: true

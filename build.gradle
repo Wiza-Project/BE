@@ -1,0 +1,97 @@
+plugins {
+	id 'java'
+	id 'org.springframework.boot' version '4.0'
+	id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'com.gnagnoohc'
+version = '0.0.1-SNAPSHOT'
+description = '학생통합역량시스템 (Student Competency Management System)'
+
+java {
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(17)
+	}
+}
+
+configurations {
+	compileOnly {
+		extendsFrom annotationProcessor
+	}
+}
+
+repositories {
+	mavenCentral()
+}
+
+dependencies {
+	// ── Web ────────────────────────────────────────────────────────
+	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+	implementation 'org.springframework.boot:spring-boot-starter-validation'
+
+	// ── JPA ────────────────────────────────────────────────────────
+	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+	runtimeOnly 'org.postgresql:postgresql'
+
+	// ── Security ───────────────────────────────────────────────────
+	// 사용자 유형이 학생/교직원/상담사/기업체 4종이라 권한 설계가 처음부터 필요
+	implementation 'org.springframework.boot:spring-boot-starter-security'
+	implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
+	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
+	runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
+
+	// ── QueryDSL ───────────────────────────────────────────────────
+	// 잡매칭 조건 검색, 취업통계 집계, 프로그램 다중 필터에 필수
+	implementation 'com.querydsl:querydsl-jpa:5.1.0:jakarta'
+	annotationProcessor 'com.querydsl:querydsl-apt:5.1.0:jakarta'
+	annotationProcessor 'jakarta.annotation:jakarta.annotation-api'
+	annotationProcessor 'jakarta.persistence:jakarta.persistence-api'
+
+	// ── API 문서 ───────────────────────────────────────────────────
+	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.6'
+
+	// ── 통계/엑셀 (P5100 취업통계조사 생성, 운영현황 다운로드) ──────
+	// 해당 기능 착수 시 주석을 해제
+	// mvnrepository.com 에서 최신 버전을 확인한 뒤 버전을 맞추세요.
+	// implementation 'org.apache.poi:poi-ooxml:5.4.0'
+
+	// ── 수료증 PDF 출력 (P1200) ────────────────────────────────────
+	// implementation 'com.github.librepdf:openpdf:2.0.3'
+
+	// ── 알림 메일 (상담 확정, 승인 결과 통보) ──────────────────────
+	implementation 'org.springframework.boot:spring-boot-starter-mail'
+	implementation 'org.springframework.boot:spring-boot-starter-thymeleaf' // 메일 템플릿용
+
+	// ── 배치 (마일리지 정산, 취업통계 집계) ────────────────────────
+	// 처음부터 넣지 말고 실제로 필요해질 때 주석 해제하세요.
+	// implementation 'org.springframework.boot:spring-boot-starter-batch'
+
+	// ── 개발 편의 ──────────────────────────────────────────────────
+	compileOnly 'org.projectlombok:lombok'
+	annotationProcessor 'org.projectlombok:lombok'
+	developmentOnly 'org.springframework.boot:spring-boot-devtools'
+	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+
+	// ── 테스트 ─────────────────────────────────────────────────────
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+	testImplementation 'org.springframework.security:spring-security-test'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+	testCompileOnly 'org.projectlombok:lombok'
+	testAnnotationProcessor 'org.projectlombok:lombok'
+	testRuntimeOnly 'com.h2database:h2'
+}
+
+def generatedDir = layout.buildDirectory.dir('generated/querydsl')
+tasks.withType(JavaCompile).configureEach {
+	options.generatedSourceOutputDirectory = generatedDir.get().asFile
+	options.compilerArgs << '-parameters'
+	options.encoding = 'UTF-8'
+}
+clean {
+	delete generatedDir
+}
+
+tasks.named('test') {
+	useJUnitPlatform()
+}
+ㅓ라아ㅓ라

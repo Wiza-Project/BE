@@ -1,0 +1,63 @@
+spring:
+  application:
+    name: scms
+  profiles:
+    active: local
+  config:
+    import: optional:classpath:application-secret.yml
+
+  jpa:
+    hibernate:
+      ddl-auto: validate      # 운영 안전값. 로컬 프로필에서만 update
+    properties:
+      hibernate:
+        format_sql: true
+        default_batch_fetch_size: 100
+    open-in-view: false       # 지연로딩 예외를 서비스 계층에서 잡기 위함
+
+  servlet:
+    multipart:
+      # 포트폴리오/이력서/증빙자료 업로드 고려
+      max-file-size: 20MB
+      max-request-size: 60MB
+
+  jackson:
+    property-naming-strategy: LOWER_CAMEL_CASE
+    default-property-inclusion: non_null
+    serialization:
+      write-dates-as-timestamps: false
+    time-zone: Asia/Seoul
+
+server:
+  port: 8080
+  servlet:
+    encoding:
+      charset: UTF-8
+      force: true
+
+app:
+  cors:
+    allowed-origins: http://localhost:5173
+  jwt:
+    access-token-validity-seconds: 1800       # 30분
+    refresh-token-validity-seconds: 1209600   # 14일
+    # secret 은 application-secret.yml 에 작성
+  file:
+    upload-dir: ${user.home}/scms-uploads
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info
+
+logging:
+  level:
+    com.gnagnoohc.scms: debug
+    org.hibernate.orm.jdbc.bind: trace   # 쿼리 파라미터 확인 (개발용)

@@ -1,0 +1,47 @@
+HELP.md
+.gradle
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### 보안: 실제 키/비밀번호는 절대 커밋 금지 ###
+*.key
+*.pem
+.env
+**/application-secret.yml
+**/application-local.yml
+**/application-prod.yml
+
+### 로그 / 업로드 산출물 ###
+logs/
+*.log
+uploads/
+files/
+
+### IntelliJ IDEA ###
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+
+### Eclipse / STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+bin/
+
+### VS Code ###
+.vscode/
+
+### Claude Code ###
+.claude/
+
+### OS ###
+.DS_Store
+Thumbs.db
