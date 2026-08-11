@@ -1,6 +1,6 @@
 plugins {
 	id 'java'
-	id 'org.springframework.boot' version '4.0'
+	id 'org.springframework.boot' version '4.0.7'
 	id 'io.spring.dependency-management' version '1.1.7'
 }
 
@@ -48,7 +48,8 @@ dependencies {
 	annotationProcessor 'jakarta.persistence:jakarta.persistence-api'
 
 	// ── API 문서 ───────────────────────────────────────────────────
-	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.6'
+	// 2.x는 Spring Boot 3용, 3.x부터 Boot 4를 지원합니다. 버전을 반드시 맞추세요.
+	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3'
 
 	// ── 통계/엑셀 (P5100 취업통계조사 생성, 운영현황 다운로드) ──────
 	// 해당 기능 착수 시 주석을 해제
@@ -94,4 +95,3 @@ clean {
 tasks.named('test') {
 	useJUnitPlatform()
 }
-ㅓ라아ㅓ라

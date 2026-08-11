@@ -30,11 +30,11 @@
 
 | 항목 | 버전 |
 | --- | --- |
-| Java | 21 (LTS) |
-| Spring Boot | 3.5.16 |
+| Java | 17 (LTS) |
+| Spring Boot | 4.0.7 |
 | 영속성 | Spring Data JPA (Hibernate) |
 | 동적 쿼리 | QueryDSL 5.1.0 |
-| DB | MySQL 8 |
+| DB | PostgreSQL 18 |
 | 인증 | Spring Security + JWT (jjwt 0.12.6) |
 | API 문서 | springdoc-openapi (Swagger UI) |
 | 엑셀 | Apache POI (취업통계, 운영현황) |
@@ -47,13 +47,15 @@
 
 ### 1. 사전 준비
 
-JDK 21 설치 후 MySQL에 DB 생성.
+JDK 17 설치 후 PostgreSQL에 DB 생성.
 
 ```sql
-CREATE DATABASE scmsdb DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER 'scms'@'%' IDENTIFIED BY '원하는비밀번호';
-GRANT ALL PRIVILEGES ON scmsdb.* TO 'scms'@'%';
-FLUSH PRIVILEGES;
+CREATE DATABASE scmsdb;
+CREATE USER scms WITH PASSWORD '원하는비밀번호';
+GRANT ALL PRIVILEGES ON DATABASE scmsdb TO scms;
+-- PostgreSQL 15+ 는 스키마 권한도 별도로 필요합니다
+\c scmsdb
+GRANT ALL ON SCHEMA public TO scms;
 ```
 
 ### 2. 설정 파일 복사
