@@ -2,9 +2,9 @@
 spring:
   datasource:
     driver-class-name: org.postgresql.Driver
-    url: jdbc:postgresql://localhost:5432/scmsdb
-    username: scms
-    password: CHANGE_ME
+    url: jdbc:postgresql://localhost:YOUR_DB_PORT_ENV/YOUR_DB_NAME_ENV
+    username: YOUR_DB_USER_ENV
+    password: YOUR_DB_PASSWORD_ENV
   jpa:
     hibernate:
       ddl-auto: update      # 로컬 개발 중에만. 절대 운영에 쓰지 말 것

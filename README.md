@@ -28,18 +28,21 @@
 
 ## 기술 스택
 
-| 항목 | 버전 |
-| --- | --- |
-| Java | 17 (LTS) |
-| Spring Boot | 4.0.7 |
-| 영속성 | Spring Data JPA (Hibernate) |
-| 동적 쿼리 | QueryDSL 5.1.0 |
-| DB | PostgreSQL 18 |
+| 항목 | 버전                                  |
+| --- |-------------------------------------|
+| Java | 17 (LTS)                            |
+| Spring Boot | 4.0.7                               |
+| 영속성 | Spring Data JPA (Hibernate)         |
+| 동적 쿼리 | QueryDSL 5.1.0                      |
+| DB | PostgreSQL 16 (pgvector)            |
+| 컨테이너 | Docker Desktop / Docker Compose (개발 DB 가동) |
 | 인증 | Spring Security + JWT (jjwt 0.12.6) |
-| API 문서 | springdoc-openapi (Swagger UI) |
-| 엑셀 | Apache POI (취업통계, 운영현황) |
-| PDF | OpenPDF (수료증 출력) |
-| 빌드 | Gradle 8.14.5 |
+| API 문서 | springdoc-openapi (Swagger UI)      |
+| 엑셀 | Apache POI (취업통계, 운영현황)             |
+| PDF | OpenPDF (수료증 출력)                    |
+| 빌드 | Gradle 8.14.5                       |
+
+로컬 개발용 DB(PostgreSQL + pgvector)는 프로젝트 루트의 `docker-compose.yml`을 통해 컨테이너 환경으로 실행됩니다.
 
 ---
 
@@ -47,41 +50,56 @@
 
 ### 1. 사전 준비
 
-JDK 17 설치 후 PostgreSQL에 DB 생성.
+- JDK 17 이상 설치
+- Docker Desktop 실행(엔진이 켜진 상태인지 확인해주세요)
 
-```sql
-CREATE DATABASE scmsdb;
-CREATE USER scms WITH PASSWORD '원하는비밀번호';
-GRANT ALL PRIVILEGES ON DATABASE scmsdb TO scms;
--- PostgreSQL 15+ 는 스키마 권한도 별도로 필요합니다
-\c scmsdb
-GRANT ALL ON SCHEMA public TO scms;
-```
+### 2. 설정 파일 복사 및 환경 세팅
 
-### 2. 설정 파일 복사
-
-두 파일 모두 `.gitignore` 대상입니다.
+세 파일 모두 `.gitignore` 대상입니다.
 
 ```bash
 cd src/main/resources
 cp application-local.yml.example application-local.yml
 cp application-secret.yml.example application-secret.yml
-```
 
+# env파일은 백엔드 최상위 루트 디렉토리에서 실행하세요
+cp .env.example .env
+```
+생성된 .env 파일 내 DB 정보 및 JWT secret 키 값을 본인 환경에 맞춰 적어주세요.
 JWT secret은 32바이트 이상이어야 합니다.
 
 ```bash
 openssl rand -base64 48
 ```
 
-### 3. 실행
+docker Desktop이 실행 중이라면, 아래 명령으로 로컬 DB 컨테이너를 실행합니다.
+
+```bash
+# docker-compose.yml이 있는 루트 디렉토리에서 실행하세요
+docker compose up -d
+```
+
+Docker Desktop의 Containers 탭에서 컨테이너 실행 되었는지 확인해주세요.
+
+### 3. DB 툴 연결 방법
+DB 관리 툴에서 가동된 Docker DB에 접속해주세요.
+
+PostgreSQL
+Host: localhost
+Port: 본인의 .env에 설정한 DB_PORT (예: 5433, 5334, 5678 등 중복되지 않으면서도 본인이 편한 port)
+User: .env에 작성한 DB_USER
+Password: .env에 작성한 DB_PASSWORD
+Database: .env에 작성한 DB_NAME
+Test Connection (연결 테스트) 클릭하여 연결 확인 후 적용
+
+### 4. 실행
 
 ```bash
 ./gradlew bootRun
 ```
 
-- 연결 확인: http://localhost:8080/api/auth/ping
-- Swagger UI: http://localhost:8080/swagger-ui.html
+- 연결 확인: http://localhost:${SERVER_PORT}OR9999/api/auth/ping
+- Swagger UI: http://localhost:${SERVER_PORT}OR9999/swagger-ui.html
 
 ---
 
@@ -219,5 +237,5 @@ public void handle(ProgramCompletedEvent event) { ... }
 
 ### 보안
 
-- 어떤 키/비밀번호도 `application.yml`에 직접 쓰지 않습니다.
+- 어떤 키/비밀번호도 `application.yml, application-secret.yml`에 직접 쓰지 않습니다. `.env`파일에 적어주세요. 
 - 커밋 전 `git diff --staged`로 비밀값 포함 여부를 확인하세요.

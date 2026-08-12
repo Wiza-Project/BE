@@ -29,7 +29,7 @@ spring:
     time-zone: Asia/Seoul
 
 server:
-  port: 8080
+  port: ${SERVER_PORT:9999}  # .env에 SERVER_PORT 사용자 지정하거나, 없으면 기본값 9999 사용
   servlet:
     encoding:
       charset: UTF-8
