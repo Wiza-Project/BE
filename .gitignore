@@ -9,6 +9,7 @@ build/
 *.key
 *.pem
 .env
+*.env
 **/application-secret.yml
 **/application-local.yml
 **/application-prod.yml
