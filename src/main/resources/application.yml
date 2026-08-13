@@ -24,8 +24,6 @@ spring:
   jackson:
     property-naming-strategy: LOWER_CAMEL_CASE
     default-property-inclusion: non_null
-    serialization:
-      write-dates-as-timestamps: false
     time-zone: Asia/Seoul
 
 server:
