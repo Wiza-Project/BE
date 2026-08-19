@@ -89,6 +89,7 @@ dependencies {
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 	testCompileOnly 'org.projectlombok:lombok'
 	testAnnotationProcessor 'org.projectlombok:lombok'
+	testImplementation 'com.h2database:h2'
 }
 
 def generatedDir = layout.buildDirectory.dir('generated/querydsl')
