@@ -14,16 +14,11 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 
-/**
- * Authorization: Bearer <token> 헤더를 읽어 SecurityContext 를 채웁니다.
- */
 @Component
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
-
     private static final String HEADER = "Authorization";
     private static final String PREFIX = "Bearer ";
-
     private final JwtTokenProvider jwtTokenProvider;
     private final AuthUserService authUserService;
 
@@ -32,32 +27,26 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                     @NonNull HttpServletResponse response,
                                     @NonNull FilterChain filterChain)
             throws ServletException, IOException {
-
         String token = resolveToken(request);
-
         if (token != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-            Long userId = jwtTokenProvider.parseUserId(token);
+            Integer userId = jwtTokenProvider.parseUserId(token);
             if (userId != null) {
                 try {
                     UserDetails userDetails = authUserService.loadUserById(userId);
-                    UsernamePasswordAuthenticationToken authentication =
+                    SecurityContextHolder.getContext().setAuthentication(
                             new UsernamePasswordAuthenticationToken(
-                                    userDetails, null, userDetails.getAuthorities());
-                    SecurityContextHolder.getContext().setAuthentication(authentication);
-                } catch (Exception e) {
+                                    userDetails, null, userDetails.getAuthorities()));
+                } catch (Exception exception) {
                     SecurityContextHolder.clearContext();
                 }
             }
         }
-
         filterChain.doFilter(request, response);
     }
 
     private String resolveToken(HttpServletRequest request) {
         String header = request.getHeader(HEADER);
-        if (header != null && header.startsWith(PREFIX)) {
-            return header.substring(PREFIX.length());
-        }
-        return null;
+        return header != null && header.startsWith(PREFIX)
+                ? header.substring(PREFIX.length()) : null;
     }
 }
