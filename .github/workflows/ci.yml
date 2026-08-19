@@ -30,3 +30,6 @@ jobs:
 
       - name: Test
         run: ./gradlew test
+  # 공통 보안 사항 [.github repo]의 yml 호출 용도. 절대 삭제하지 마세요.
+  security-scan:
+    uses: Wiza-Project/.github/.github/workflows/reusable-security.yml@main
