@@ -1,13 +1,23 @@
 package com.gnagnoohc.scms.domain.program.repository;
 
 import com.gnagnoohc.scms.domain.program.entity.ProgramApplication;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
+import java.util.Optional;
 
 public interface ProgramApplicationRepository extends JpaRepository<ProgramApplication, Integer> {
+
+    // 신청 건 row에 비관적 락을 걸어 조회한다. 승인/반려 처리 중 같은 신청 건이 동시에
+    // 이중 처리되는 경쟁 조건을 막기 위해 사용한다 (ExtracurricularProgramRepository.findByIdForUpdate와 동일 패턴).
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT a FROM ProgramApplication a WHERE a.applicationId = :applicationId")
+    Optional<ProgramApplication> findByIdForUpdate(@Param("applicationId") Integer applicationId);
 
     // ── 여기부터 "참여 신청 접수(Create)" 기능 ──────────────────────────────────────
     //
@@ -46,4 +56,28 @@ public interface ProgramApplicationRepository extends JpaRepository<ProgramAppli
           AND a.applicationStatus = 'WAITLISTED'
         """)
     Integer findMaxWaitlistOrderByProgramId(@Param("programId") Integer programId);
+
+    // ── 여기부터 "승인/반려 처리(Update)" 기능 ──────────────────────────────────────
+    //
+    // ProgramApplication 엔티티는 setter/빌더가 없어(insertApplication과 같은 이유),
+    // 승인/반려 상태 변경도 네이티브 UPDATE로 처리한다 (ExtracurricularProgramRepository.updateProgram 참고).
+    @Modifying(clearAutomatically = true)
+    @Query(value = """
+        UPDATE program_application
+        SET application_status = :applicationStatus,
+            decision_reason = :decisionReason,
+            processed_by = :processedBy,
+            processed_at = :now,
+            updated_at = :now
+        WHERE application_id = :applicationId
+        """, nativeQuery = true)
+    int updateDecision(@Param("applicationId") Integer applicationId,
+                        // "APPROVED" 또는 "REJECTED".
+                        @Param("applicationStatus") String applicationStatus,
+                        // 반려 사유. 승인이면 null.
+                        @Param("decisionReason") String decisionReason,
+                        // 처리한 운영부서 담당자의 user_id. 클라이언트가 보낸 값이 아니라
+                        // 서비스 계층에서 "지금 로그인한 사용자"의 id를 그대로 전달한다.
+                        @Param("processedBy") Integer processedBy,
+                        @Param("now") Instant now);
 }
