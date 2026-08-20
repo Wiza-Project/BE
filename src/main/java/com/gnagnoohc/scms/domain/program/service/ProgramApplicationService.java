@@ -1,7 +1,6 @@
 package com.gnagnoohc.scms.domain.program.service;
 
 import com.gnagnoohc.scms.domain.program.dto.ProgramApplyResponseDTO;
-import com.gnagnoohc.scms.domain.program.entity.ApplicationStatus;
 import com.gnagnoohc.scms.domain.program.entity.ExtracurricularProgram;
 import com.gnagnoohc.scms.domain.program.repository.ExtracurricularProgramRepository;
 import com.gnagnoohc.scms.domain.program.repository.ProgramApplicationRepository;

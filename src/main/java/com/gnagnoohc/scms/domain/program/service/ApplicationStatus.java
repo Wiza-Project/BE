@@ -1,4 +1,4 @@
-package com.gnagnoohc.scms.domain.program.entity;
+package com.gnagnoohc.scms.domain.program.service;
 
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
