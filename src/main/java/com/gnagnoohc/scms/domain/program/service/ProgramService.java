@@ -201,6 +201,41 @@ public class ProgramService {
                 .toList();
     }
 
+    // ── "삭제(Delete)" 기능 ──────────────────────────────────────────────
+    //
+    // 프로그램 하나를 삭제하는 메서드. 매개변수 2개의 의미:
+    //   programId     : 삭제할 프로그램의 PK (URL 경로에서 옴)
+    //   currentUserId : 지금 로그인해서 이 요청을 보낸 사용자의 id (인증 정보에서 옴, 클라이언트가 위조 불가)
+    public void delete(Integer programId, Integer currentUserId) {
+
+        // (a) 존재 확인 ------------------------------------------------------------
+        ExtracurricularProgram program = programRepository.findById(programId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PROGRAM_NOT_FOUND));
+
+        // (b) 소유자 확인 ------------------------------------------------------------
+        // update()와 동일한 이유로, 등록자 본인이 아니면 403 Forbidden.
+        if (!program.getManagerUser().getUserId().equals(currentUserId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+
+        // (c) 삭제 가능한 상태인지 확인 ------------------------------------------------
+        // update()의 (c)단계와 완전히 같은 조건: 모집중(현재 시각이 모집 종료 시각 이전)일 때만 허용한다.
+        Instant now = Instant.now();
+        if (!now.isBefore(program.getRecruitmentEndsAt())) {
+            throw new BusinessException(ErrorCode.PROGRAM_NOT_DELETABLE);
+        }
+
+        // (d) 실제 DB 반영 -------------------------------------------------------------
+        // deletedRows가 0이라는 것은, (c)에서 모집중임을 확인한 "직후"부터 실제 DELETE 문이 실행되기
+        // "직전" 사이의 아주 짧은 순간에 모집 종료 시각이 지나버렸다는 뜻이다(native DELETE 쿼리의
+        // WHERE 절에도 recruitment_ends_at > :now 조건이 걸려있기 때문). 이런 경우도 결국
+        // "지금은 삭제할 수 없는 상태"이므로 (c)와 같은 에러를 던진다.
+        int deletedRows = programRepository.deleteProgram(programId, now);
+        if (deletedRows == 0) {
+            throw new BusinessException(ErrorCode.PROGRAM_NOT_DELETABLE);
+        }
+    }
+
     // FK 제약 위반 메시지에는 PostgreSQL이 항상 위반된 컬럼명을 "Key (컬럼명)=(값) is not present..." 형식으로 담아준다.
     // 제약 조건 이름(마이그레이션에서 어떻게 명명했는지)에 기대지 않고 컬럼명 문자열만으로 어떤 참조 값이 없는지 구분한다.
     private BusinessException resolveForeignKeyViolation(DataIntegrityViolationException e) {
