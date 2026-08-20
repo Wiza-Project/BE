@@ -20,4 +20,16 @@ public class Competency extends BaseTimeEntity {
     @Column(name = "display_order", nullable = false) private Integer displayOrder;
     @Column(name = "is_active", nullable = false) private boolean active = true;
     @Column(name = "created_by", nullable = false) private Integer createdBy;
+
+    public static Competency createTop(String competencyCode, String competencyName, String englishName,
+                                        String description, Integer displayOrder, Integer createdBy) {
+        Competency competency = new Competency();
+        competency.competencyCode = competencyCode;
+        competency.competencyName = competencyName;
+        competency.englishName = englishName;
+        competency.description = description;
+        competency.displayOrder = displayOrder;
+        competency.createdBy = createdBy;
+        return competency;
+    }
 }
