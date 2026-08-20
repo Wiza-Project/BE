@@ -244,11 +244,13 @@ public class ProgramService {
 
     // ── "목록 조회(List)" 기능 ──────────────────────────────────────────────
     //
-    // 학생이 프로그램 목록 페이지에서 탐색할 때 쓰는 조회. 상태/이름 키워드로 걸러 페이지 단위로 내려준다.
-    // status/keyword가 둘 다 없으면 전체 프로그램을 페이지네이션해서 반환한다.
+    // 학생이 프로그램 목록 페이지에서 탐색할 때 쓰는 조회. 상태/이름 키워드/연계 핵심역량으로 걸러 페이지 단위로 내려준다.
+    // 셋 다 없으면 전체 프로그램을 페이지네이션해서 반환한다. 정렬(신규순=createdAt, 마감임박순=recruitmentEndsAt 등)은
+    // 이 메서드가 아니라 Pageable의 sort 쿼리 파라미터로 이미 처리된다(ExtracurricularProgramRepositoryImpl.resolveOrderSpecifiers 참고).
     @Transactional(readOnly = true)
-    public PageResponse<ProgramListItemResponseDTO> list(ProgramStatus status, String keyword, Pageable pageable) {
-        Page<ExtracurricularProgram> page = programRepository.search(status, keyword, pageable);
+    public PageResponse<ProgramListItemResponseDTO> list(ProgramStatus status, String keyword, Integer competencyId,
+                                                           Pageable pageable) {
+        Page<ExtracurricularProgram> page = programRepository.search(status, keyword, competencyId, pageable);
         Map<Integer, Long> applicantCounts = countApplicantsByProgram(page.getContent());
         return PageResponse.from(page.map(program ->
                 ProgramListItemResponseDTO.from(program, applicantCounts.getOrDefault(program.getProgramId(), 0L))));
@@ -259,8 +261,10 @@ public class ProgramService {
     // list()와 거의 같지만, 로그인한 staff 본인이 담당(managerUser)한 프로그램으로만 범위를 좁힌다.
     @Transactional(readOnly = true)
     public PageResponse<ProgramAdminListItemResponseDTO> listMine(Integer managerUserId, ProgramStatus status,
-                                                                    String keyword, Pageable pageable) {
-        Page<ExtracurricularProgram> page = programRepository.searchByManager(managerUserId, status, keyword, pageable);
+                                                                    String keyword, Integer competencyId,
+                                                                    Pageable pageable) {
+        Page<ExtracurricularProgram> page = programRepository.searchByManager(
+                managerUserId, status, keyword, competencyId, pageable);
         Map<Integer, Long> applicantCounts = countApplicantsByProgram(page.getContent());
         return PageResponse.from(page.map(program -> ProgramAdminListItemResponseDTO.from(
                 program, applicantCounts.getOrDefault(program.getProgramId(), 0L))));

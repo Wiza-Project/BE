@@ -46,9 +46,11 @@ public class ProgramController {
     public ApiResponse<PageResponse<ProgramAdminListItemResponseDTO>> list(
             @RequestParam(required = false) ProgramStatus status,
             @RequestParam(required = false) String keyword,
+            // 연계 핵심역량 id로 필터링. 생략하면 역량으로 거르지 않는다.
+            @RequestParam(required = false) Integer competencyId,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable,
             @AuthenticationPrincipal AuthUser authUser) {
-        return ApiResponse.ok(programService.listMine(authUser.getId(), status, keyword, pageable));
+        return ApiResponse.ok(programService.listMine(authUser.getId(), status, keyword, competencyId, pageable));
     }
 
     @Operation(summary = "프로그램 등록", description = "비교과 프로그램을 신규 등록합니다 (모집중 상태로 시작)")

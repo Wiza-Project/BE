@@ -26,18 +26,19 @@ public class ExtracurricularProgramRepositoryImpl implements ExtracurricularProg
     private final JPAQueryFactory queryFactory;
 
     @Override
-    public Page<ExtracurricularProgram> search(ProgramStatus status, String keyword, Pageable pageable) {
-        return search(null, status, keyword, pageable);
+    public Page<ExtracurricularProgram> search(ProgramStatus status, String keyword, Integer competencyId,
+                                                 Pageable pageable) {
+        return search(null, status, keyword, competencyId, pageable);
     }
 
     @Override
     public Page<ExtracurricularProgram> searchByManager(Integer managerUserId, ProgramStatus status, String keyword,
-                                                          Pageable pageable) {
-        return search(managerUserId, status, keyword, pageable);
+                                                          Integer competencyId, Pageable pageable) {
+        return search(managerUserId, status, keyword, competencyId, pageable);
     }
 
     private Page<ExtracurricularProgram> search(Integer managerUserId, ProgramStatus status, String keyword,
-                                                  Pageable pageable) {
+                                                  Integer competencyId, Pageable pageable) {
         QExtracurricularProgram program = extracurricularProgram;
 
         BooleanBuilder condition = new BooleanBuilder();
@@ -49,6 +50,9 @@ public class ExtracurricularProgramRepositoryImpl implements ExtracurricularProg
         }
         if (StringUtils.hasText(keyword)) {
             condition.and(program.programName.containsIgnoreCase(keyword));
+        }
+        if (competencyId != null) {
+            condition.and(program.competency.competencyId.eq(competencyId));
         }
 
         // operatingUnitCode/programTypeCode/competency는 목록 DTO 매핑에서 라벨(codeName/competencyName)로
