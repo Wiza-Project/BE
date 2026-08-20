@@ -16,6 +16,11 @@ import java.util.List;
  * TODO: sql파일 따로 생성완료
  * 공통코드 초기 시드 데이터.
  *
+ * local 프로필에서만 동작합니다. "!prod"로 하면 테스트 실행 시(활성 프로필이 없어
+ * !prod에도 해당됨) 이 러너가 H2 테스트 DB에 대고 Postgres 전용 문법
+ * (ON CONFLICT)을 실행하려다 ScmsApplicationTests의 컨텍스트 로딩이 깨집니다
+ * (JdbcSQLSyntaxErrorException) — 실제로 겪은 문제라 남겨둡니다.
+ *
  * ── 부서(DEPARTMENT) 코드 ────────────────────────────────────────
  * global.common.enums.Department 라는 고정 Java enum이 문서(package-info.java)에
  * 언급돼 있었지만 실제로는 구현된 적이 없고, UserSummaryResponse 주석에 "department는
@@ -24,7 +29,7 @@ import java.util.List;
  */
 @Slf4j
 @Component
-@Profile("!prod")
+@Profile("local")
 @RequiredArgsConstructor
 public class CommonCodeSeeder implements CommandLineRunner {
 
