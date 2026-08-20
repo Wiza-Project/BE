@@ -80,4 +80,35 @@ public interface ProgramApplicationRepository extends JpaRepository<ProgramAppli
                         // 서비스 계층에서 "지금 로그인한 사용자"의 id를 그대로 전달한다.
                         @Param("processedBy") Integer processedBy,
                         @Param("now") Instant now);
+
+    // ── 여기부터 "출석 기반 이수 판정" 기능 ──────────────────────────────────────
+    //
+    // ExtracurricularProgramRepository.transitionOperatingToClosed와 같은 스타일의 벌크 native UPDATE.
+    // 프로그램이 종료(CLOSED)된 뒤, 승인(APPROVED)된 신청 건마다 "출석한 회차 수 / 전체 회차 수"를
+    // 계산해 프로그램의 이수 기준 출석률(completion_rate)과 비교한 결과를 completion_status에 채운다.
+    //
+    // WHERE 절의 "pa.completion_status IS NULL" 조건 덕분에 이 쿼리는 멱등하다: 매분 실행돼도
+    // 이미 판정된 건은 다시 건드리지 않고, 방금 CLOSED로 전환된 프로그램의 아직 판정되지 않은
+    // 승인 건만 새로 판정한다 (ProgramStatusScheduler의 시각 비교 멱등성과 같은 원리).
+    // 회차가 하나도 없는 프로그램은 NULLIF(...,0)이 NULL이 되어 비교식이 거짓으로 평가되므로 FAILED로 처리된다.
+    @Modifying(clearAutomatically = true)
+    @Query(value = """
+        UPDATE program_application pa
+        SET completion_status = CASE
+                WHEN (SELECT COUNT(*) FROM program_attendance att
+                      JOIN program_session ps ON ps.program_session_id = att.program_session_id
+                      WHERE att.application_id = pa.application_id
+                        AND att.attendance_status = 'PRESENT')::numeric
+                     / NULLIF((SELECT COUNT(*) FROM program_session ps2 WHERE ps2.program_id = pa.program_id), 0) * 100
+                     >= ep.completion_rate
+                THEN 'COMPLETED' ELSE 'FAILED' END,
+            completed_at = :now,
+            updated_at = :now
+        FROM extracurricular_program ep
+        WHERE pa.program_id = ep.program_id
+          AND ep.program_status = 'CLOSED'
+          AND pa.application_status = 'APPROVED'
+          AND pa.completion_status IS NULL
+        """, nativeQuery = true)
+    int judgeCompletion(@Param("now") Instant now);
 }

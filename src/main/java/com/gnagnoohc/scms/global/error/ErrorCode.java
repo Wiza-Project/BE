@@ -60,6 +60,11 @@ public enum ErrorCode {
     APPLICATION_NOT_FOUND(HttpStatus.NOT_FOUND, "P011", "신청 내역을 찾을 수 없습니다."),
     // 이미 승인 또는 반려 처리된 신청을 다시 승인/반려하려고 할 때 사용하는 에러코드.
     APPLICATION_ALREADY_PROCESSED(HttpStatus.CONFLICT, "P012", "이미 승인 또는 반려 처리된 신청입니다."),
+    PROGRAM_SESSION_NOT_FOUND(HttpStatus.NOT_FOUND, "P013", "프로그램 회차를 찾을 수 없습니다."),
+    // 같은 프로그램에 이미 존재하는 회차 번호로 등록하려고 할 때 사용하는 에러코드.
+    DUPLICATE_SESSION_NO(HttpStatus.CONFLICT, "P014", "이미 등록된 회차 번호입니다."),
+    // 승인되지 않은(APPLIED/WAITLISTED/REJECTED) 신청 건에 출석을 기록하려고 할 때 사용하는 에러코드.
+    APPLICATION_NOT_APPROVED(HttpStatus.BAD_REQUEST, "P015", "승인된 신청 건이 아니어서 출석을 기록할 수 없습니다."),
 
     // ── 핵심역량/진단 ─────────────────────────────────────────────
     COMPETENCY_NOT_FOUND(HttpStatus.NOT_FOUND, "Q001", "핵심역량 정보를 찾을 수 없습니다."),
