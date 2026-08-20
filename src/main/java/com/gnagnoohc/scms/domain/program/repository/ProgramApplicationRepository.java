@@ -111,4 +111,33 @@ public interface ProgramApplicationRepository extends JpaRepository<ProgramAppli
           AND pa.completion_status IS NULL
         """, nativeQuery = true)
     int judgeCompletion(@Param("now") Instant now);
+
+    // ── 여기부터 "취소(Update)" 기능 ────────────────────────────────────────────
+    //
+    // updateDecision과 같은 이유로 native UPDATE를 쓴다. 다만 취소 가능 여부는 신청 건 하나만으로
+    // 판단할 수 없고(모집 종료 시각은 program 테이블에 있음) program_application과
+    // extracurricular_program을 조인해야 하므로, judgeCompletion과 같은 UPDATE ... FROM ... 구문을 쓴다.
+    //
+    // WHERE 절에 "p.recruitment_ends_at > :now"와 "pa.application_status IN (...)" 두 조건을
+    // 함께 걸어둔 이유: 서비스 계층(ProgramApplicationService.cancel)에서 먼저 같은 조건을 확인하지만,
+    // 그 확인과 이 UPDATE 실행 사이의 짧은 순간에 모집이 종료되거나 다른 요청이 먼저 처리(승인/반려/취소)했을
+    // 수 있다(ExtracurricularProgramRepository.updateProgram과 동일한 경쟁 조건 방지 패턴).
+    // 이 경우 UPDATE는 0개의 row에만 영향을 주고, 서비스 계층은 영향받은 row 수로 실패를 알아챈다.
+    @Modifying(clearAutomatically = true)
+    @Query(value = """
+        UPDATE program_application pa
+        SET application_status = 'CANCELLED',
+            cancellation_reason = :reason,
+            canceled_at = :now,
+            updated_at = :now
+        FROM extracurricular_program p
+        WHERE pa.application_id = :applicationId
+          AND pa.program_id = p.program_id
+          AND p.recruitment_ends_at > :now
+          AND pa.application_status IN ('APPLIED', 'WAITLISTED', 'APPROVED')
+        """, nativeQuery = true)
+    int updateCancellation(@Param("applicationId") Integer applicationId,
+                            // 취소 사유. 학생이 입력하지 않았으면 null.
+                            @Param("reason") String reason,
+                            @Param("now") Instant now);
 }

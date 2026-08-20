@@ -13,7 +13,9 @@ public enum ApplicationStatus {
     // 운영부서가 참여를 승인한 신청.
     APPROVED("승인"),
     // 운영부서가 참여를 반려한 신청.
-    REJECTED("반려");
+    REJECTED("반려"),
+    // 학생이 스스로 취소한 신청.
+    CANCELLED("취소");
 
     private final String label;
 }
