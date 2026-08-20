@@ -1,5 +1,6 @@
 package com.gnagnoohc.scms.domain.competency.controller;
 
+import com.gnagnoohc.scms.domain.competency.dto.CompetencyActiveStatusRequest;
 import com.gnagnoohc.scms.domain.competency.dto.CompetencyDisplayOrderRequest;
 import com.gnagnoohc.scms.domain.competency.dto.CompetencyRegisterRequest;
 import com.gnagnoohc.scms.domain.competency.dto.CompetencyResponse;
@@ -44,5 +45,14 @@ public class CompetencyController {
             @Valid @RequestBody CompetencyDisplayOrderRequest request
     ) {
         return ApiResponse.ok(competencyService.changeDisplayOrder(competencyId, request));
+    }
+
+    @Operation(summary = "사용여부 관리", description = "핵심역량의 활성/비활성 상태를 전환합니다. 응답 이력이 있는 역량도 삭제 대신 비활성 처리로 과거 기록을 보존합니다.")
+    @PatchMapping("/{competencyId}/active-status")
+    public ApiResponse<CompetencyResponse> changeActiveStatus(
+            @PathVariable Integer competencyId,
+            @Valid @RequestBody CompetencyActiveStatusRequest request
+    ) {
+        return ApiResponse.ok(competencyService.changeActiveStatus(competencyId, request));
     }
 }

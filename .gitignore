@@ -46,3 +46,6 @@ bin/
 ### OS ###
 .DS_Store
 Thumbs.db
+
+### Local-only test ###
+src/test/java/com/gnagnoohc/scms/domain/competency/service/CompetencyServiceTest.java

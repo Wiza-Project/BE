@@ -36,4 +36,12 @@ public class Competency extends BaseTimeEntity {
     public void changeDisplayOrder(Integer displayOrder) {
         this.displayOrder = displayOrder;
     }
+
+    public void activate() {
+        this.active = true;
+    }
+
+    public void deactivate() {
+        this.active = false;
+    }
 }
