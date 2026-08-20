@@ -34,4 +34,25 @@ public class MileageTransaction extends BaseCreatedAtEntity {
     @Column(name = "processed_by") private Integer processedBy;
     @Column(name = "transaction_reason", columnDefinition = "text") private String transactionReason;
     @Column(name = "posted_at") private Instant postedAt;
+
+    /** 이수 완료된 비교과 프로그램의 사전 등록 점수로 적립 원장을 생성한다. */
+    public static MileageTransaction earnFromProgramCompletion(
+            ProgramApplication application,
+            Instant postedAt
+    ) {
+        MileagePolicy policy = application.getProgram().getMileagePolicy();
+
+        MileageTransaction transaction = new MileageTransaction();
+        transaction.student = application.getStudent();
+        transaction.mileagePolicy = policy;
+        transaction.competency = policy.getActivityType().getCompetency();
+        transaction.sourceProgramApplication = application;
+        transaction.transactionType = "EARN";
+        transaction.points = policy.getPoints();
+        transaction.transactionStatus = "POSTED";
+        transaction.requestedBy = application.getStudent().getUserId();
+        transaction.transactionReason = "비교과 프로그램 이수 자동 적립";
+        transaction.postedAt = postedAt;
+        return transaction;
+    }
 }
