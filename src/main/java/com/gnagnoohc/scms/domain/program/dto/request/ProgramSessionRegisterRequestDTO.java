@@ -1,4 +1,4 @@
-package com.gnagnoohc.scms.domain.program.dto;
+package com.gnagnoohc.scms.domain.program.dto.request;
 
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;

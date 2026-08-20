@@ -1,9 +1,9 @@
 package com.gnagnoohc.scms.domain.program.controller;
 
-import com.gnagnoohc.scms.domain.program.dto.ProgramApplicationCancelRequestDTO;
-import com.gnagnoohc.scms.domain.program.dto.ProgramApplicationCancelResponseDTO;
-import com.gnagnoohc.scms.domain.program.dto.ProgramApplicationSummaryResponseDTO;
-import com.gnagnoohc.scms.domain.program.dto.ProgramApplyResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.request.ProgramApplicationCancelRequestDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplicationCancelResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplicationSummaryResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplyResponseDTO;
 import com.gnagnoohc.scms.domain.program.service.ProgramApplicationService;
 import com.gnagnoohc.scms.global.common.dto.ApiResponse;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;

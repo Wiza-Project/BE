@@ -1,9 +1,9 @@
 package com.gnagnoohc.scms.domain.program.service;
 
-import com.gnagnoohc.scms.domain.program.dto.ProgramApplicationCancelResponseDTO;
-import com.gnagnoohc.scms.domain.program.dto.ProgramApplicationDecisionResponseDTO;
-import com.gnagnoohc.scms.domain.program.dto.ProgramApplicationSummaryResponseDTO;
-import com.gnagnoohc.scms.domain.program.dto.ProgramApplyResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplicationCancelResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplicationDecisionResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplicationSummaryResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplyResponseDTO;
 import com.gnagnoohc.scms.domain.program.entity.ExtracurricularProgram;
 import com.gnagnoohc.scms.domain.program.entity.ProgramApplication;
 import com.gnagnoohc.scms.domain.program.repository.ExtracurricularProgramRepository;

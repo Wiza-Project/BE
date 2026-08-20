@@ -1,11 +1,11 @@
 package com.gnagnoohc.scms.domain.program.service;
 
-import com.gnagnoohc.scms.domain.program.dto.CompetencyOptionResponseDTO;
-import com.gnagnoohc.scms.domain.program.dto.ProgramListItemResponseDTO;
-import com.gnagnoohc.scms.domain.program.dto.ProgramRegisterRequestDTO;
-import com.gnagnoohc.scms.domain.program.dto.ProgramRegisterResponseDTO;
-import com.gnagnoohc.scms.domain.program.dto.ProgramUpdateRequestDTO;
-import com.gnagnoohc.scms.domain.program.dto.ProgramUpdateResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.CompetencyOptionResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramListItemResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.request.ProgramRegisterRequestDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramRegisterResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.request.ProgramUpdateRequestDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramUpdateResponseDTO;
 import com.gnagnoohc.scms.domain.program.entity.ExtracurricularProgram;
 import com.gnagnoohc.scms.domain.program.entity.ProgramStatus;
 import com.gnagnoohc.scms.domain.program.repository.CompetencyOptionRepository;

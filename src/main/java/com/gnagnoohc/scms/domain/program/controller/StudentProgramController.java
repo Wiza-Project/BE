@@ -1,6 +1,6 @@
 package com.gnagnoohc.scms.domain.program.controller;
 
-import com.gnagnoohc.scms.domain.program.dto.ProgramListItemResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramListItemResponseDTO;
 import com.gnagnoohc.scms.domain.program.entity.ProgramStatus;
 import com.gnagnoohc.scms.domain.program.service.ProgramService;
 import com.gnagnoohc.scms.global.common.dto.ApiResponse;

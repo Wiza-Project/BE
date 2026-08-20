@@ -1,7 +1,7 @@
 package com.gnagnoohc.scms.domain.program.controller;
 
-import com.gnagnoohc.scms.domain.program.dto.ProgramApplicationDecisionResponseDTO;
-import com.gnagnoohc.scms.domain.program.dto.ProgramApplicationRejectRequestDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplicationDecisionResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.request.ProgramApplicationRejectRequestDTO;
 import com.gnagnoohc.scms.domain.program.service.ProgramApplicationService;
 import com.gnagnoohc.scms.global.common.dto.ApiResponse;
 import com.gnagnoohc.scms.global.security.AuthUser;

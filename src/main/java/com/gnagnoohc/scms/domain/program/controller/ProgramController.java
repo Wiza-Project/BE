@@ -1,10 +1,10 @@
 package com.gnagnoohc.scms.domain.program.controller;
 
-import com.gnagnoohc.scms.domain.program.dto.CompetencyOptionResponseDTO;
-import com.gnagnoohc.scms.domain.program.dto.ProgramRegisterRequestDTO;
-import com.gnagnoohc.scms.domain.program.dto.ProgramRegisterResponseDTO;
-import com.gnagnoohc.scms.domain.program.dto.ProgramUpdateRequestDTO;
-import com.gnagnoohc.scms.domain.program.dto.ProgramUpdateResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.CompetencyOptionResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.request.ProgramRegisterRequestDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramRegisterResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.request.ProgramUpdateRequestDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramUpdateResponseDTO;
 import com.gnagnoohc.scms.domain.program.service.ProgramService;
 import com.gnagnoohc.scms.global.common.dto.ApiResponse;
 import com.gnagnoohc.scms.global.security.AuthUser;

@@ -1,7 +1,7 @@
 package com.gnagnoohc.scms.domain.program.service;
 
-import com.gnagnoohc.scms.domain.program.dto.ProgramAttendanceRecordRequestDTO;
-import com.gnagnoohc.scms.domain.program.dto.ProgramAttendanceResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.request.ProgramAttendanceRecordRequestDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramAttendanceResponseDTO;
 import com.gnagnoohc.scms.domain.program.entity.ProgramApplication;
 import com.gnagnoohc.scms.domain.program.entity.ProgramSession;
 import com.gnagnoohc.scms.domain.program.repository.ProgramApplicationRepository;
