@@ -56,8 +56,9 @@ public class ProgramService {
             );
         } catch (DataIntegrityViolationException e) {
             // 존재하지 않는 operatingUnitCodeId/programTypeCodeId/competencyId/mileagePolicyId를 넣으면
-            // DB가 FK 제약 위반으로 이 예외를 던진다. 그대로 흘리면 500이 나가므로 400으로 바꿔서 응답한다.
-            throw new BusinessException(ErrorCode.INVALID_INPUT, "존재하지 않는 분류/역량/마일리지 정책입니다.");
+            // DB가 FK 제약 위반으로 이 예외를 던진다. 그대로 흘리면 500이 나가므로,
+            // 위반된 컬럼을 구분해 어떤 참조 값이 없는지에 맞는 404로 바꿔서 응답한다.
+            throw resolveForeignKeyViolation(e);
         }
 
         return new ProgramRegisterResponseDTO(
@@ -72,6 +73,25 @@ public class ProgramService {
                 request.operationEndsAt(),
                 now
         );
+    }
+
+    // FK 제약 위반 메시지에는 PostgreSQL이 항상 위반된 컬럼명을 "Key (컬럼명)=(값) is not present..." 형식으로 담아준다.
+    // 제약 조건 이름(마이그레이션에서 어떻게 명명했는지)에 기대지 않고 컬럼명 문자열만으로 어떤 참조 값이 없는지 구분한다.
+    private BusinessException resolveForeignKeyViolation(DataIntegrityViolationException e) {
+        String detail = e.getMostSpecificCause().getMessage();
+        if (detail.contains("operating_unit_code_id")) {
+            return new BusinessException(ErrorCode.OPERATING_UNIT_NOT_FOUND);
+        }
+        if (detail.contains("program_type_code_id")) {
+            return new BusinessException(ErrorCode.PROGRAM_CATEGORY_NOT_FOUND);
+        }
+        if (detail.contains("competency_id")) {
+            return new BusinessException(ErrorCode.COMPETENCY_NOT_FOUND);
+        }
+        if (detail.contains("mileage_policy_id")) {
+            return new BusinessException(ErrorCode.MILEAGE_POLICY_NOT_FOUND);
+        }
+        return new BusinessException(ErrorCode.INVALID_INPUT, "요청 값이 올바르지 않습니다.");
     }
 
     // 세 가지 논리적 제약을 검사한다: 모집 시작<종료, 운영 시작<종료, 모집 종료<=운영 시작(모집이 끝나야 운영이 시작됨).
