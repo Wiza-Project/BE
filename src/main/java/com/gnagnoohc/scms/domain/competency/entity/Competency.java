@@ -32,4 +32,8 @@ public class Competency extends BaseTimeEntity {
         competency.createdBy = createdBy;
         return competency;
     }
+
+    public void changeDisplayOrder(Integer displayOrder) {
+        this.displayOrder = displayOrder;
+    }
 }

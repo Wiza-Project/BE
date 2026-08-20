@@ -1,5 +1,6 @@
 package com.gnagnoohc.scms.domain.competency.controller;
 
+import com.gnagnoohc.scms.domain.competency.dto.CompetencyDisplayOrderRequest;
 import com.gnagnoohc.scms.domain.competency.dto.CompetencyRegisterRequest;
 import com.gnagnoohc.scms.domain.competency.dto.CompetencyResponse;
 import com.gnagnoohc.scms.domain.competency.service.CompetencyService;
@@ -10,10 +11,14 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 @Tag(name = "Competency", description = "핵심역량 관리")
 @RestController
@@ -30,5 +35,14 @@ public class CompetencyController {
             @AuthenticationPrincipal AuthUser authUser
     ) {
         return ApiResponse.ok(competencyService.registerCompetency(request, authUser.getId()));
+    }
+
+    @Operation(summary = "축순서 지정", description = "핵심역량의 축순서(결과 화면 방사형 차트에 표시될 위치)를 지정합니다. 이미 다른 역량이 쓰고 있는 순서면 그 역량과 서로 교환됩니다.")
+    @PatchMapping("/{competencyId}/display-order")
+    public ApiResponse<List<CompetencyResponse>> changeDisplayOrder(
+            @PathVariable Integer competencyId,
+            @Valid @RequestBody CompetencyDisplayOrderRequest request
+    ) {
+        return ApiResponse.ok(competencyService.changeDisplayOrder(competencyId, request));
     }
 }
