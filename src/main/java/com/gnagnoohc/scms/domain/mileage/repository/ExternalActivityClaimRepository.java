@@ -30,6 +30,7 @@ public interface ExternalActivityClaimRepository extends JpaRepository<ExternalA
             Pageable pageable
     );
 
+    /** 최근 외부활동 신청 쿼리의 조회 전용 결과다. */
     interface ClaimSummaryProjection {
         Integer getExternalClaimId();
 

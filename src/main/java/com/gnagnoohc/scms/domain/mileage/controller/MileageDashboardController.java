@@ -13,10 +13,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+/** 학생이 자신의 마일리지 현황과 최근 활동을 조회하는 API를 제공한다. */
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/students/mileage")
-/** 학생이 자신의 마일리지 현황과 최근 활동을 조회하는 API를 제공한다. */
 public class MileageDashboardController {
 
     private final MileageDashboardService mileageDashboardService;

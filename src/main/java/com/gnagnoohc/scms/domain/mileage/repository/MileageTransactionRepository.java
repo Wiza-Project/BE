@@ -147,12 +147,14 @@ public interface MileageTransactionRepository extends JpaRepository<MileageTrans
             Pageable pageable
     );
 
+    /** 카테고리별 점수 집계 쿼리의 조회 전용 결과다. */
     interface CategorySummaryProjection {
         String getCategoryCode();
 
         BigDecimal getPoints();
     }
 
+    /** 핵심역량별 점수 집계 쿼리의 조회 전용 결과다. */
     interface CompetencySummaryProjection {
         Integer getCompetencyId();
 
@@ -161,6 +163,7 @@ public interface MileageTransactionRepository extends JpaRepository<MileageTrans
         BigDecimal getPoints();
     }
 
+    /** 최근 거래 원장 쿼리의 조회 전용 결과다. */
     interface TransactionSummaryProjection {
         Integer getTransactionId();
 
@@ -175,6 +178,7 @@ public interface MileageTransactionRepository extends JpaRepository<MileageTrans
         Instant getOccurredAt();
     }
 
+    /** 학기별 적립 추이 쿼리의 조회 전용 결과다. */
     interface SemesterTrendProjection {
         Integer getAcademicYear();
 

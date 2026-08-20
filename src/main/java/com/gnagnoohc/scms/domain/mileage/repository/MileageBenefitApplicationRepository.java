@@ -24,6 +24,7 @@ public interface MileageBenefitApplicationRepository extends JpaRepository<Milea
             @Param("benefitPolicyIds") Collection<Integer> benefitPolicyIds
     );
 
+    /** 정책별 신청 상태만 전달하는 조회 전용 결과다. */
     interface ApplicationStatusProjection {
         Integer getBenefitPolicyId();
 
