@@ -18,7 +18,7 @@ import java.time.Instant;
 // 아래 필드에는 일부러 넣지 않은 값들이 있다.
 //   - managerUserId(등록 담당자) : 클라이언트가 마음대로 "이 사람이 등록한 걸로 해줘"라고 위조하지 못하도록,
 //                                요청 항목에서 빼고 서버가 로그인한 사용자(authUser)의 id로 직접 채운다.
-//   - programStatus            : 새로 등록되는 프로그램은 항상 "DRAFT"(초안) 상태로 고정되므로 클라이언트 입력을 받지 않는다.
+//   - programStatus            : 새로 등록되는 프로그램은 항상 "모집중" 상태로 고정되므로 클라이언트 입력을 받지 않는다.
 public record ProgramRegisterRequestDTO(
         // 첨부파일 그룹 id. 포스터 등 이미지가 없을 수도 있으므로 @NotNull을 붙이지 않았다(선택값).
         Integer fileGroupId,
