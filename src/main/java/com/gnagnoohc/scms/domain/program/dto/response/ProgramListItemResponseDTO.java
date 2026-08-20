@@ -10,23 +10,29 @@ public record ProgramListItemResponseDTO(
         String programName,
         String operatingUnitCodeName,
         String programTypeCodeName,
+        String competencyName,
         String programStatus,
         String programStatusLabel,
         Integer capacity,
+        long applicantCount,
+        int remainingCapacity,
         Instant recruitmentStartsAt,
         Instant recruitmentEndsAt,
         Instant operationStartsAt,
         Instant operationEndsAt
 ) {
-    public static ProgramListItemResponseDTO from(ExtracurricularProgram program) {
+    public static ProgramListItemResponseDTO from(ExtracurricularProgram program, long applicantCount) {
         return new ProgramListItemResponseDTO(
                 program.getProgramId(),
                 program.getProgramName(),
                 program.getOperatingUnitCode().getCodeName(),
                 program.getProgramTypeCode().getCodeName(),
+                program.getCompetency().getCompetencyName(),
                 program.getProgramStatus().name(),
                 program.getProgramStatus().getLabel(),
                 program.getCapacity(),
+                applicantCount,
+                Math.max(program.getCapacity() - (int) applicantCount, 0),
                 program.getRecruitmentStartsAt(),
                 program.getRecruitmentEndsAt(),
                 program.getOperationStartsAt(),
