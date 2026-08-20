@@ -6,7 +6,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 
 // 비교과프로그램 "등록" 응답 DTO. 등록이 성공적으로 끝난 뒤 클라이언트(프론트엔드)에게 돌려줄 값들만 담는다.
-// programId(새로 생성된 PK), programStatus(항상 DRAFT), createdAt처럼 요청 DTO엔 없던
+// programId(새로 생성된 PK), programStatus(항상 "모집중"), createdAt처럼 요청 DTO엔 없던
 // "서버가 결정한 값"들이 포함되고, FK id처럼 클라이언트가 이미 알고 있는 값은 응답에서 뺐다.
 public record ProgramRegisterResponseDTO(
         // 새로 등록된 프로그램의 PK. DB가 자동으로 채번한 값이라 등록 전에는 클라이언트가 알 수 없으므로 응답으로 알려준다.
@@ -15,7 +15,7 @@ public record ProgramRegisterResponseDTO(
         // 등록된 프로그램명. 요청으로 받은 값을 그대로 돌려준다.
         String programName,
 
-        // 프로그램 상태. 등록 직후에는 항상 "DRAFT"(초안) 상태로 고정된다.
+        // 프로그램 상태. 등록 직후에는 항상 "모집중" 상태로 고정된다 (한글 라벨로 노출).
         String programStatus,
 
         // 등록된 정원.
