@@ -76,11 +76,11 @@ public interface ExtracurricularProgramRepository extends JpaRepository<Extracur
     // findById로 엔티티를 읽어서 값을 바꾸고 save()하는 방식(JPA dirty checking)을 쓸 수 없다.
     // 그래서 수정도 등록처럼 native UPDATE 쿼리로 직접 DB row를 갱신한다.
     //
-    // WHERE 절에 "program_status = 'DRAFT'" 조건을 함께 걸어둔 이유:
-    //   서비스 계층(ProgramService.update)에서 "지금 이 프로그램이 DRAFT 상태인지"를 먼저 확인하고,
+    // WHERE 절에 "recruitment_ends_at > :now" 조건을 함께 걸어둔 이유:
+    //   서비스 계층(ProgramService.update)에서 "지금 모집중인지(모집 종료 시각이 아직 안 지났는지)"를 먼저 확인하고,
     //   그 다음에 이 UPDATE 쿼리를 실행한다. 그런데 그 "확인"과 "실제 UPDATE 실행" 사이의 아주 짧은 시간에
-    //   다른 요청이 먼저 끼어들어 상태를 바꿔버릴 수도 있다(이런 상황을 경쟁 조건, race condition이라고 부른다).
-    //   그래서 UPDATE 문 자체에도 조건을 걸어두면, 그 사이에 상태가 바뀌었을 경우 이 UPDATE는
+    //   모집 종료 시각이 지나버릴 수도 있다(이런 상황을 경쟁 조건, race condition이라고 부른다).
+    //   그래서 UPDATE 문 자체에도 조건을 걸어두면, 그 사이에 모집이 종료됐을 경우 이 UPDATE는
     //   0개의 row에만 영향을 주고 아무것도 바꾸지 않는다. 서비스 계층은 영향받은 row 수(0인지 아닌지)를 보고
     //   "역시 수정할 수 없는 상태였구나"를 알아챌 수 있다.
     @Modifying(clearAutomatically = true)
@@ -102,7 +102,7 @@ public interface ExtracurricularProgramRepository extends JpaRepository<Extracur
             updated_by = :updatedBy,
             updated_at = :now
         WHERE program_id = :programId
-          AND program_status = 'DRAFT'
+          AND recruitment_ends_at > :now
         """, nativeQuery = true)
     // @Modifying을 붙였다 — UPDATE/DELETE 쿼리는 새로 생성된 값을 돌려주는 게 아니라
     // "몇 개의 row가 실제로 바뀌었는지"만 알면 되므로, 반환 타입을 int(영향받은 row 수)로 받는다.

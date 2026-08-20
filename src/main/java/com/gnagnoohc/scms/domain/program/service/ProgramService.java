@@ -120,10 +120,11 @@ public class ProgramService {
         }
 
         // (c) 수정 가능한 상태인지 확인 ------------------------------------------------
-        // programStatus가 "DRAFT"(아직 모집이 시작되지 않은 초안 상태)일 때만 수정을 허용한다.
-        // 이미 모집이나 운영이 시작된 프로그램의 정보를 마음대로 바꾸면, 이미 신청한 학생들에게
-        // 혼란을 주거나 데이터가 꼬일 수 있기 때문에 막는다.
-        if (!INITIAL_STATUS.equals(program.getProgramStatus())) {
+        // 모집중(현재 시각이 모집 종료 시각 이전)일 때만 수정을 허용한다.
+        // 모집이 종료되면(운영중 이후) 이미 신청한 학생들에게 혼란을 주거나 데이터가 꼬일 수 있기 때문에 막는다.
+        // "지금 이 순간"의 시각을 한 번만 만들어서, 이 판단과 아래 UPDATE 쿼리·응답 DTO에 똑같이 사용한다.
+        Instant now = Instant.now();
+        if (!now.isBefore(program.getRecruitmentEndsAt())) {
             throw new BusinessException(ErrorCode.PROGRAM_NOT_EDITABLE);
         }
 
@@ -135,8 +136,6 @@ public class ProgramService {
         // 요청에 completionRate 값이 없으면(null) 기본값(80)으로 채워준다. register()와 동일한 규칙.
         BigDecimal completionRate = request.completionRate() != null
                 ? request.completionRate() : DEFAULT_COMPLETION_RATE;
-        // "지금 이 순간"의 시각을 한 번만 만들어서, 아래 UPDATE 쿼리와 응답 DTO에 똑같이 사용한다.
-        Instant now = Instant.now();
 
         // (e) 실제 DB 반영 -------------------------------------------------------------
         // updatedRows는 이번 UPDATE 문으로 실제 몇 개의 row가 바뀌었는지를 담는다(보통 0 또는 1).
@@ -167,9 +166,9 @@ public class ProgramService {
             throw resolveForeignKeyViolation(e);
         }
 
-        // updatedRows가 0이라는 것은, (c)에서 DRAFT 상태를 확인한 "직후"부터 실제 UPDATE 문이
-        // 실행되기 "직전" 사이의 아주 짧은 순간에 다른 요청이 먼저 프로그램 상태를 바꿔버렸다는 뜻이다
-        // (native UPDATE 쿼리의 WHERE 절에도 program_status = 'DRAFT' 조건이 걸려있기 때문).
+        // updatedRows가 0이라는 것은, (c)에서 모집중임을 확인한 "직후"부터 실제 UPDATE 문이
+        // 실행되기 "직전" 사이의 아주 짧은 순간에 모집 종료 시각이 지나버렸다는 뜻이다
+        // (native UPDATE 쿼리의 WHERE 절에도 recruitment_ends_at > :now 조건이 걸려있기 때문).
         // 이런 경우도 결국 "지금은 수정할 수 없는 상태"이므로 (c)와 같은 에러를 던진다.
         if (updatedRows == 0) {
             throw new BusinessException(ErrorCode.PROGRAM_NOT_EDITABLE);
