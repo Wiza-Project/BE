@@ -10,8 +10,10 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 
+/** 마일리지 거래 원장을 기준으로 대시보드 집계와 최근 내역을 조회한다. */
 public interface MileageTransactionRepository extends JpaRepository<MileageTransaction, Integer> {
 
+    /** 모든 학기의 확정 거래를 합산해 학생의 누적 마일리지를 조회한다. */
     @Query("""
             select coalesce(sum(t.points), 0)
             from MileageTransaction t
@@ -20,6 +22,7 @@ public interface MileageTransactionRepository extends JpaRepository<MileageTrans
             """)
     BigDecimal sumPostedPointsByStudent(@Param("studentId") Integer studentId);
 
+    /** 선택 학기 또는 연간 정책에 귀속된 확정 거래를 합산한다. */
     @Query("""
             select coalesce(sum(t.points), 0)
             from MileageTransaction t
@@ -35,6 +38,7 @@ public interface MileageTransactionRepository extends JpaRepository<MileageTrans
             @Param("semesterCode") String semesterCode
     );
 
+    /** 확정일이 없는 기존 거래도 생성일을 사용해 마지막 적립 시점을 반환한다. */
     @Query("""
             select max(coalesce(t.postedAt, t.createdAt))
             from MileageTransaction t
@@ -47,6 +51,7 @@ public interface MileageTransactionRepository extends JpaRepository<MileageTrans
      * 정책에 명시적으로 귀속된 학기의 확정 거래만 학기 추이로 사용한다.
      * ALL 정책 거래는 어느 한 학기에 임의로 중복 배정하지 않는다.
      */
+    /** 선택 학기의 확정 적립 점수를 활동 카테고리별로 합산한다. */
     @Query("""
             select p.academicYear as academicYear,
                    p.semesterCode as semesterCode,
@@ -62,6 +67,7 @@ public interface MileageTransactionRepository extends JpaRepository<MileageTrans
             @Param("studentId") Integer studentId
     );
 
+    /** 선택 학기의 확정 적립 점수를 핵심역량별로 합산한다. */
     @Query("""
             select p.activityType.categoryCode as categoryCode,
                    coalesce(sum(t.points), 0) as points

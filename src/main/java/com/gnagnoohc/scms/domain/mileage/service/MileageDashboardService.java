@@ -26,6 +26,7 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
+/** 대시보드 화면에 필요한 마일리지 집계와 정책 진행도를 조합한다. */
 public class MileageDashboardService {
 
     private static final int RECENT_ITEM_LIMIT = 5;
@@ -38,6 +39,10 @@ public class MileageDashboardService {
     private final MileageBenefitApplicationRepository mileageBenefitApplicationRepository;
     private final CompetencyRepository competencyRepository;
 
+    /**
+     * 로그인한 학생의 선택 학기 기준 대시보드 데이터를 생성한다.
+     * 누적 점수는 전체 확정 거래, 학기 점수·분포는 선택 학기에 귀속된 확정 거래를 사용한다.
+     */
     public MileageDashboardResponse getDashboard(
             Integer studentId,
             Integer academicYear,
@@ -87,10 +92,12 @@ public class MileageDashboardService {
         );
     }
 
+    /** 대시보드 외의 화면에서도 사용할 수 있도록 최근 거래 미리보기를 제공한다. */
     public List<MileageDashboardResponse.TransactionSummary> getRecentTransactions(Integer studentId) {
         return getRecentTransactions(studentId, PageRequest.of(0, RECENT_ITEM_LIMIT));
     }
 
+    /** 대시보드 외의 화면에서도 사용할 수 있도록 최근 외부활동 신청 미리보기를 제공한다. */
     public List<MileageDashboardResponse.ClaimSummary> getRecentExternalActivityApplications(
             Integer studentId
     ) {
@@ -99,6 +106,7 @@ public class MileageDashboardService {
                 PageRequest.of(0, RECENT_ITEM_LIMIT));
     }
 
+    /** 외부활동 신청 목록을 화면 전용 응답 모델로 변환한다. */
     private List<MileageDashboardResponse.ClaimSummary> getRecentExternalActivityApplications(
             Integer studentId,
             PageRequest pageRequest
@@ -116,6 +124,7 @@ public class MileageDashboardService {
                 .toList();
     }
 
+    /** 선택 학기에 활성인 인증·장학 정책을 누적 마일리지 기준으로 판정한다. */
     private List<MileageDashboardResponse.BenefitProgress> getBenefitProgress(
             Integer studentId,
             Integer academicYear,
@@ -149,6 +158,7 @@ public class MileageDashboardService {
                 .toList();
     }
 
+    /** 정책별 목표 점수, 부족 점수, 신청 가능 상태를 하나의 응답으로 만든다. */
     private MileageDashboardResponse.BenefitProgress toBenefitProgress(
             com.gnagnoohc.scms.domain.mileage.entity.MileageBenefitPolicy policy,
             BigDecimal cumulativePoints,
@@ -175,6 +185,7 @@ public class MileageDashboardService {
         );
     }
 
+    /** 신청 이력, 누적 점수, 신청 기간 순서로 정책의 현재 상태를 결정한다. */
     private String resolveBenefitProgressStatus(
             com.gnagnoohc.scms.domain.mileage.entity.MileageBenefitPolicy policy,
             BigDecimal shortagePoints,
@@ -196,6 +207,7 @@ public class MileageDashboardService {
         return "ELIGIBLE";
     }
 
+    /** 활성 최상위 핵심역량을 모두 반환해 점수가 0인 역량도 차트에 표시한다. */
     private List<MileageDashboardResponse.CompetencySummary> getCompetencyBreakdown(
             Integer studentId,
             Integer academicYear,
@@ -234,6 +246,7 @@ public class MileageDashboardService {
                 .toList();
     }
 
+    /** 선택 학기까지의 최근 최대 4개 학기 적립 점수를 시간순으로 반환한다. */
     private List<MileageDashboardResponse.SemesterTrendSummary> getSemesterTrend(
             Integer studentId,
             Integer academicYear,
@@ -271,6 +284,7 @@ public class MileageDashboardService {
                 .toList();
     }
 
+    /** 학년도와 학기 코드의 순서로 두 학기를 비교한다. */
     private int comparePeriods(
             MileageDashboardResponse.SemesterTrendSummary first,
             MileageDashboardResponse.SemesterTrendSummary second
@@ -288,6 +302,7 @@ public class MileageDashboardService {
         return first.semesterCode().compareTo(second.semesterCode());
     }
 
+    /** 서로 다른 학기 코드 표기를 차트 정렬을 위한 순서 값으로 변환한다. */
     private int semesterOrder(String semesterCode) {
         return switch (semesterCode.toUpperCase(Locale.ROOT)) {
             case "1", "1ST", "FIRST", "SPRING" -> 1;
@@ -298,6 +313,7 @@ public class MileageDashboardService {
         };
     }
 
+    /** 요청 학기가 실제 개별 학기 형식인지 확인하고 공백을 제거한다. */
     private String validatePeriod(Integer academicYear, String semesterCode) {
         if (academicYear == null || academicYear < 2000 || academicYear > 9999
                 || semesterCode == null || semesterCode.isBlank()) {
@@ -311,6 +327,7 @@ public class MileageDashboardService {
         return normalizedSemesterCode;
     }
 
+    /** 거래 원장 조회 결과를 최근 내역 카드에 필요한 필드만으로 변환한다. */
     private List<MileageDashboardResponse.TransactionSummary> getRecentTransactions(
             Integer studentId,
             PageRequest pageRequest
@@ -328,6 +345,7 @@ public class MileageDashboardService {
                 .toList();
     }
 
+    /** 집계 쿼리 결과가 null일 때 화면 계산에 사용할 0점으로 보정한다. */
     private BigDecimal valueOrZero(BigDecimal value) {
         return value == null ? BigDecimal.ZERO : value;
     }
