@@ -34,11 +34,15 @@ public enum ErrorCode {
     EXPIRED_TOKEN(HttpStatus.UNAUTHORIZED, "A003", "토큰이 만료되었습니다."),
     FORBIDDEN(HttpStatus.FORBIDDEN, "A004", "권한이 없습니다."),
     DEPARTMENT_FORBIDDEN(HttpStatus.FORBIDDEN, "A005", "해당 업무를 수행할 수 있는 부서가 아닙니다."),
+    INVALID_REFRESH_TOKEN(HttpStatus.UNAUTHORIZED, "A006", "세션이 만료되었습니다. 다시 로그인해주세요."),
 
     // ── 사용자 ────────────────────────────────────────────────────
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, "U001", "사용자를 찾을 수 없습니다."),
     DUPLICATE_LOGIN_ID(HttpStatus.CONFLICT, "U002", "이미 사용 중인 아이디입니다."),
     PASSWORD_MISMATCH(HttpStatus.UNAUTHORIZED, "U003", "아이디 또는 비밀번호가 일치하지 않습니다."),
+    ACCOUNT_DORMANT(HttpStatus.FORBIDDEN, "U004", "장기간 로그인 이력이 없어 휴면 계정으로 전환되었습니다. 본인확인 후 휴면 해제가 필요합니다."),
+    ACCOUNT_LOCKED(HttpStatus.FORBIDDEN, "U005", "잠금 처리된 계정입니다. 관리자에게 문의하세요."),
+    ACCOUNT_WITHDRAWN(HttpStatus.FORBIDDEN, "U006", "탈퇴 처리된 계정입니다."),
 
     // ── 비교과프로그램 ────────────────────────────────────────────
     PROGRAM_NOT_FOUND(HttpStatus.NOT_FOUND, "P001", "비교과 프로그램을 찾을 수 없습니다."),
@@ -49,6 +53,8 @@ public enum ErrorCode {
     NOT_COMPLETED(HttpStatus.BAD_REQUEST, "P006", "이수하지 않아 수료증을 발급할 수 없습니다."),
     PROGRAM_INVALID_PERIOD(HttpStatus.BAD_REQUEST, "P007", "모집/운영 기간이 올바르지 않습니다."),
     OPERATING_UNIT_NOT_FOUND(HttpStatus.NOT_FOUND, "P008", "운영 단위 정보를 찾을 수 없습니다."),
+    // 모집이 이미 종료된 프로그램을 수정하려고 할 때 사용하는 에러코드.
+    PROGRAM_NOT_EDITABLE(HttpStatus.BAD_REQUEST, "P009", "모집이 종료된 프로그램은 수정할 수 없습니다."),
 
     // ── 핵심역량/진단 ─────────────────────────────────────────────
     COMPETENCY_NOT_FOUND(HttpStatus.NOT_FOUND, "Q001", "핵심역량 정보를 찾을 수 없습니다."),
