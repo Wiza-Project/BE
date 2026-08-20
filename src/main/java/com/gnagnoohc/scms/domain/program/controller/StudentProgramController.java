@@ -1,5 +1,6 @@
 package com.gnagnoohc.scms.domain.program.controller;
 
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramDetailResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramListItemResponseDTO;
 import com.gnagnoohc.scms.domain.program.entity.ProgramStatus;
 import com.gnagnoohc.scms.domain.program.service.ProgramService;
@@ -12,6 +13,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -36,5 +38,11 @@ public class StudentProgramController {
             // 기본값은 최신 등록순 20건씩.
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
         return ApiResponse.ok(programService.list(status, keyword, pageable));
+    }
+
+    @Operation(summary = "프로그램 상세 조회", description = "프로그램 기본정보, 회차 목록, 신청자 수를 조회합니다")
+    @GetMapping("/{programId}")
+    public ApiResponse<ProgramDetailResponseDTO> getDetail(@PathVariable Integer programId) {
+        return ApiResponse.ok(programService.getDetail(programId));
     }
 }

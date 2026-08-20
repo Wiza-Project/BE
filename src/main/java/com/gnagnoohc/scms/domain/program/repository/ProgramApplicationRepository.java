@@ -11,9 +11,34 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 public interface ProgramApplicationRepository extends JpaRepository<ProgramApplication, Integer> {
+
+    // ── 여기부터 "신청자 수 집계" 기능 (목록/상세 조회에서 공통으로 사용) ──────────────────
+    //
+    // 정원을 차지하는 상태는 APPLIED(정원 내 신청)/APPROVED(승인)뿐이다.
+    // WAITLISTED는 대기이므로 정원 외, REJECTED/CANCELLED는 종결된 상태라 제외한다.
+
+    // 상세 조회 등 단일 프로그램의 신청자 수가 필요할 때 사용.
+    long countByProgram_ProgramIdAndApplicationStatusIn(Integer programId, List<String> statuses);
+
+    // 목록 조회처럼 여러 프로그램의 신청자 수가 한 번에 필요할 때, 프로그램마다 개별 조회하면
+    // N+1이 발생하므로 programId 목록을 받아 한 번의 GROUP BY 쿼리로 집계한다.
+    @Query("""
+        SELECT a.program.programId AS programId, COUNT(a) AS count
+        FROM ProgramApplication a
+        WHERE a.program.programId IN :programIds
+          AND a.applicationStatus IN ('APPLIED', 'APPROVED')
+        GROUP BY a.program.programId
+        """)
+    List<ProgramApplicantCount> countActiveApplicantsByProgramIds(@Param("programIds") List<Integer> programIds);
+
+    interface ProgramApplicantCount {
+        Integer getProgramId();
+        Long getCount();
+    }
 
     // 신청 건 row에 비관적 락을 걸어 조회한다. 승인/반려 처리 중 같은 신청 건이 동시에
     // 이중 처리되는 경쟁 조건을 막기 위해 사용한다 (ExtracurricularProgramRepository.findByIdForUpdate와 동일 패턴).
