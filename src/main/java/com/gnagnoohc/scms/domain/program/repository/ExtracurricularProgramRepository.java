@@ -1,15 +1,29 @@
 package com.gnagnoohc.scms.domain.program.repository;
 
 import com.gnagnoohc.scms.domain.program.entity.ExtracurricularProgram;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Optional;
 
 public interface ExtracurricularProgramRepository extends JpaRepository<ExtracurricularProgram, Integer> {
+
+    // ── 여기부터 "참여 신청 접수" 기능이 사용하는 조회 ──────────────────────────────
+    //
+    // 정원 초과 여부를 확인하고 대기순번을 매기는 작업(ProgramApplicationService.apply)은
+    // "신청자 수 세기 → 정원과 비교 → INSERT"가 하나의 원자적 단위로 처리되어야 한다.
+    // 그렇지 않으면 동시에 신청한 두 학생이 똑같이 "정원 내"로 판단되거나, 같은 대기순번을
+    // 중복으로 받는 경쟁 조건(race condition)이 생긴다. 그래서 이 프로그램 row에
+    // 비관적 락(PESSIMISTIC_WRITE)을 걸어, 같은 프로그램에 대한 동시 신청을 트랜잭션 단위로 직렬화한다.
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT p FROM ExtracurricularProgram p WHERE p.programId = :programId")
+    Optional<ExtracurricularProgram> findByIdForUpdate(@Param("programId") Integer programId);
 
     // ── 여기부터 "등록(Create)" 기능 ──────────────────────────────────────────────
     //

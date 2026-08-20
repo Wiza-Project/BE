@@ -30,7 +30,7 @@
  *   <li>[ ] ProgramCategory — 계층 구조(대분류/중분류)라면 self-reference 또는 depth 컬럼 설계 필요</li>
  *   <li>[ ] CategoryRequest — 부서의 분류체계 요청 + 학생역량센터 승인 ({@code ApprovalStatus} 재사용)</li>
  *   <li>[ ] Program — 모집 인원, 신청 기간, 운영 기간, 운영부서, 부여 마일리지</li>
- *   <li>[ ] ProgramApplication — 학생 참여신청 ({@code ApprovalStatus} 재사용)</li>
+ *   <li>[x] ProgramApplication — 학생 참여신청 (정원 초과 시 대기순번 자동 부여). 참여승인/거절 단계는 미구현 ({@code ApprovalStatus} 재사용 예정)</li>
  *   <li>[ ] ProgramResult — 이수 여부, 출석/성과 기록</li>
  *   <li>[ ] 수료증 PDF 생성 (openpdf). 대학 로고·직인 이미지 필요</li>
  *   <li>[ ] <b>이수 확정 시 마일리지 자동 적립</b> — mileage 패키지를 직접 호출하지 말고
