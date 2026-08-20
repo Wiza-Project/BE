@@ -1,5 +1,6 @@
 package com.gnagnoohc.scms.domain.competency.service;
 
+import com.gnagnoohc.scms.domain.competency.dto.CompetencyActiveStatusRequest;
 import com.gnagnoohc.scms.domain.competency.dto.CompetencyDisplayOrderRequest;
 import com.gnagnoohc.scms.domain.competency.dto.CompetencyRegisterRequest;
 import com.gnagnoohc.scms.domain.competency.dto.CompetencyResponse;
@@ -64,5 +65,19 @@ public class CompetencyService {
         Competency swapped = conflicting.get();
         swapped.changeDisplayOrder(previousOrder);
         return List.of(CompetencyResponse.from(competency), CompetencyResponse.from(swapped));
+    }
+
+    // 응답 이력이 있는 역량도 삭제 대신 비활성 처리로 과거 기록을 보존하므로, 삭제가 아닌 사용여부 전환만 제공한다.
+    public CompetencyResponse changeActiveStatus(Integer competencyId, CompetencyActiveStatusRequest request) {
+        Competency competency = competencyRepository.findById(competencyId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.COMPETENCY_NOT_FOUND));
+
+        if (request.active()) {
+            competency.activate();
+        } else {
+            competency.deactivate();
+        }
+
+        return CompetencyResponse.from(competency);
     }
 }
