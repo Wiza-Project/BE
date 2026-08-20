@@ -12,7 +12,10 @@ import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 import java.time.Instant;
 
-/** POSTED 거래의 합이 잔액이며 정정은 원행 변경 대신 반대 부호의 역분개로 기록한다. */
+/**
+ * 학생별 마일리지 적립·차감 원장을 기록한다.
+ * POSTED 거래의 합이 잔액이며 정정은 원행 변경 대신 반대 부호의 역분개로 기록한다.
+ */
 @Entity @Getter @Table(name = "mileage_transaction")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class MileageTransaction extends BaseCreatedAtEntity {

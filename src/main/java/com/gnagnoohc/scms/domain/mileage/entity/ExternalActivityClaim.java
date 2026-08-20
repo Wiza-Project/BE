@@ -15,6 +15,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 
+/** 학생이 증빙 파일과 함께 제출한 외부활동 마일리지 신청을 관리한다. */
 @Entity @Getter @Table(name = "external_activity_claim")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ExternalActivityClaim extends BaseTimeEntity {

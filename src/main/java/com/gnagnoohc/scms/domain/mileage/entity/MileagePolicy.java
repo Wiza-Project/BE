@@ -12,6 +12,7 @@ import org.hibernate.type.SqlTypes;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
+/** 활동 유형별·학기별 마일리지 적립 점수와 적용 기간을 관리한다. */
 @Entity @Getter
 @Table(name = "mileage_policy", uniqueConstraints = @UniqueConstraint(
         name = "uq_mileage_policy_activity_period_version",
