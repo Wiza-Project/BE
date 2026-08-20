@@ -146,4 +146,32 @@ public interface ExtracurricularProgramRepository extends JpaRepository<Extracur
     int deleteProgram(@Param("programId") Integer programId,
                        // 삭제 실행 시각. 이 값보다 recruitment_ends_at이 이후여야(아직 모집중이어야) 삭제된다.
                        @Param("now") Instant now);
+
+    // ── 여기부터 "모집 마감에 따른 상태 자동 전환" 기능 ──────────────────────────────
+    //
+    // ProgramStatusScheduler가 주기적으로 호출하는 벌크 UPDATE. 특정 program_id 하나가 아니라
+    // 조건에 맞는 모든 row를 한 번에 갱신하므로, insertProgram/updateProgram/deleteProgram과 달리
+    // WHERE 절에 program_id가 없다.
+
+    // 모집중(DRAFT) 상태이면서 모집 마감 시각이 지난 프로그램을 전부 운영중(OPERATING)으로 전환한다.
+    @Modifying(clearAutomatically = true)
+    @Query(value = """
+        UPDATE extracurricular_program
+        SET program_status = 'OPERATING',
+            updated_at = :now
+        WHERE program_status = 'DRAFT'
+          AND recruitment_ends_at <= :now
+        """, nativeQuery = true)
+    int transitionRecruitingToOperating(@Param("now") Instant now);
+
+    // 운영중(OPERATING) 상태이면서 운영 종료 시각이 지난 프로그램을 전부 종료(CLOSED)로 전환한다.
+    @Modifying(clearAutomatically = true)
+    @Query(value = """
+        UPDATE extracurricular_program
+        SET program_status = 'CLOSED',
+            updated_at = :now
+        WHERE program_status = 'OPERATING'
+          AND operation_ends_at <= :now
+        """, nativeQuery = true)
+    int transitionOperatingToClosed(@Param("now") Instant now);
 }
