@@ -32,4 +32,17 @@ public class Competency extends BaseTimeEntity {
         competency.createdBy = createdBy;
         return competency;
     }
+
+    public void changeDisplayOrder(Integer displayOrder) {
+        this.displayOrder = displayOrder;
+    }
+
+    // 삭제는 지원하지 않음 — 응답 이력 보존을 위해 비활성 처리만 함
+    public void activate() {
+        this.active = true;
+    }
+
+    public void deactivate() {
+        this.active = false;
+    }
 }

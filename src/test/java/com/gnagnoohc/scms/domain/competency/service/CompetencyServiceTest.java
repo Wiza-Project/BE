@@ -1,5 +1,6 @@
 package com.gnagnoohc.scms.domain.competency.service;
 
+import com.gnagnoohc.scms.domain.competency.dto.CompetencyActiveStatusRequest;
 import com.gnagnoohc.scms.domain.competency.dto.CompetencyRegisterRequest;
 import com.gnagnoohc.scms.domain.competency.dto.CompetencyResponse;
 import com.gnagnoohc.scms.domain.competency.entity.Competency;
@@ -11,6 +12,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -49,5 +52,25 @@ class CompetencyServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.COMPETENCY_LIMIT_EXCEEDED);
+    }
+
+    @Test
+    void changeActiveStatus_deactivatesCompetency() {
+        Competency competency = Competency.createTop("C1", "문제해결역량", "Problem Solving", "설명", 1, 1);
+        when(competencyRepository.findById(1)).thenReturn(Optional.of(competency));
+
+        CompetencyResponse response = competencyService.changeActiveStatus(1, new CompetencyActiveStatusRequest(false));
+
+        assertThat(response.active()).isFalse();
+    }
+
+    @Test
+    void changeActiveStatus_whenNotFound_throwsNotFound() {
+        when(competencyRepository.findById(999)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> competencyService.changeActiveStatus(999, new CompetencyActiveStatusRequest(false)))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.COMPETENCY_NOT_FOUND);
     }
 }

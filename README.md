@@ -11,18 +11,41 @@
 
 프로세스 흐름도의 5개 파트를 그대로 패키지로 옮겼습니다.
 
-| Proc.ID | 프로세스 | Owner | 패키지 |
-| --- | --- | --- | --- |
-| P1100 | 비교과프로그램 등록 | 학생역량센터 | `domain/program` |
-| P1200 | 비교과프로그램 운영 | 비교과운영부서 | `domain/program` |
-| P2100 | 핵심역량정보 등록 | 학생역량센터 | `domain/competency` |
-| P2200 | 진단검사 실시 | 학생역량센터 | `domain/competency` |
-| P3100 | 상담준비 / 상담실시 | 학생역량센터 | `domain/counsel` |
-| P4100 | 마일리지 항목관리·실적등록 | 학생역량센터 | `domain/mileage` |
-| P5100 | 구인/구직 잡매칭 및 이력관리 | 취창업지원과 | `domain/career` |
+| 프로세스 | Owner | 패키지 |
+| --- | --- | --- |
+| 비교과프로그램 등록 | 학생역량센터 | `domain/program` |
+| 비교과프로그램 운영 | 비교과운영부서 | `domain/program` |
+| 핵심역량정보 등록 | 학생역량센터 | `domain/competency` |
+| 진단검사 실시 | 학생역량센터 | `domain/competency` |
+| 상담준비 / 상담실시 | 학생역량센터 | `domain/counsel` |
+| 마일리지 항목관리·실적등록 | 학생역량센터 | `domain/mileage` |
+| 구인/구직 잡매칭 및 이력관리 | 취창업지원과 | `domain/career` |
 
 각 패키지의 `package-info.java`에 해당 프로세스의 흐름도와 구현 체크리스트가 들어 있습니다.
 **작업 시작 전에 반드시 읽어보세요.**
+
+---
+
+## 공통코드
+
+여러 도메인이 공유하는 드롭다운/옵션 값은 `common_code` 테이블 하나로 관리합니다.
+`GET /api/common-codes?groupCode={그룹코드}`로 조회하면 활성 코드만 `sortOrder` 순으로 내려줍니다
+(로그인만 하면 역할 무관하게 조회 가능). `code`(문자열)만 안정적인 값이고 `codeId`는 환경마다
+다를 수 있으니, FK로 넘길 `codeId`는 항상 이 API로 그때그때 조회해서 쓰세요 — 하드코딩 금지.
+
+코드값은 접두어+100단위 형식입니다(나중에 세분류를 중간에 끼워넣을 여유를 두기 위함).
+
+| 그룹코드 (groupCode) | 설명 | 코드 예시 |
+| --- | --- | --- |
+| `PROGRAM_TYPE` | 비교과프로그램 유형. `ExtracurricularProgram.programTypeCodeId`가 참조 | `PT100` 학습, `PT200` 공모전, `PT300` 진로창업, `PT400` 심리상담, `PT500` 사회봉사, `PT600` 국제화 |
+| `DEPARTMENT` | 부서/운영 단위. `AppUser.departmentCode`, `ExtracurricularProgram.operatingUnitCodeId`가 참조 | `D100` 학생역량센터, `D200` 비교과운영부서, `D300` 진로심리상담센터, `D400` 취창업지원과 |
+| `ACADEMIC_YEAR` | 학년도. FK는 아니고(각 엔티티는 스칼라 Integer로 저장) 드롭다운 선택지 기준값 | `2024`~`2027` |
+| `SEMESTER` | 학기. FK는 아니고(각 엔티티는 스칼라 String으로 저장) 드롭다운 선택지 기준값 | `SPRING` 1학기, `SUMMER` 여름학기, `FALL` 2학기, `WINTER` 겨울학기 |
+
+초기 시드는 `CommonCodeSeeder`(local 프로필, 앱 기동 시 자동)와 `docs/ddl/2026-08-20_common_code_seed.sql`
+(운영 반영용, 수동 실행) 양쪽에 있습니다 — 그룹/코드를 추가·변경하면 **두 곳 다** 같이 고치세요
+(자동 동기화 아님). "상담유형"/"마일리지 활동유형"은 각자 전용 테이블(`counseling_type`,
+`mileage_activity_type`)이 있어 여기 포함하지 않았습니다.
 
 ---
 
