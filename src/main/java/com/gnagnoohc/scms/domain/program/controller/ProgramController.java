@@ -13,6 +13,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -21,7 +22,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-@Tag(name = "Program", description = "비교과프로그램 등록/수정")
+@Tag(name = "Program", description = "비교과프로그램 등록/수정/삭제")
 @RestController
 @RequestMapping("/api/admin/programs")
 @RequiredArgsConstructor
@@ -59,5 +60,17 @@ public class ProgramController {
             @AuthenticationPrincipal AuthUser authUser) {
         // authUser.getId()를 그대로 서비스에 넘겨서, 소유자 검증(본인이 등록한 프로그램인지)을 서비스 계층에서 수행하게 한다.
         return ApiResponse.ok(programService.update(programId, request, authUser.getId()));
+    }
+
+    @Operation(summary = "프로그램 삭제", description = "모집중인 비교과 프로그램을 삭제합니다 (등록자 본인만 가능)")
+    // HTTP DELETE 요청, 즉 "/api/admin/programs/{programId}" 로 오는 요청을 이 메서드가 처리한다.
+    @DeleteMapping("/{programId}")
+    // 삭제에 성공하면 돌려줄 데이터가 없으므로 204(NO_CONTENT)로 응답한다.
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void delete(
+            @PathVariable Integer programId,
+            // 지금 로그인한 사용자 정보. 서비스 계층에서 "이 프로그램을 등록한 사람과 같은 사람인지" 확인하는 데 쓰인다.
+            @AuthenticationPrincipal AuthUser authUser) {
+        programService.delete(programId, authUser.getId());
     }
 }

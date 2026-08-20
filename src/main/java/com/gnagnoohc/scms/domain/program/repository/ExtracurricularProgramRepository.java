@@ -128,4 +128,22 @@ public interface ExtracurricularProgramRepository extends JpaRepository<Extracur
                        @Param("updatedBy") Integer updatedBy,
                        // 이번 수정이 반영된 시각. updated_at 컬럼도 native 쿼리라 auditing을 안 타므로 직접 넣어야 한다.
                        @Param("now") Instant now);
+
+    // ── 여기부터 "삭제(Delete)" 기능 ──────────────────────────────────────────────
+    //
+    // 삭제도 updateProgram과 같은 이유(row 수만 필요, RETURNING 없음)로 @Modifying을 붙인다.
+    // WHERE 절의 "recruitment_ends_at > :now" 조건은 updateProgram과 완전히 같은 이유로 걸어둔다:
+    //   서비스 계층(ProgramService.delete)에서 "지금 모집중인지"를 먼저 확인하고 나서 이 DELETE 쿼리를
+    //   실행하는데, 그 확인과 실제 삭제 실행 사이의 아주 짧은 순간에 모집 종료 시각이 지나버릴 수도 있다
+    //   (race condition). DELETE 문 자체에도 같은 조건을 걸어두면, 그 사이에 모집이 종료됐을 경우
+    //   이 DELETE는 0개의 row에만 영향을 주고 아무것도 지우지 않는다.
+    @Modifying(clearAutomatically = true)
+    @Query(value = """
+        DELETE FROM extracurricular_program
+        WHERE program_id = :programId
+          AND recruitment_ends_at > :now
+        """, nativeQuery = true)
+    int deleteProgram(@Param("programId") Integer programId,
+                       // 삭제 실행 시각. 이 값보다 recruitment_ends_at이 이후여야(아직 모집중이어야) 삭제된다.
+                       @Param("now") Instant now);
 }
