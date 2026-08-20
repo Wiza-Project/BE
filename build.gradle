@@ -102,7 +102,7 @@ tasks.withType(JavaCompile).configureEach {
 sourceSets {
 	main {
 		java {
-			srcDirs += generatedDir
+			srcDirs += [ generatedDir.get().asFile ]
 		}
 	}
 }

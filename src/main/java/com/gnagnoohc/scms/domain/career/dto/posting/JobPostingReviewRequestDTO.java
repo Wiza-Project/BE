@@ -1,11 +1,10 @@
-package com.gnagnoohc.scms.domain.career.dto;
+package com.gnagnoohc.scms.domain.career.dto.posting;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import java.time.OffsetDateTime;
 
 /**
  * 교직원 전용 채용공고 검수(승인/반려) 처리 요청 DTO
