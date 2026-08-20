@@ -49,6 +49,8 @@ public enum ErrorCode {
     NOT_COMPLETED(HttpStatus.BAD_REQUEST, "P006", "이수하지 않아 수료증을 발급할 수 없습니다."),
     PROGRAM_INVALID_PERIOD(HttpStatus.BAD_REQUEST, "P007", "모집/운영 기간이 올바르지 않습니다."),
     OPERATING_UNIT_NOT_FOUND(HttpStatus.NOT_FOUND, "P008", "운영 단위 정보를 찾을 수 없습니다."),
+    // 모집이 이미 종료된 프로그램을 수정하려고 할 때 사용하는 에러코드.
+    PROGRAM_NOT_EDITABLE(HttpStatus.BAD_REQUEST, "P009", "모집이 종료된 프로그램은 수정할 수 없습니다."),
 
     // ── 핵심역량/진단 ─────────────────────────────────────────────
     COMPETENCY_NOT_FOUND(HttpStatus.NOT_FOUND, "Q001", "핵심역량 정보를 찾을 수 없습니다."),
