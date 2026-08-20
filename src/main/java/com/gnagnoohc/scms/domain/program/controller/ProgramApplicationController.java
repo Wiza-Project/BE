@@ -2,15 +2,21 @@ package com.gnagnoohc.scms.domain.program.controller;
 
 import com.gnagnoohc.scms.domain.program.dto.ProgramApplicationCancelRequestDTO;
 import com.gnagnoohc.scms.domain.program.dto.ProgramApplicationCancelResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.ProgramApplicationSummaryResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.ProgramApplyResponseDTO;
 import com.gnagnoohc.scms.domain.program.service.ProgramApplicationService;
 import com.gnagnoohc.scms.global.common.dto.ApiResponse;
+import com.gnagnoohc.scms.global.common.dto.PageResponse;
 import com.gnagnoohc.scms.global.security.AuthUser;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -50,5 +56,13 @@ public class ProgramApplicationController {
             @AuthenticationPrincipal AuthUser authUser) {
         String reason = request != null ? request.reason() : null;
         return ApiResponse.ok(programApplicationService.cancel(programId, applicationId, authUser.getId(), reason));
+    }
+
+    @Operation(summary = "내 신청 현황 조회", description = "로그인한 학생 본인의 프로그램 참여 신청 현황을 최신 신청순으로 페이지 단위 조회합니다.")
+    @GetMapping("/applications")
+    public ApiResponse<PageResponse<ProgramApplicationSummaryResponseDTO>> listMyApplications(
+            @AuthenticationPrincipal AuthUser authUser,
+            @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+        return ApiResponse.ok(programApplicationService.listMyApplications(authUser.getId(), pageable));
     }
 }

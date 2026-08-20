@@ -1,6 +1,7 @@
 package com.gnagnoohc.scms.domain.program.service;
 
 import com.gnagnoohc.scms.domain.program.dto.CompetencyOptionResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.ProgramListItemResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.ProgramRegisterRequestDTO;
 import com.gnagnoohc.scms.domain.program.dto.ProgramRegisterResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.ProgramUpdateRequestDTO;
@@ -9,11 +10,14 @@ import com.gnagnoohc.scms.domain.program.entity.ExtracurricularProgram;
 import com.gnagnoohc.scms.domain.program.entity.ProgramStatus;
 import com.gnagnoohc.scms.domain.program.repository.CompetencyOptionRepository;
 import com.gnagnoohc.scms.domain.program.repository.ExtracurricularProgramRepository;
+import com.gnagnoohc.scms.global.common.dto.PageResponse;
 import com.gnagnoohc.scms.global.common.repository.CommonCodeRepository;
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -47,7 +51,17 @@ public class ProgramService {
     //   request       : 등록할 내용이 담긴 요청 DTO (요청 바디에서 옴)
     //   managerUserId : 지금 로그인해서 이 요청을 보낸 사용자의 id (인증 정보에서 옴, 클라이언트가 위조 불가)
     //                    → 이 값이 그대로 등록 담당자(managerUser)가 된다.
-    public ProgramRegisterResponseDTO register(ProgramRegisterRequestDTO request, Integer managerUserId) {
+    //   departmentCodeId : 로그인한 사용자가 소속된 부서의 CommonCode PK (인증 정보에서 옴, 클라이언트가 위조 불가)
+    //                    → 비교과운영부서(D200) 소속인지 검증하는 데만 쓰인다.
+    public ProgramRegisterResponseDTO register(ProgramRegisterRequestDTO request, Integer managerUserId,
+                                                Integer departmentCodeId) {
+        // (0) 부서 권한 확인 -----------------------------------------------------------
+        // user_type=STAFF 여부는 SecurityConfig의 URL 매칭(hasRole("STAFF"))에서 이미 걸러졌으므로,
+        // 여기서는 그중에서도 소속 부서가 비교과운영부서(D200)인지만 추가로 검증한다.
+        if (!isOperatingDepartment(departmentCodeId)) {
+            throw new BusinessException(ErrorCode.DEPARTMENT_FORBIDDEN);
+        }
+
         // (a) 기간 논리 검증 ----------------------------------------------------------
         // @NotNull 등 형식 검증만으로는 "시작 > 종료"처럼 값들 사이의 논리적 오류를 잡을 수 없어 여기서 별도 검증한다.
         // 검증에 실패하면 validatePeriod 내부에서 예외를 던지므로, 통과했을 때만 아래 코드가 실행된다.
@@ -219,6 +233,16 @@ public class ProgramService {
         );
     }
 
+    // ── "목록 조회(List)" 기능 ──────────────────────────────────────────────
+    //
+    // 학생이 프로그램 목록 페이지에서 탐색할 때 쓰는 조회. 상태/이름 키워드로 걸러 페이지 단위로 내려준다.
+    // status/keyword가 둘 다 없으면 전체 프로그램을 페이지네이션해서 반환한다.
+    @Transactional(readOnly = true)
+    public PageResponse<ProgramListItemResponseDTO> list(ProgramStatus status, String keyword, Pageable pageable) {
+        Page<ExtracurricularProgram> page = programRepository.search(status, keyword, pageable);
+        return PageResponse.from(page.map(ProgramListItemResponseDTO::from));
+    }
+
     // 프로그램 등록 폼의 핵심역량 드롭다운용 옵션 목록. 최상위(하위 역량 없음) + 활성 상태만 노출한다.
     public List<CompetencyOptionResponseDTO> getCompetencyOptions() {
         return competencyOptionRepository.findByParentCompetencyIsNullAndActiveTrueOrderByDisplayOrderAsc()
@@ -260,6 +284,18 @@ public class ProgramService {
         if (deletedRows == 0) {
             throw new BusinessException(ErrorCode.PROGRAM_NOT_DELETABLE);
         }
+    }
+
+    // 로그인한 사용자의 부서 codeId가 비교과운영부서(D200)의 codeId와 같은지 검사한다.
+    // departmentCodeId가 null이면(부서 미배정) 당연히 비교과운영부서가 아니므로 false.
+    private boolean isOperatingDepartment(Integer departmentCodeId) {
+        if (departmentCodeId == null) {
+            return false;
+        }
+        return commonCodeRepository.findByCodeGroupAndActiveTrueOrderBySortOrderAsc(DEPARTMENT_GROUP)
+                .stream()
+                .filter(commonCode -> commonCode.getCode().equals(DEFAULT_DEPARTMENT_CODE))
+                .anyMatch(commonCode -> commonCode.getCodeId().equals(departmentCodeId));
     }
 
     // 요청값이 있으면 그대로 쓰고, 없으면(null) 주어진 그룹에서 defaultCode와 일치하는 CommonCode를 찾아 그 codeId를 대신 쓴다.

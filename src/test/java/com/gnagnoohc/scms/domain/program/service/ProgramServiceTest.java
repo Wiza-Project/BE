@@ -13,12 +13,17 @@ import com.gnagnoohc.scms.global.common.entity.CommonCode;
 import com.gnagnoohc.scms.global.common.repository.CommonCodeRepository;
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
+import com.gnagnoohc.scms.domain.program.dto.ProgramListItemResponseDTO;
+import com.gnagnoohc.scms.global.common.dto.PageResponse;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.lang.reflect.Constructor;
@@ -48,7 +53,10 @@ class ProgramServiceTest {
     ProgramService programService;
 
     @Test
-    void register_setsInitialStatusToDraft_andResponseHasKoreanLabel() {
+    void register_setsInitialStatusToDraft_andResponseHasKoreanLabel() throws Exception {
+        when(commonCodeRepository.findByCodeGroupAndActiveTrueOrderBySortOrderAsc("DEPARTMENT"))
+                .thenReturn(List.of(buildCommonCodeFixture(11, "DEPARTMENT", "D200")));
+
         ArgumentCaptor<String> statusCaptor = ArgumentCaptor.forClass(String.class);
         when(programRepository.insertProgram(
                 any(), any(), any(), any(), any(), any(), any(), any(),
@@ -67,7 +75,7 @@ class ProgramServiceTest {
                 10, null
         );
 
-        ProgramRegisterResponseDTO response = programService.register(request, 100);
+        ProgramRegisterResponseDTO response = programService.register(request, 100, 11);
 
         assertThat(statusCaptor.getValue()).isEqualTo("DRAFT");
         assertThat(response.programStatus()).isEqualTo("모집중");
@@ -99,10 +107,53 @@ class ProgramServiceTest {
                 10, null
         );
 
-        programService.register(request, 100);
+        programService.register(request, 100, 11);
 
         assertThat(operatingUnitCaptor.getValue()).isEqualTo(11);
         assertThat(programTypeCaptor.getValue()).isEqualTo(22);
+    }
+
+    @Test
+    void register_whenDepartmentIsNotOperatingDepartment_throwsDepartmentForbidden() throws Exception {
+        when(commonCodeRepository.findByCodeGroupAndActiveTrueOrderBySortOrderAsc("DEPARTMENT"))
+                .thenReturn(List.of(buildCommonCodeFixture(11, "DEPARTMENT", "D200")));
+
+        Instant recruitmentStartsAt = Instant.now();
+        Instant recruitmentEndsAt = recruitmentStartsAt.plusSeconds(3600);
+        Instant operationStartsAt = recruitmentEndsAt;
+        Instant operationEndsAt = operationStartsAt.plusSeconds(3600);
+
+        ProgramRegisterRequestDTO request = new ProgramRegisterRequestDTO(
+                null, 1, 2, 3, null,
+                "프로그램명", "설명",
+                recruitmentStartsAt, recruitmentEndsAt, operationStartsAt, operationEndsAt,
+                10, null
+        );
+
+        assertThatThrownBy(() -> programService.register(request, 100, 99))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.DEPARTMENT_FORBIDDEN);
+    }
+
+    @Test
+    void register_whenDepartmentCodeIdIsNull_throwsDepartmentForbidden() {
+        Instant recruitmentStartsAt = Instant.now();
+        Instant recruitmentEndsAt = recruitmentStartsAt.plusSeconds(3600);
+        Instant operationStartsAt = recruitmentEndsAt;
+        Instant operationEndsAt = operationStartsAt.plusSeconds(3600);
+
+        ProgramRegisterRequestDTO request = new ProgramRegisterRequestDTO(
+                null, 1, 2, 3, null,
+                "프로그램명", "설명",
+                recruitmentStartsAt, recruitmentEndsAt, operationStartsAt, operationEndsAt,
+                10, null
+        );
+
+        assertThatThrownBy(() -> programService.register(request, 100, null))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.DEPARTMENT_FORBIDDEN);
     }
 
     @Test
@@ -160,6 +211,38 @@ class ProgramServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.PROGRAM_NOT_EDITABLE);
+    }
+
+    @Test
+    void list_mapsSearchResultPageToPageResponseOfListItemDto() throws Exception {
+        CommonCode operatingUnitCode = buildCommonCodeFixture(11, "DEPARTMENT", "D200");
+        ReflectionTestUtils.setField(operatingUnitCode, "codeName", "비교과운영부서");
+        CommonCode programTypeCode = buildCommonCodeFixture(22, "PROGRAM_TYPE", "PT100");
+        ReflectionTestUtils.setField(programTypeCode, "codeName", "학습");
+
+        ExtracurricularProgram program = buildProgramFixture(
+                1, null, Instant.now().plusSeconds(3600), ProgramStatus.DRAFT);
+        ReflectionTestUtils.setField(program, "programName", "프로그램명");
+        ReflectionTestUtils.setField(program, "capacity", 10);
+        ReflectionTestUtils.setField(program, "operatingUnitCode", operatingUnitCode);
+        ReflectionTestUtils.setField(program, "programTypeCode", programTypeCode);
+
+        Pageable pageable = PageRequest.of(0, 20);
+        when(programRepository.search(ProgramStatus.DRAFT, "프로그램", pageable))
+                .thenReturn(new PageImpl<>(List.of(program), pageable, 1));
+
+        PageResponse<ProgramListItemResponseDTO> response =
+                programService.list(ProgramStatus.DRAFT, "프로그램", pageable);
+
+        assertThat(response.totalElements()).isEqualTo(1);
+        assertThat(response.content()).hasSize(1);
+        ProgramListItemResponseDTO item = response.content().get(0);
+        assertThat(item.programId()).isEqualTo(1);
+        assertThat(item.programName()).isEqualTo("프로그램명");
+        assertThat(item.operatingUnitCodeName()).isEqualTo("비교과운영부서");
+        assertThat(item.programTypeCodeName()).isEqualTo("학습");
+        assertThat(item.programStatus()).isEqualTo("DRAFT");
+        assertThat(item.programStatusLabel()).isEqualTo("모집중");
     }
 
     // ExtracurricularProgram은 protected 기본 생성자만 있고 setter/빌더가 없어(네이티브 SQL로만 값을 채우는 구조),
