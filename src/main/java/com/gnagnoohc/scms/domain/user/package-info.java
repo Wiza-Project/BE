@@ -7,12 +7,19 @@
  *
  * <h3>구현 체크리스트</h3>
  * <ul>
- *   <li>[ ] 로그인 / 토큰 재발급 / 로그아웃 API</li>
- *   <li>[ ] <b>계정 생성 경로를 유형별로 결정하세요.</b>
- *           학생·교직원은 학사 시스템 데이터를 받아 일괄 등록하는 경우가 많고,
- *           기업체는 자체 회원가입이 필요합니다. 이 결정이 API 설계를 크게 바꿉니다.</li>
+ *   <li>[x] 로그인 / 토큰 재발급 / 로그아웃 API — {@link com.gnagnoohc.scms.domain.user.controller.AuthController},
+ *           {@link com.gnagnoohc.scms.domain.user.service.AuthService}.
+ *           30분 미활동 자동 로그아웃은 Access 토큰 만료(app.jwt.access-token-validity-seconds)로,
+ *           6개월 이상 미접속 후 로그인 시도 시 휴면 잠금은 AuthService.rejectIfNotLoginable() 로 구현했습니다.
+ *           AppUser 엔티티는 손대지 않고, 상태 변경은 AppUserRepository 의 벌크 업데이트로 처리합니다
+ *           (엔티티에 세터/비즈니스 메서드가 없기 때문 — DormantAccountLocker 주석 참고).</li>
  *   <li>[ ] 비밀번호 정책 / 초기 비밀번호 변경 강제</li>
- *   <li>[ ] Refresh Token 저장 위치 결정 (DB vs Redis vs httpOnly 쿠키)</li>
+ *   <li>[x] Refresh Token 저장 위치 결정 → <b>stateless JWT, httpOnly 쿠키</b>로 결정.
+ *           별도 저장소(DB/Redis) 없음 — 특정 토큰만 골라 폐기(강제 로그아웃 등)는 불가능합니다.
+ *           그런 요구가 생기면 저장소 도입을 재검토하세요.</li>
+ *   <li>[x] 로그인 실패 횟수 기반 계정 잠금 — {@link com.gnagnoohc.scms.domain.user.service.LoginFailureTracker}.
+ *           비밀번호 5회 연속 실패 시 LOCKED 전환. 정상 로그인 성공 시 카운트 초기화(AppUserRepository.recordSuccessfulLogin).
+ *           잠금 해제(관리자 개입) 절차는 휴면 해제와 마찬가지로 범위 밖입니다.</li>
  * </ul>
  */
 package com.gnagnoohc.scms.domain.user;

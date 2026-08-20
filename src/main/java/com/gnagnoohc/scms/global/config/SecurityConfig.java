@@ -1,6 +1,7 @@
 package com.gnagnoohc.scms.global.config;
 
 import com.gnagnoohc.scms.global.security.JwtAuthenticationFilter;
+import com.gnagnoohc.scms.global.security.SecurityResponseHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -36,6 +37,7 @@ public class SecurityConfig {
 
     private final CorsConfigurationSource corsConfigurationSource;
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final SecurityResponseHandler securityResponseHandler;
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -55,6 +57,9 @@ public class SecurityConfig {
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .formLogin(form -> form.disable())
             .httpBasic(basic -> basic.disable())
+            .exceptionHandling(handling -> handling
+                .authenticationEntryPoint(securityResponseHandler)
+                .accessDeniedHandler(securityResponseHandler))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
