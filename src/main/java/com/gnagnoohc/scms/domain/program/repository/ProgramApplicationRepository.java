@@ -40,6 +40,11 @@ public interface ProgramApplicationRepository extends JpaRepository<ProgramAppli
         Long getCount();
     }
 
+    // QR 자기체크인(ProgramAttendanceService.checkInWithQr)에서, "이 학생이 이 프로그램에 낸 신청 건"을
+    // applicationId 없이 (programId, 로그인한 학생 id)만으로 찾을 때 사용한다.
+    // program_id+student_id 조합은 uq_program_application_program_student 유니크 제약이 걸려있어 항상 0건 또는 1건이다.
+    Optional<ProgramApplication> findByProgram_ProgramIdAndStudent_UserId(Integer programId, Integer studentId);
+
     // 신청 건 row에 비관적 락을 걸어 조회한다. 승인/반려 처리 중 같은 신청 건이 동시에
     // 이중 처리되는 경쟁 조건을 막기 위해 사용한다 (ExtracurricularProgramRepository.findByIdForUpdate와 동일 패턴).
     @Lock(LockModeType.PESSIMISTIC_WRITE)
@@ -134,26 +139,85 @@ public interface ProgramApplicationRepository extends JpaRepository<ProgramAppli
     // 이미 판정된 건은 다시 건드리지 않고, 방금 CLOSED로 전환된 프로그램의 아직 판정되지 않은
     // 승인 건만 새로 판정한다 (ProgramStatusScheduler의 시각 비교 멱등성과 같은 원리).
     // 회차가 하나도 없는 프로그램은 NULLIF(...,0)이 NULL이 되어 비교식이 거짓으로 평가되므로 FAILED로 처리된다.
+    //
+    // COMPLETED로 판정되는 순간, 이수번호(certificate_no)도 함께 채번한다. "수료증 발급"이라고 부르지만
+    // 실제로 PDF 등을 만들어 어딘가 저장하는 게 아니라, 이수완료 시 서버가 고유한 이수번호 문자열을
+    // 자동으로 부여해두는 것뿐이다(형식: CERT-연도-programId-applicationId — applicationId 자체가
+    // PK라 이 조합은 항상 유일하다). FAILED로 판정되면 채번하지 않는다(NULL 유지).
+    //
+    // attendanceRate 계산을 completion_status/certificate_no 판정에서 반복하지 않도록 한 번만 계산해 재사용하고
+    // 싶었는데, Postgres의 UPDATE ... FROM 에서는 LATERAL 서브쿼리가 UPDATE 대상 테이블(pa)을 참조할 수 없다
+    // ("invalid reference to FROM-clause entry for table pa") — LATERAL은 FROM 목록의 다른 항목(ep 등)만
+    // 참조 가능하고, UPDATE 대상 row는 그 목록에 속하지 않기 때문이다. 그래서 attendance_rate를 별도 CTE(WITH)로
+    // 먼저 전부 계산해두고, UPDATE에서는 그 결과를 application_id로 평범하게(LATERAL 아닌 일반 조인 조건으로) 붙인다.
     @Modifying(clearAutomatically = true)
     @Query(value = """
+        WITH attendance_rate AS (
+            SELECT pa2.application_id,
+                   (SELECT COUNT(*) FROM program_attendance att
+                    JOIN program_session ps ON ps.program_session_id = att.program_session_id
+                    WHERE att.application_id = pa2.application_id
+                      AND att.attendance_status = 'PRESENT')::numeric
+                 / NULLIF((SELECT COUNT(*) FROM program_session ps2 WHERE ps2.program_id = pa2.program_id), 0) * 100
+                 AS rate
+            FROM program_application pa2
+            WHERE pa2.application_status = 'APPROVED'
+              AND pa2.completion_status IS NULL
+        )
         UPDATE program_application pa
-        SET completion_status = CASE
-                WHEN (SELECT COUNT(*) FROM program_attendance att
-                      JOIN program_session ps ON ps.program_session_id = att.program_session_id
-                      WHERE att.application_id = pa.application_id
-                        AND att.attendance_status = 'PRESENT')::numeric
-                     / NULLIF((SELECT COUNT(*) FROM program_session ps2 WHERE ps2.program_id = pa.program_id), 0) * 100
-                     >= ep.completion_rate
-                THEN 'COMPLETED' ELSE 'FAILED' END,
+        SET completion_status = CASE WHEN calc.rate >= ep.completion_rate THEN 'COMPLETED' ELSE 'FAILED' END,
+            certificate_no = CASE WHEN calc.rate >= ep.completion_rate
+                THEN 'CERT-' || to_char(CAST(:now AS timestamp), 'YYYY') || '-' || pa.program_id || '-' || pa.application_id
+                ELSE NULL END,
+            certificate_issued_at = CASE WHEN calc.rate >= ep.completion_rate THEN CAST(:now AS timestamptz) ELSE NULL END,
             completed_at = :now,
             updated_at = :now
-        FROM extracurricular_program ep
+        FROM extracurricular_program ep, attendance_rate calc
         WHERE pa.program_id = ep.program_id
+          AND pa.application_id = calc.application_id
           AND ep.program_status = 'CLOSED'
           AND pa.application_status = 'APPROVED'
           AND pa.completion_status IS NULL
         """, nativeQuery = true)
     int judgeCompletion(@Param("now") Instant now);
+
+    // ── 여기부터 "스태프용 신청자 목록 조회(Read)" 기능 ──────────────────────────────
+    //
+    // 스태프가 신청관리/이수판정 화면에서 프로그램 하나의 전체 신청자를 조회한다. student는 지연 로딩(LAZY)이고
+    // 응답에 학생 이름/학번이 필요하므로 JOIN FETCH로 N+1을 방지한다(listMyApplications와 같은 이유).
+    // status가 null이면 상태 필터 없이 전체 신청자를 조회한다.
+    @Query(value = """
+        SELECT a FROM ProgramApplication a
+        JOIN FETCH a.student
+        WHERE a.program.programId = :programId
+          AND (:status IS NULL OR a.applicationStatus = :status)
+        """,
+        countQuery = """
+        SELECT COUNT(a) FROM ProgramApplication a
+        WHERE a.program.programId = :programId
+          AND (:status IS NULL OR a.applicationStatus = :status)
+        """)
+    Page<ProgramApplication> findAllByProgramIdAndStatus(@Param("programId") Integer programId,
+                                                           @Param("status") String status, Pageable pageable);
+
+    // ── 여기부터 "만족도 설문 완료 처리(Update)" 기능 ──────────────────────────────
+    //
+    // 개별 문항/응답 내용을 저장하는 기능은 이번 범위에서 제외되었고(저장할 엔티티 자체가 없음),
+    // ProgramApplication.surveyCompleted 플래그만 true로 갱신한다. 승인(APPROVED)된 신청 건만
+    // 제출할 수 있다는 조건을 WHERE 절에도 걸어, 서비스 계층의 확인과 이 UPDATE 사이의 경쟁 조건을 방지한다
+    // (updateDecision/updateCancellation과 같은 패턴).
+    @Modifying(clearAutomatically = true)
+    @Query(value = """
+        UPDATE program_application
+        SET survey_completed = true,
+            updated_at = :now
+        WHERE application_id = :applicationId
+          AND student_id = :studentId
+          AND application_status = 'APPROVED'
+        """, nativeQuery = true)
+    int markSurveyCompleted(@Param("applicationId") Integer applicationId,
+                             @Param("studentId") Integer studentId,
+                             @Param("now") Instant now);
 
     // ── 여기부터 "취소(Update)" 기능 ────────────────────────────────────────────
     //
