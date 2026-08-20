@@ -1,19 +1,25 @@
 package com.gnagnoohc.scms.domain.program.service;
 
-import com.gnagnoohc.scms.domain.program.dto.ProgramRegisterRequestDTO;
-import com.gnagnoohc.scms.domain.program.dto.ProgramRegisterResponseDTO;
-import com.gnagnoohc.scms.domain.program.dto.ProgramUpdateRequestDTO;
-import com.gnagnoohc.scms.domain.program.dto.ProgramUpdateResponseDTO;
+import com.gnagnoohc.scms.domain.competency.entity.Competency;
+import com.gnagnoohc.scms.domain.program.dto.request.ProgramRegisterRequestDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramAdminListItemResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramDetailResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramRegisterResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.request.ProgramUpdateRequestDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramUpdateResponseDTO;
 import com.gnagnoohc.scms.domain.program.entity.ExtracurricularProgram;
+import com.gnagnoohc.scms.domain.program.entity.ProgramSession;
 import com.gnagnoohc.scms.domain.program.entity.ProgramStatus;
 import com.gnagnoohc.scms.domain.program.repository.CompetencyOptionRepository;
 import com.gnagnoohc.scms.domain.program.repository.ExtracurricularProgramRepository;
+import com.gnagnoohc.scms.domain.program.repository.ProgramApplicationRepository;
+import com.gnagnoohc.scms.domain.program.repository.ProgramSessionRepository;
 import com.gnagnoohc.scms.domain.user.entity.AppUser;
 import com.gnagnoohc.scms.global.common.entity.CommonCode;
 import com.gnagnoohc.scms.global.common.repository.CommonCodeRepository;
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
-import com.gnagnoohc.scms.domain.program.dto.ProgramListItemResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramListItemResponseDTO;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -34,7 +40,9 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -48,6 +56,12 @@ class ProgramServiceTest {
 
     @Mock
     CommonCodeRepository commonCodeRepository;
+
+    @Mock
+    ProgramSessionRepository programSessionRepository;
+
+    @Mock
+    ProgramApplicationRepository applicationRepository;
 
     @InjectMocks
     ProgramService programService;
@@ -219,6 +233,7 @@ class ProgramServiceTest {
         ReflectionTestUtils.setField(operatingUnitCode, "codeName", "비교과운영부서");
         CommonCode programTypeCode = buildCommonCodeFixture(22, "PROGRAM_TYPE", "PT100");
         ReflectionTestUtils.setField(programTypeCode, "codeName", "학습");
+        Competency competency = buildCompetencyFixture(33, "리더십");
 
         ExtracurricularProgram program = buildProgramFixture(
                 1, null, Instant.now().plusSeconds(3600), ProgramStatus.DRAFT);
@@ -226,13 +241,17 @@ class ProgramServiceTest {
         ReflectionTestUtils.setField(program, "capacity", 10);
         ReflectionTestUtils.setField(program, "operatingUnitCode", operatingUnitCode);
         ReflectionTestUtils.setField(program, "programTypeCode", programTypeCode);
+        ReflectionTestUtils.setField(program, "competency", competency);
 
         Pageable pageable = PageRequest.of(0, 20);
-        when(programRepository.search(ProgramStatus.DRAFT, "프로그램", pageable))
+        when(programRepository.search(ProgramStatus.DRAFT, "프로그램", null, pageable))
                 .thenReturn(new PageImpl<>(List.of(program), pageable, 1));
+        ProgramApplicationRepository.ProgramApplicantCount applicantCountFixture = buildApplicantCountFixture(1, 4L);
+        when(applicationRepository.countActiveApplicantsByProgramIds(List.of(1)))
+                .thenReturn(List.of(applicantCountFixture));
 
         PageResponse<ProgramListItemResponseDTO> response =
-                programService.list(ProgramStatus.DRAFT, "프로그램", pageable);
+                programService.list(ProgramStatus.DRAFT, "프로그램", null, pageable);
 
         assertThat(response.totalElements()).isEqualTo(1);
         assertThat(response.content()).hasSize(1);
@@ -241,8 +260,85 @@ class ProgramServiceTest {
         assertThat(item.programName()).isEqualTo("프로그램명");
         assertThat(item.operatingUnitCodeName()).isEqualTo("비교과운영부서");
         assertThat(item.programTypeCodeName()).isEqualTo("학습");
+        assertThat(item.competencyName()).isEqualTo("리더십");
         assertThat(item.programStatus()).isEqualTo("DRAFT");
         assertThat(item.programStatusLabel()).isEqualTo("모집중");
+        assertThat(item.applicantCount()).isEqualTo(4L);
+        assertThat(item.remainingCapacity()).isEqualTo(6);
+    }
+
+    @Test
+    void listMine_scopesSearchToManagerUserId() throws Exception {
+        CommonCode operatingUnitCode = buildCommonCodeFixture(11, "DEPARTMENT", "D200");
+        CommonCode programTypeCode = buildCommonCodeFixture(22, "PROGRAM_TYPE", "PT100");
+
+        ExtracurricularProgram program = buildProgramFixture(
+                1, null, Instant.now().plusSeconds(3600), ProgramStatus.DRAFT);
+        ReflectionTestUtils.setField(program, "programName", "프로그램명");
+        ReflectionTestUtils.setField(program, "capacity", 10);
+        ReflectionTestUtils.setField(program, "completionRate", new java.math.BigDecimal("80"));
+        ReflectionTestUtils.setField(program, "operatingUnitCode", operatingUnitCode);
+        ReflectionTestUtils.setField(program, "programTypeCode", programTypeCode);
+
+        Pageable pageable = PageRequest.of(0, 20);
+        when(programRepository.searchByManager(eq(100), any(), any(), any(), eq(pageable)))
+                .thenReturn(new PageImpl<>(List.of(program), pageable, 1));
+        when(applicationRepository.countActiveApplicantsByProgramIds(List.of(1)))
+                .thenReturn(List.of());
+
+        PageResponse<ProgramAdminListItemResponseDTO> response =
+                programService.listMine(100, null, null, null, pageable);
+
+        assertThat(response.content()).hasSize(1);
+        assertThat(response.content().get(0).applicantCount()).isEqualTo(0L);
+        verify(programRepository).searchByManager(100, null, null, null, pageable);
+    }
+
+    @Test
+    void getDetail_returnsProgramWithSessionsAndApplicantCount() throws Exception {
+        AppUser managerUser = mock(AppUser.class);
+        when(managerUser.getUserName()).thenReturn("담당자명");
+
+        CommonCode operatingUnitCode = buildCommonCodeFixture(11, "DEPARTMENT", "D200");
+        CommonCode programTypeCode = buildCommonCodeFixture(22, "PROGRAM_TYPE", "PT100");
+        Competency competency = buildCompetencyFixture(33, "리더십");
+
+        ExtracurricularProgram program = buildProgramFixture(
+                1, managerUser, Instant.now().plusSeconds(3600), ProgramStatus.DRAFT);
+        ReflectionTestUtils.setField(program, "programName", "프로그램명");
+        ReflectionTestUtils.setField(program, "capacity", 10);
+        ReflectionTestUtils.setField(program, "operatingUnitCode", operatingUnitCode);
+        ReflectionTestUtils.setField(program, "programTypeCode", programTypeCode);
+        ReflectionTestUtils.setField(program, "competency", competency);
+
+        ProgramSession session = mock(ProgramSession.class);
+        when(session.getProgram()).thenReturn(program);
+        when(session.getSessionNo()).thenReturn(1);
+
+        when(programRepository.findDetailById(1)).thenReturn(Optional.of(program));
+        when(programSessionRepository.findByProgram_ProgramIdOrderBySessionNoAsc(1))
+                .thenReturn(List.of(session));
+        when(applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(eq(1), any()))
+                .thenReturn(3L);
+
+        ProgramDetailResponseDTO response = programService.getDetail(1);
+
+        assertThat(response.programId()).isEqualTo(1);
+        assertThat(response.competencyName()).isEqualTo("리더십");
+        assertThat(response.managerUserName()).isEqualTo("담당자명");
+        assertThat(response.applicantCount()).isEqualTo(3L);
+        assertThat(response.remainingCapacity()).isEqualTo(7);
+        assertThat(response.sessions()).hasSize(1);
+    }
+
+    @Test
+    void getDetail_whenProgramNotFound_throwsProgramNotFound() {
+        when(programRepository.findDetailById(999)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> programService.getDetail(999))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.PROGRAM_NOT_FOUND);
     }
 
     // ExtracurricularProgram은 protected 기본 생성자만 있고 setter/빌더가 없어(네이티브 SQL로만 값을 채우는 구조),
@@ -269,5 +365,25 @@ class ProgramServiceTest {
         ReflectionTestUtils.setField(commonCode, "codeGroup", codeGroup);
         ReflectionTestUtils.setField(commonCode, "code", code);
         return commonCode;
+    }
+
+    // Competency도 위 픽스처들과 동일한 이유(protected 기본 생성자, setter 없음)로 리플렉션을 사용한다.
+    private Competency buildCompetencyFixture(Integer competencyId, String competencyName) throws Exception {
+        Constructor<Competency> constructor = Competency.class.getDeclaredConstructor();
+        constructor.setAccessible(true);
+        Competency competency = constructor.newInstance();
+        ReflectionTestUtils.setField(competency, "competencyId", competencyId);
+        ReflectionTestUtils.setField(competency, "competencyName", competencyName);
+        return competency;
+    }
+
+    // ProgramApplicantCount는 인터페이스 projection이라 목(mock)으로 값을 채운다.
+    private ProgramApplicationRepository.ProgramApplicantCount buildApplicantCountFixture(
+            Integer programId, Long count) {
+        ProgramApplicationRepository.ProgramApplicantCount fixture =
+                mock(ProgramApplicationRepository.ProgramApplicantCount.class);
+        when(fixture.getProgramId()).thenReturn(programId);
+        when(fixture.getCount()).thenReturn(count);
+        return fixture;
     }
 }
