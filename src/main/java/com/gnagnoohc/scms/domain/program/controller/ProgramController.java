@@ -34,7 +34,7 @@ public class ProgramController {
 
     private final ProgramService programService;
 
-    @Operation(summary = "프로그램 등록", description = "비교과 프로그램을 신규 등록합니다 (DRAFT 상태)")
+    @Operation(summary = "프로그램 등록", description = "비교과 프로그램을 신규 등록합니다 (모집중 상태로 시작)")
     // HTTP POST 요청, 즉 "/api/admin/programs" 로 오는 요청을 이 메서드가 처리한다.
     @PostMapping
     // 등록에 성공하면 HTTP 상태코드로 200(OK) 대신 201(CREATED, "새로 생성됨")을 응답한다.
@@ -56,7 +56,7 @@ public class ProgramController {
         return ApiResponse.ok(programService.getCompetencyOptions());
     }
 
-    @Operation(summary = "프로그램 수정", description = "DRAFT 상태의 비교과 프로그램을 전체 필드 수정합니다 (등록자 본인만 가능)")
+    @Operation(summary = "프로그램 수정", description = "모집중 상태의 비교과 프로그램을 전체 필드 수정합니다 (등록자 본인만 가능)")
     // HTTP PUT 요청, 즉 "/api/admin/programs/{programId}" 로 오는 요청을 이 메서드가 처리한다.
     // PUT은 "이 리소스 전체를 이 내용으로 통째로 교체해줘"라는 의미의 HTTP 메서드다(일부 필드만 보내는 PATCH와 다름).
     @PutMapping("/{programId}")

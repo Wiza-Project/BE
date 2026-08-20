@@ -6,6 +6,7 @@ import com.gnagnoohc.scms.domain.program.dto.ProgramRegisterResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.ProgramUpdateRequestDTO;
 import com.gnagnoohc.scms.domain.program.dto.ProgramUpdateResponseDTO;
 import com.gnagnoohc.scms.domain.program.entity.ExtracurricularProgram;
+import com.gnagnoohc.scms.domain.program.entity.ProgramStatus;
 import com.gnagnoohc.scms.domain.program.repository.CompetencyOptionRepository;
 import com.gnagnoohc.scms.domain.program.repository.ExtracurricularProgramRepository;
 import com.gnagnoohc.scms.global.error.BusinessException;
@@ -25,7 +26,9 @@ import java.util.List;
 public class ProgramService {
 
     private static final BigDecimal DEFAULT_COMPLETION_RATE = new BigDecimal("80");
-    private static final String INITIAL_STATUS = "DRAFT";
+    // 등록 직후의 상태. 값 자체는 기존과 동일한 DRAFT이지만, 이제 "모집중"을 의미하는 상수로 취급한다
+    // (ProgramStatus 참고 — 모집 마감/운영 종료가 지나면 스케줄러가 OPERATING/CLOSED로 자동 전환한다).
+    private static final ProgramStatus INITIAL_STATUS = ProgramStatus.DRAFT;
 
     private final ExtracurricularProgramRepository programRepository;
     private final CompetencyOptionRepository competencyOptionRepository;
@@ -71,8 +74,8 @@ public class ProgramService {
                     request.operationEndsAt(),
                     request.capacity(),
                     completionRate,
-                    // 새로 등록되는 프로그램은 항상 "DRAFT"(초안) 상태로 시작한다. 클라이언트가 정할 수 없다.
-                    INITIAL_STATUS,
+                    // 새로 등록되는 프로그램은 항상 "모집중"(DRAFT) 상태로 시작한다. 클라이언트가 정할 수 없다.
+                    INITIAL_STATUS.name(),
                     now
             );
         } catch (DataIntegrityViolationException e) {
@@ -87,8 +90,8 @@ public class ProgramService {
                 // DB가 새로 만들어준 PK.
                 programId,
                 request.programName(),
-                // 응답에도 "DRAFT"를 그대로 담아, 클라이언트가 등록 직후 상태를 바로 알 수 있게 한다.
-                INITIAL_STATUS,
+                // 응답에는 한글 라벨("모집중")을 담아, 클라이언트가 등록 직후 상태를 바로 알 수 있게 한다.
+                INITIAL_STATUS.getLabel(),
                 request.capacity(),
                 completionRate,
                 request.recruitmentStartsAt(),
@@ -127,6 +130,12 @@ public class ProgramService {
         // 모집중(현재 시각이 모집 종료 시각 이전)일 때만 수정을 허용한다.
         // 모집이 종료되면(운영중 이후) 이미 신청한 학생들에게 혼란을 주거나 데이터가 꼬일 수 있기 때문에 막는다.
         // "지금 이 순간"의 시각을 한 번만 만들어서, 이 판단과 아래 UPDATE 쿼리·응답 DTO에 똑같이 사용한다.
+        //
+        // programStatus(ProgramStatus.DRAFT="모집중")를 직접 보지 않고 시각을 비교하는 이유:
+        // ProgramStatusScheduler는 최대 1분 주기로만 상태를 갱신하므로, 모집 마감 시각이 지난 직후부터
+        // 다음 스케줄 실행 전까지는 DB의 programStatus가 아직 DRAFT로 남아있는 지연 구간이 있다.
+        // 그 구간에서 programStatus만 보고 판단하면 이미 모집이 끝났는데도 수정을 허용해버리므로,
+        // 스케줄러 지연과 무관하게 항상 정확한 시각 비교를 기준으로 삼는다.
         Instant now = Instant.now();
         if (!now.isBefore(program.getRecruitmentEndsAt())) {
             throw new BusinessException(ErrorCode.PROGRAM_NOT_EDITABLE);
@@ -182,7 +191,9 @@ public class ProgramService {
         return new ProgramUpdateResponseDTO(
                 programId,
                 request.programName(),
-                INITIAL_STATUS,
+                // 이 API는 모집중(DRAFT)일 때만 성공하므로 항상 "모집중"이지만, 하드코딩 대신
+                // 방금 읽어온 엔티티의 실제 상태를 라벨로 변환해 내려준다.
+                program.getProgramStatus().getLabel(),
                 request.capacity(),
                 completionRate,
                 request.recruitmentStartsAt(),
