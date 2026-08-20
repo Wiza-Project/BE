@@ -1,13 +1,23 @@
 package com.gnagnoohc.scms.domain.program.repository;
 
 import com.gnagnoohc.scms.domain.program.entity.ProgramApplication;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
+import java.util.Optional;
 
 public interface ProgramApplicationRepository extends JpaRepository<ProgramApplication, Integer> {
+
+    // 신청 건 row에 비관적 락을 걸어 조회한다. 승인/반려 처리 중 같은 신청 건이 동시에
+    // 이중 처리되는 경쟁 조건을 막기 위해 사용한다 (ExtracurricularProgramRepository.findByIdForUpdate와 동일 패턴).
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT a FROM ProgramApplication a WHERE a.applicationId = :applicationId")
+    Optional<ProgramApplication> findByIdForUpdate(@Param("applicationId") Integer applicationId);
 
     // ── 여기부터 "참여 신청 접수(Create)" 기능 ──────────────────────────────────────
     //
@@ -46,4 +56,88 @@ public interface ProgramApplicationRepository extends JpaRepository<ProgramAppli
           AND a.applicationStatus = 'WAITLISTED'
         """)
     Integer findMaxWaitlistOrderByProgramId(@Param("programId") Integer programId);
+
+    // ── 여기부터 "승인/반려 처리(Update)" 기능 ──────────────────────────────────────
+    //
+    // ProgramApplication 엔티티는 setter/빌더가 없어(insertApplication과 같은 이유),
+    // 승인/반려 상태 변경도 네이티브 UPDATE로 처리한다 (ExtracurricularProgramRepository.updateProgram 참고).
+    @Modifying(clearAutomatically = true)
+    @Query(value = """
+        UPDATE program_application
+        SET application_status = :applicationStatus,
+            decision_reason = :decisionReason,
+            processed_by = :processedBy,
+            processed_at = :now,
+            updated_at = :now
+        WHERE application_id = :applicationId
+        """, nativeQuery = true)
+    int updateDecision(@Param("applicationId") Integer applicationId,
+                        // "APPROVED" 또는 "REJECTED".
+                        @Param("applicationStatus") String applicationStatus,
+                        // 반려 사유. 승인이면 null.
+                        @Param("decisionReason") String decisionReason,
+                        // 처리한 운영부서 담당자의 user_id. 클라이언트가 보낸 값이 아니라
+                        // 서비스 계층에서 "지금 로그인한 사용자"의 id를 그대로 전달한다.
+                        @Param("processedBy") Integer processedBy,
+                        @Param("now") Instant now);
+
+    // ── 여기부터 "출석 기반 이수 판정" 기능 ──────────────────────────────────────
+    //
+    // ExtracurricularProgramRepository.transitionOperatingToClosed와 같은 스타일의 벌크 native UPDATE.
+    // 프로그램이 종료(CLOSED)된 뒤, 승인(APPROVED)된 신청 건마다 "출석한 회차 수 / 전체 회차 수"를
+    // 계산해 프로그램의 이수 기준 출석률(completion_rate)과 비교한 결과를 completion_status에 채운다.
+    //
+    // WHERE 절의 "pa.completion_status IS NULL" 조건 덕분에 이 쿼리는 멱등하다: 매분 실행돼도
+    // 이미 판정된 건은 다시 건드리지 않고, 방금 CLOSED로 전환된 프로그램의 아직 판정되지 않은
+    // 승인 건만 새로 판정한다 (ProgramStatusScheduler의 시각 비교 멱등성과 같은 원리).
+    // 회차가 하나도 없는 프로그램은 NULLIF(...,0)이 NULL이 되어 비교식이 거짓으로 평가되므로 FAILED로 처리된다.
+    @Modifying(clearAutomatically = true)
+    @Query(value = """
+        UPDATE program_application pa
+        SET completion_status = CASE
+                WHEN (SELECT COUNT(*) FROM program_attendance att
+                      JOIN program_session ps ON ps.program_session_id = att.program_session_id
+                      WHERE att.application_id = pa.application_id
+                        AND att.attendance_status = 'PRESENT')::numeric
+                     / NULLIF((SELECT COUNT(*) FROM program_session ps2 WHERE ps2.program_id = pa.program_id), 0) * 100
+                     >= ep.completion_rate
+                THEN 'COMPLETED' ELSE 'FAILED' END,
+            completed_at = :now,
+            updated_at = :now
+        FROM extracurricular_program ep
+        WHERE pa.program_id = ep.program_id
+          AND ep.program_status = 'CLOSED'
+          AND pa.application_status = 'APPROVED'
+          AND pa.completion_status IS NULL
+        """, nativeQuery = true)
+    int judgeCompletion(@Param("now") Instant now);
+
+    // ── 여기부터 "취소(Update)" 기능 ────────────────────────────────────────────
+    //
+    // updateDecision과 같은 이유로 native UPDATE를 쓴다. 다만 취소 가능 여부는 신청 건 하나만으로
+    // 판단할 수 없고(모집 종료 시각은 program 테이블에 있음) program_application과
+    // extracurricular_program을 조인해야 하므로, judgeCompletion과 같은 UPDATE ... FROM ... 구문을 쓴다.
+    //
+    // WHERE 절에 "p.recruitment_ends_at > :now"와 "pa.application_status IN (...)" 두 조건을
+    // 함께 걸어둔 이유: 서비스 계층(ProgramApplicationService.cancel)에서 먼저 같은 조건을 확인하지만,
+    // 그 확인과 이 UPDATE 실행 사이의 짧은 순간에 모집이 종료되거나 다른 요청이 먼저 처리(승인/반려/취소)했을
+    // 수 있다(ExtracurricularProgramRepository.updateProgram과 동일한 경쟁 조건 방지 패턴).
+    // 이 경우 UPDATE는 0개의 row에만 영향을 주고, 서비스 계층은 영향받은 row 수로 실패를 알아챈다.
+    @Modifying(clearAutomatically = true)
+    @Query(value = """
+        UPDATE program_application pa
+        SET application_status = 'CANCELLED',
+            cancellation_reason = :reason,
+            canceled_at = :now,
+            updated_at = :now
+        FROM extracurricular_program p
+        WHERE pa.application_id = :applicationId
+          AND pa.program_id = p.program_id
+          AND p.recruitment_ends_at > :now
+          AND pa.application_status IN ('APPLIED', 'WAITLISTED', 'APPROVED')
+        """, nativeQuery = true)
+    int updateCancellation(@Param("applicationId") Integer applicationId,
+                            // 취소 사유. 학생이 입력하지 않았으면 null.
+                            @Param("reason") String reason,
+                            @Param("now") Instant now);
 }

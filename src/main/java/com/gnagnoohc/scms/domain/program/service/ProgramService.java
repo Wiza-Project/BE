@@ -9,6 +9,7 @@ import com.gnagnoohc.scms.domain.program.entity.ExtracurricularProgram;
 import com.gnagnoohc.scms.domain.program.entity.ProgramStatus;
 import com.gnagnoohc.scms.domain.program.repository.CompetencyOptionRepository;
 import com.gnagnoohc.scms.domain.program.repository.ExtracurricularProgramRepository;
+import com.gnagnoohc.scms.global.common.repository.CommonCodeRepository;
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -29,9 +30,16 @@ public class ProgramService {
     // 등록 직후의 상태. 값 자체는 기존과 동일한 DRAFT이지만, 이제 "모집중"을 의미하는 상수로 취급한다
     // (ProgramStatus 참고 — 모집 마감/운영 종료가 지나면 스케줄러가 OPERATING/CLOSED로 자동 전환한다).
     private static final ProgramStatus INITIAL_STATUS = ProgramStatus.DRAFT;
+    // 요청에 부서/프로그램 유형 코드가 없을 때 채워 넣을 기본값(CommonCode의 code_group/code).
+    // 코드값은 CommonCodeSeeder 기준(접두어+100단위 형식으로 리네임됨: 학습=PT100, 비교과운영부서=D200).
+    private static final String DEPARTMENT_GROUP = "DEPARTMENT";
+    private static final String DEFAULT_DEPARTMENT_CODE = "D200"; // 비교과운영부서
+    private static final String PROGRAM_TYPE_GROUP = "PROGRAM_TYPE";
+    private static final String DEFAULT_PROGRAM_TYPE_CODE = "PT100"; // 학습
 
     private final ExtracurricularProgramRepository programRepository;
     private final CompetencyOptionRepository competencyOptionRepository;
+    private final CommonCodeRepository commonCodeRepository;
 
     // ── "등록(Create)" 기능 ──────────────────────────────────────────────
     //
@@ -50,6 +58,13 @@ public class ProgramService {
         // 요청에 completionRate 값이 없으면(null) 엔티티 기본값(80)과 동일하게 채운다.
         BigDecimal completionRate = request.completionRate() != null
                 ? request.completionRate() : DEFAULT_COMPLETION_RATE;
+        // 요청에 operatingUnitCodeId/programTypeCodeId가 없으면(null) 각각 "비교과운영부서"/"학습" 코드로 채운다.
+        Integer operatingUnitCodeId = resolveCodeId(
+                request.operatingUnitCodeId(), DEPARTMENT_GROUP, DEFAULT_DEPARTMENT_CODE,
+                ErrorCode.OPERATING_UNIT_NOT_FOUND);
+        Integer programTypeCodeId = resolveCodeId(
+                request.programTypeCodeId(), PROGRAM_TYPE_GROUP, DEFAULT_PROGRAM_TYPE_CODE,
+                ErrorCode.PROGRAM_CATEGORY_NOT_FOUND);
         // "지금 이 순간"의 시각을 한 번만 만들어서, 아래 INSERT 쿼리(created_at/updated_at)와
         // 응답 DTO(createdAt)에 똑같은 값으로 사용한다.
         Instant now = Instant.now();
@@ -60,8 +75,8 @@ public class ProgramService {
         try {
             programId = programRepository.insertProgram(
                     request.fileGroupId(),
-                    request.operatingUnitCodeId(),
-                    request.programTypeCodeId(),
+                    operatingUnitCodeId,
+                    programTypeCodeId,
                     request.competencyId(),
                     request.mileagePolicyId(),
                     // managerUserId는 요청 DTO가 아니라 이 메서드의 매개변수(로그인한 사용자)로 채운다.
@@ -245,6 +260,21 @@ public class ProgramService {
         if (deletedRows == 0) {
             throw new BusinessException(ErrorCode.PROGRAM_NOT_DELETABLE);
         }
+    }
+
+    // 요청값이 있으면 그대로 쓰고, 없으면(null) 주어진 그룹에서 defaultCode와 일치하는 CommonCode를 찾아 그 codeId를 대신 쓴다.
+    // (CommonCodeRepository에는 group+code 단건 조회 메서드가 없어, 기존에 있는 그룹 전체 조회 메서드로 가져온 뒤 code로 걸러낸다.)
+    private Integer resolveCodeId(Integer requestedCodeId, String codeGroup, String defaultCode,
+                                   ErrorCode notFoundError) {
+        if (requestedCodeId != null) {
+            return requestedCodeId;
+        }
+        return commonCodeRepository.findByCodeGroupAndActiveTrueOrderBySortOrderAsc(codeGroup)
+                .stream()
+                .filter(commonCode -> commonCode.getCode().equals(defaultCode))
+                .findFirst()
+                .orElseThrow(() -> new BusinessException(notFoundError))
+                .getCodeId();
     }
 
     // FK 제약 위반 메시지에는 PostgreSQL이 항상 위반된 컬럼명을 "Key (컬럼명)=(값) is not present..." 형식으로 담아준다.
