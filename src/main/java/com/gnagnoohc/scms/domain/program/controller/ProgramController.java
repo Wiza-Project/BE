@@ -47,7 +47,7 @@ public class ProgramController {
             // "지금 로그인한 사용자 정보"를 그대로 꺼내온다. 클라이언트가 body에 넣어 보내는 값이 아니므로 위조가 불가능하다.
             @AuthenticationPrincipal AuthUser authUser) {
         // authUser.getId()로 등록 담당자를 서버가 직접 결정해서 서비스에 넘긴다.
-        return ApiResponse.ok(programService.register(request, authUser.getId()));
+        return ApiResponse.ok(programService.register(request, authUser.getId(), authUser.getDepartmentCodeId()));
     }
 
     @Operation(summary = "핵심역량 옵션 조회", description = "프로그램 등록 폼에서 사용할 핵심역량 목록을 조회합니다")
