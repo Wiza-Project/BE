@@ -1,7 +1,9 @@
 package com.gnagnoohc.scms.domain.program.service;
 
+import com.gnagnoohc.scms.domain.program.dto.CompetencyOptionResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.ProgramRegisterRequestDTO;
 import com.gnagnoohc.scms.domain.program.dto.ProgramRegisterResponseDTO;
+import com.gnagnoohc.scms.domain.program.repository.CompetencyOptionRepository;
 import com.gnagnoohc.scms.domain.program.repository.ExtracurricularProgramRepository;
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
@@ -12,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -22,6 +25,7 @@ public class ProgramService {
     private static final String INITIAL_STATUS = "DRAFT";
 
     private final ExtracurricularProgramRepository programRepository;
+    private final CompetencyOptionRepository competencyOptionRepository;
 
     // 비교과프로그램 등록 흐름: 기간 검증 → 기본값 보정 → native INSERT 저장 → 응답 DTO 조립.
     // managerUserId는 요청 바디가 아니라 컨트롤러가 인증된 사용자(JWT)에서 뽑아 넘겨준 값이다.
@@ -73,6 +77,14 @@ public class ProgramService {
                 request.operationEndsAt(),
                 now
         );
+    }
+
+    // 프로그램 등록 폼의 핵심역량 드롭다운용 옵션 목록. 최상위(하위 역량 없음) + 활성 상태만 노출한다.
+    public List<CompetencyOptionResponseDTO> getCompetencyOptions() {
+        return competencyOptionRepository.findByParentCompetencyIsNullAndActiveTrueOrderByDisplayOrderAsc()
+                .stream()
+                .map(CompetencyOptionResponseDTO::from)
+                .toList();
     }
 
     // FK 제약 위반 메시지에는 PostgreSQL이 항상 위반된 컬럼명을 "Key (컬럼명)=(값) is not present..." 형식으로 담아준다.
