@@ -1,6 +1,7 @@
 package com.gnagnoohc.scms.domain.counsel.service;
 
 import com.gnagnoohc.scms.domain.counsel.dto.CounselingScheduleRequest;
+import com.gnagnoohc.scms.domain.counsel.dto.CounselingScheduleAvailabilityResponse;
 import com.gnagnoohc.scms.domain.counsel.dto.CounselingScheduleResponse;
 import com.gnagnoohc.scms.domain.counsel.entity.CounselingSchedule;
 import com.gnagnoohc.scms.domain.counsel.entity.CounselingType;
@@ -16,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.List;
 
 /**
  * 상담 일정 등록·전체 수정·마감의 권한, 불변식과 트랜잭션 경계를 담당한다.
@@ -30,6 +32,25 @@ public class CounselingScheduleService {
     private final CounselingTypeRepository counselingTypeRepository;
     private final CounselingScheduleRepository counselingScheduleRepository;
     private final CounselingReservationRepository counselingReservationRepository;
+
+    /**
+     * 활성 학생만 예약 가능한 일정을 조회할 수 있으며 조회 중에는 일정 행을 잠그지 않는다.
+     */
+    @Transactional(readOnly = true)
+    public List<CounselingScheduleAvailabilityResponse> getAvailableSchedules(
+            Integer counselingTypeId,
+            Integer studentId
+    ) {
+        if (!counselUserRepository.isActiveStudent(studentId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        getActiveCounselingType(counselingTypeId);
+
+        return counselingScheduleRepository.findAvailableSchedules(
+                counselingTypeId,
+                Instant.now()
+        );
+    }
 
     /**
      * 활성 상담사가 미래의 겹치지 않는 OPEN 일정을 등록한다.
