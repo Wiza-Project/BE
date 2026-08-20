@@ -1,5 +1,6 @@
 package com.gnagnoohc.scms.domain.program.dto;
 
+// 유효성 검사(Validation) 어노테이션들을 사용하기 위해 import 한다.
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
@@ -12,15 +13,15 @@ import java.math.BigDecimal;
 // 날짜+시간+시간대를 함께 표현하는 타입(모집/운영 시작·종료 시각에 사용).
 import java.time.Instant;
 
-// 비교과프로그램 "등록" 요청 DTO. record 키워드로 만들면 필드값이 바뀌지 않는(불변) 데이터 객체가 자동으로 생성된다.
-// 클라이언트(프론트엔드)가 보내는 입력값만 여기에 담는다.
+// 비교과프로그램 "수정" 요청 DTO. record 키워드로 만들면 필드값이 바뀌지 않는(불변) 데이터 객체가 자동으로 생성된다.
+// PUT 방식이라 등록(register) 때처럼 전체 필드를 한 번에 다시 받는다(일부 필드만 보내는 PATCH 방식이 아님).
 //
 // 아래 필드에는 일부러 넣지 않은 값들이 있다.
-//   - managerUserId(등록 담당자) : 클라이언트가 마음대로 "이 사람이 등록한 걸로 해줘"라고 위조하지 못하도록,
-//                                요청 항목에서 빼고 서버가 로그인한 사용자(authUser)의 id로 직접 채운다.
-//   - programStatus            : 새로 등록되는 프로그램은 항상 "DRAFT"(초안) 상태로 고정되므로 클라이언트 입력을 받지 않는다.
-public record ProgramRegisterRequestDTO(
-        // 첨부파일 그룹 id. 포스터 등 이미지가 없을 수도 있으므로 @NotNull을 붙이지 않았다(선택값).
+//   - programId(수정 대상 PK)  : 요청 바디가 아니라 URL 경로(/programs/{programId})로 받는다.
+//   - managerUserId(등록자)    : 이 API로 등록자(소유권)를 바꿀 수 없게 하기 위해 아예 요청 항목에서 뺐다.
+//   - programStatus            : 상태값은 별도의 "상태 변경" 기능에서 다루도록 하고, 이 수정 API에서는 손대지 않는다.
+public record ProgramUpdateRequestDTO(
+        // 첨부파일 그룹 id. 파일이 없을 수도 있으므로 @NotNull을 붙이지 않았다(선택값).
         Integer fileGroupId,
 
         // 운영 단위 코드 id. 반드시 있어야 하는 값이라 @NotNull로 "값이 비어있으면 안 된다"고 검증한다.
