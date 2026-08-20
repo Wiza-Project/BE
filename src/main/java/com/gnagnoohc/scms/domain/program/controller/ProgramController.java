@@ -1,5 +1,6 @@
 package com.gnagnoohc.scms.domain.program.controller;
 
+import com.gnagnoohc.scms.domain.program.dto.CompetencyOptionResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.ProgramRegisterRequestDTO;
 import com.gnagnoohc.scms.domain.program.dto.ProgramRegisterResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.ProgramUpdateRequestDTO;
@@ -13,6 +14,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -20,6 +22,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 @Tag(name = "Program", description = "비교과프로그램 등록/수정")
 @RestController
@@ -43,6 +47,12 @@ public class ProgramController {
             @AuthenticationPrincipal AuthUser authUser) {
         // authUser.getId()로 등록 담당자를 서버가 직접 결정해서 서비스에 넘긴다.
         return ApiResponse.ok(programService.register(request, authUser.getId()));
+    }
+
+    @Operation(summary = "핵심역량 옵션 조회", description = "프로그램 등록 폼에서 사용할 핵심역량 목록을 조회합니다")
+    @GetMapping("/competencies")
+    public ApiResponse<List<CompetencyOptionResponseDTO>> listCompetencyOptions() {
+        return ApiResponse.ok(programService.getCompetencyOptions());
     }
 
     @Operation(summary = "프로그램 수정", description = "DRAFT 상태의 비교과 프로그램을 전체 필드 수정합니다 (등록자 본인만 가능)")
