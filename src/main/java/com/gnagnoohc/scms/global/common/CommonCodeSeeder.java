@@ -90,7 +90,21 @@ public class CommonCodeSeeder implements CommandLineRunner {
             new Seed("DEPARTMENT", "D100", "학생역량센터", 1),
             new Seed("DEPARTMENT", "D200", "비교과운영부서", 2),
             new Seed("DEPARTMENT", "D300", "진로심리상담센터", 3),
-            new Seed("DEPARTMENT", "D400", "취창업지원과", 4)
+            new Seed("DEPARTMENT", "D400", "취창업지원과", 4),
+
+            // 사용자 유형 — AppUser.userType. common_code FK는 아니고(자유 varchar) 값만
+            // 일치시켜 코드→한글명 조회 용도로만 시딩한다.
+            new Seed("USER_TYPE", "ADMIN", "관리자", 1),
+            new Seed("USER_TYPE", "STAFF", "교직원", 2),
+            new Seed("USER_TYPE", "STUDENT", "학생", 3),
+
+            // 사용자 역할(user_role.role_code, N:M) — 마찬가지로 common_code FK 아님, 조회 전용 시딩.
+            // 접두어+100단위 일련번호: SD(학생)/ST(교직원 계열)/AD(관리자)
+            new Seed("USER_ROLE", "SD100", "학생", 1),
+            new Seed("USER_ROLE", "ST100", "일반교직원", 2),
+            new Seed("USER_ROLE", "ST200", "카운셀러", 3),
+            new Seed("USER_ROLE", "ST300", "교수", 4),
+            new Seed("USER_ROLE", "AD100", "관리자", 5)
     );
 
     @Override

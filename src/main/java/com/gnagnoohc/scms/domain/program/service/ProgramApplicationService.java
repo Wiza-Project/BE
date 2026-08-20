@@ -2,15 +2,19 @@ package com.gnagnoohc.scms.domain.program.service;
 
 import com.gnagnoohc.scms.domain.program.dto.ProgramApplicationCancelResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.ProgramApplicationDecisionResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.ProgramApplicationSummaryResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.ProgramApplyResponseDTO;
 import com.gnagnoohc.scms.domain.program.entity.ExtracurricularProgram;
 import com.gnagnoohc.scms.domain.program.entity.ProgramApplication;
 import com.gnagnoohc.scms.domain.program.repository.ExtracurricularProgramRepository;
 import com.gnagnoohc.scms.domain.program.repository.ProgramApplicationRepository;
+import com.gnagnoohc.scms.global.common.dto.PageResponse;
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -144,6 +148,24 @@ public class ProgramApplicationService {
         return new ProgramApplicationCancelResponseDTO(
                 applicationId, programId, ApplicationStatus.CANCELLED.name(), ApplicationStatus.CANCELLED.getLabel(),
                 reason, now);
+    }
+
+    // 학생이 자신의 전체 신청 현황을 최신순으로 조회한다. 조회 전용이라 클래스 레벨
+    // @Transactional을 readOnly = true로 오버라이드한다.
+    @Transactional(readOnly = true)
+    public PageResponse<ProgramApplicationSummaryResponseDTO> listMyApplications(Integer studentId, Pageable pageable) {
+        Page<ProgramApplication> applications = applicationRepository.findAllByStudentId(studentId, pageable);
+        return PageResponse.from(applications.map(this::toSummary));
+    }
+
+    private ProgramApplicationSummaryResponseDTO toSummary(ProgramApplication a) {
+        ApplicationStatus status = ApplicationStatus.valueOf(a.getApplicationStatus());
+        return new ProgramApplicationSummaryResponseDTO(
+                a.getApplicationId(), a.getProgram().getProgramId(), a.getProgram().getProgramName(),
+                a.getApplicationStatus(), status.getLabel(), a.getWaitlistOrder(),
+                a.getCreatedAt(), a.getProcessedAt(), a.getDecisionReason(),
+                a.getCanceledAt(), a.getCancellationReason(),
+                a.getCompletionStatus(), a.getCertificateNo(), a.getCertificateIssuedAt());
     }
 
     // 승인/반려 공통: 신청 건을 락을 걸어 조회하고, 요청 경로의 programId에 실제로 속하는지,

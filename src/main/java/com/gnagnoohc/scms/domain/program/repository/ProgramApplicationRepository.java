@@ -2,6 +2,8 @@ package com.gnagnoohc.scms.domain.program.repository;
 
 import com.gnagnoohc.scms.domain.program.entity.ProgramApplication;
 import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
@@ -18,6 +20,22 @@ public interface ProgramApplicationRepository extends JpaRepository<ProgramAppli
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT a FROM ProgramApplication a WHERE a.applicationId = :applicationId")
     Optional<ProgramApplication> findByIdForUpdate(@Param("applicationId") Integer applicationId);
+
+    // ── 여기부터 "내 신청 현황 조회(Read)" 기능 ──────────────────────────────────────
+    //
+    // 학생이 자신의 전체 신청 내역을 최신순으로 조회한다. program은 지연 로딩(LAZY)이고
+    // 응답에 프로그램명이 필요하므로 JOIN FETCH로 N+1을 방지한다. *-to-one 관계라
+    // Pageable과 함께 써도 컬렉션 페치조인처럼 메모리 페이징 경고가 발생하지 않는다.
+    @Query(value = """
+        SELECT a FROM ProgramApplication a
+        JOIN FETCH a.program
+        WHERE a.student.userId = :studentId
+        """,
+        countQuery = """
+        SELECT COUNT(a) FROM ProgramApplication a
+        WHERE a.student.userId = :studentId
+        """)
+    Page<ProgramApplication> findAllByStudentId(@Param("studentId") Integer studentId, Pageable pageable);
 
     // ── 여기부터 "참여 신청 접수(Create)" 기능 ──────────────────────────────────────
     //
