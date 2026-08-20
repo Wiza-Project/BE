@@ -1,5 +1,7 @@
 package com.gnagnoohc.scms.domain.program.controller;
 
+import com.gnagnoohc.scms.domain.program.dto.ProgramApplicationCancelRequestDTO;
+import com.gnagnoohc.scms.domain.program.dto.ProgramApplicationCancelResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.ProgramApplyResponseDTO;
 import com.gnagnoohc.scms.domain.program.service.ProgramApplicationService;
 import com.gnagnoohc.scms.global.common.dto.ApiResponse;
@@ -11,6 +13,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
@@ -35,5 +38,17 @@ public class ProgramApplicationController {
             // 신청자는 이 값으로만 결정하며, 클라이언트가 body로 보내는 값이 아니므로 위조가 불가능하다.
             @AuthenticationPrincipal AuthUser authUser) {
         return ApiResponse.ok(programApplicationService.apply(programId, authUser.getId()));
+    }
+
+    @Operation(summary = "프로그램 참여 신청 취소", description = "모집 기간이 끝나지 않은 경우에만 참여 신청을 취소할 수 있습니다.")
+    @PostMapping("/{programId}/applications/{applicationId}/cancel")
+    public ApiResponse<ProgramApplicationCancelResponseDTO> cancel(
+            @PathVariable Integer programId,
+            @PathVariable Integer applicationId,
+            // 취소 사유는 선택 입력이라, 요청 바디 자체를 생략해도(required = false) 된다.
+            @RequestBody(required = false) ProgramApplicationCancelRequestDTO request,
+            @AuthenticationPrincipal AuthUser authUser) {
+        String reason = request != null ? request.reason() : null;
+        return ApiResponse.ok(programApplicationService.cancel(programId, applicationId, authUser.getId(), reason));
     }
 }
