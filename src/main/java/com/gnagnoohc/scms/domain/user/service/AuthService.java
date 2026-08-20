@@ -32,6 +32,18 @@ import java.time.ZoneId;
  * 휴면 전환이 실제로 커밋되도록 하는 이유는 DormantAccountLocker 주석 참고.
  * 휴면 해제(본인확인) 절차는 이 기능 범위 밖입니다.
  *
+ * ── 로그인 실패 잠금 정책 ─────────────────────────────────────────
+ * 비밀번호를 {@value #MAX_FAILED_LOGIN_ATTEMPTS}회 연속으로 틀리면 계정을 LOCKED 로
+ * 전환합니다. 존재하는 아이디에만 적용됩니다(존재하지 않는 아이디는 애초에 카운트할
+ * failedLoginCount 가 없음). 정상 로그인에 성공하면 카운트는 0으로 초기화됩니다
+ * (recordSuccessfulLogin 참고).
+ * 잠금을 유발한 그 시도조차 응답은 항상 PASSWORD_MISMATCH 로만 내려갑니다 — "지금 이
+ * 시도로 잠겼다"는 사실 자체를 비밀번호가 틀린 요청에 노출하지 않기 위해서입니다
+ * (프론트도 반복 실패를 "잠김 확정"으로 단정하지 않고 안내만 하는 걸로 이미 맞춰져
+ * 있습니다). 계정이 잠겼다는 사실은 이후 올바른 비밀번호로 재시도했을 때
+ * rejectIfNotLoginable() 을 거치면서만 드러납니다.
+ * 관리자에 의한 잠금 해제 절차는 이 기능 범위 밖입니다(휴면 해제와 동일).
+ *
  * ── Refresh Token 보관 위치 결정 ──────────────────────────────────
  * domain/user/package-info.java 체크리스트의 미결정 사항이었습니다.
  * DB/Redis 저장 없이 stateless JWT로 발급하고, httpOnly 쿠키(AuthController)로만
@@ -54,6 +66,7 @@ import java.time.ZoneId;
 public class AuthService {
 
     private static final long DORMANT_THRESHOLD_MONTHS = 6;
+    private static final int MAX_FAILED_LOGIN_ATTEMPTS = 5;
 
     /**
      * 존재하지 않는 아이디로 로그인 시도 시에도 이 해시에 대해 BCrypt 검증을 한 번 실행해서
@@ -67,6 +80,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
     private final DormantAccountLocker dormantAccountLocker;
+    private final LoginFailureTracker loginFailureTracker;
 
     @Transactional
     public AuthResult login(String universityNo, String rawPassword) {
@@ -81,6 +95,7 @@ public class AuthService {
         }
 
         if (!passwordEncoder.matches(rawPassword, user.getPasswordHash())) {
+            registerLoginFailure(user);
             throw new BusinessException(ErrorCode.PASSWORD_MISMATCH);
         }
 
@@ -133,6 +148,17 @@ public class AuthService {
             dormantAccountLocker.lock(user.getUserId());
             throw new BusinessException(ErrorCode.ACCOUNT_DORMANT);
         }
+    }
+
+    /**
+     * 실패 횟수를 늘리고, {@value #MAX_FAILED_LOGIN_ATTEMPTS}회에 도달하면 계정을 잠급니다.
+     * DormantAccountLocker와 동일한 이유로 커밋을 보장하기 위해 반영 자체는
+     * LoginFailureTracker(REQUIRES_NEW)에 위임합니다.
+     */
+    private void registerLoginFailure(AppUser user) {
+        int newFailedCount = user.getFailedLoginCount() + 1;
+        boolean shouldLock = newFailedCount >= MAX_FAILED_LOGIN_ATTEMPTS;
+        loginFailureTracker.registerFailure(user.getUserId(), newFailedCount, shouldLock);
     }
 
     private AuthResult issueTokens(AppUser user) {
