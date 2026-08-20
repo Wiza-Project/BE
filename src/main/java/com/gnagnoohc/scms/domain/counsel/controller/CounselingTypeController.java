@@ -1,10 +1,15 @@
 package com.gnagnoohc.scms.domain.counsel.controller;
 
+import com.gnagnoohc.scms.domain.counsel.dto.CounselingScheduleAvailabilityResponse;
 import com.gnagnoohc.scms.domain.counsel.dto.CounselingTypeResponse;
+import com.gnagnoohc.scms.domain.counsel.service.CounselingScheduleService;
 import com.gnagnoohc.scms.domain.counsel.service.CounselingTypeService;
 import com.gnagnoohc.scms.global.common.dto.ApiResponse;
+import com.gnagnoohc.scms.global.security.AuthUser;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -22,6 +27,7 @@ import java.util.List;
 public class CounselingTypeController {
 
     private final CounselingTypeService counselingTypeService;
+    private final CounselingScheduleService counselingScheduleService;
 
     /**
      * 신규 상담 신청에 사용할 수 있는 활성 상담 유형 목록을 조회한다.
@@ -29,5 +35,21 @@ public class CounselingTypeController {
     @GetMapping
     public ApiResponse<List<CounselingTypeResponse>> getActiveCounselingTypes() {
         return ApiResponse.ok(counselingTypeService.getActiveCounselingTypes());
+    }
+
+    /**
+     * 로그인한 학생이 선택한 상담 유형에서 실제 예약할 수 있는 일정만 조회한다.
+     */
+    @GetMapping("/{counselingTypeId}/schedules")
+    public ApiResponse<List<CounselingScheduleAvailabilityResponse>> getAvailableSchedules(
+            @PathVariable Integer counselingTypeId,
+            @AuthenticationPrincipal AuthUser authUser
+    ) {
+        return ApiResponse.ok(
+                counselingScheduleService.getAvailableSchedules(
+                        counselingTypeId,
+                        authUser.getId()
+                )
+        );
     }
 }
