@@ -73,8 +73,8 @@ public class SecurityConfig {
                 // 학생 전용 (진단검사 응시, 상담예약, 마일리지 신청, 포트폴리오)
                 .requestMatchers("/api/students/**").hasRole("STUDENT")
 
-                // 상담사 전용 (상담일정 등록/확정/결과등록)
-                .requestMatchers("/api/counselors/**").hasRole("COUNSELOR")
+                // 상담사 전용 (상담일정 등록/확정/결과등록). role_code는 ST200(카운셀러) — user_role 명명 규칙 확정본.
+                .requestMatchers("/api/counselors/**").hasRole("ST200")
 
                 // 기업체 전용 (구인신청)
                 .requestMatchers("/api/companies/**").hasRole("COMPANY")
