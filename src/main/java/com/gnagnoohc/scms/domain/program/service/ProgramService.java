@@ -1,6 +1,7 @@
 package com.gnagnoohc.scms.domain.program.service;
 
 import com.gnagnoohc.scms.domain.program.dto.CompetencyOptionResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.ProgramListItemResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.ProgramRegisterRequestDTO;
 import com.gnagnoohc.scms.domain.program.dto.ProgramRegisterResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.ProgramUpdateRequestDTO;
@@ -9,11 +10,14 @@ import com.gnagnoohc.scms.domain.program.entity.ExtracurricularProgram;
 import com.gnagnoohc.scms.domain.program.entity.ProgramStatus;
 import com.gnagnoohc.scms.domain.program.repository.CompetencyOptionRepository;
 import com.gnagnoohc.scms.domain.program.repository.ExtracurricularProgramRepository;
+import com.gnagnoohc.scms.global.common.dto.PageResponse;
 import com.gnagnoohc.scms.global.common.repository.CommonCodeRepository;
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -217,6 +221,16 @@ public class ProgramService {
                 request.operationEndsAt(),
                 now
         );
+    }
+
+    // ── "목록 조회(List)" 기능 ──────────────────────────────────────────────
+    //
+    // 학생이 프로그램 목록 페이지에서 탐색할 때 쓰는 조회. 상태/이름 키워드로 걸러 페이지 단위로 내려준다.
+    // status/keyword가 둘 다 없으면 전체 프로그램을 페이지네이션해서 반환한다.
+    @Transactional(readOnly = true)
+    public PageResponse<ProgramListItemResponseDTO> list(ProgramStatus status, String keyword, Pageable pageable) {
+        Page<ExtracurricularProgram> page = programRepository.search(status, keyword, pageable);
+        return PageResponse.from(page.map(ProgramListItemResponseDTO::from));
     }
 
     // 프로그램 등록 폼의 핵심역량 드롭다운용 옵션 목록. 최상위(하위 역량 없음) + 활성 상태만 노출한다.

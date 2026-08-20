@@ -12,7 +12,8 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Optional;
 
-public interface ExtracurricularProgramRepository extends JpaRepository<ExtracurricularProgram, Integer> {
+public interface ExtracurricularProgramRepository extends JpaRepository<ExtracurricularProgram, Integer>,
+        ExtracurricularProgramRepositoryCustom {
 
     // ── 여기부터 "참여 신청 접수" 기능이 사용하는 조회 ──────────────────────────────
     //
