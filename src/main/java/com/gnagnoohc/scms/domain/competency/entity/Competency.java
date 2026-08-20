@@ -37,6 +37,7 @@ public class Competency extends BaseTimeEntity {
         this.displayOrder = displayOrder;
     }
 
+    // 삭제는 지원하지 않음 — 응답 이력 보존을 위해 비활성 처리만 함
     public void activate() {
         this.active = true;
     }
