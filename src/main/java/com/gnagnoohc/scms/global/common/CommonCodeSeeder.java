@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 /**
  * TODO: 개발 편의를 위해 초기 시드데이터 세팅만 이 방식으로 합니다. 이후 삭제예정
@@ -41,14 +42,34 @@ public class CommonCodeSeeder implements CommandLineRunner {
     private record Seed(String group, String code, String name, int sortOrder) {
     }
 
+    /**
+     * 접두어+100단위 코드(PT100, D100 ...)로 바꾸기 전에 이미 옛 이름(STUDY,
+     * STUDENT_COMPETENCY_CENTER 등)으로 시드돼있는 로컬 DB를 위한 이름 변경 매핑.
+     * codeId를 그대로 유지한 채(이미 참조 중인 FK가 있어도 안전) code 값만 바꾼다.
+     * 새로 받는 팀원의 빈 DB에서는 매치되는 게 없어 그냥 no-op.
+     */
+    private static final Map<String, String> RENAMES = Map.ofEntries(
+            Map.entry("STUDY", "PT100"),
+            Map.entry("CONTEST", "PT200"),
+            Map.entry("CAREER_STARTUP", "PT300"),
+            Map.entry("PSYCH_COUNSEL", "PT400"),
+            Map.entry("VOLUNTEER", "PT500"),
+            Map.entry("GLOBAL", "PT600"),
+            Map.entry("STUDENT_COMPETENCY_CENTER", "D100"),
+            Map.entry("EXTRACURRICULAR_OPS", "D200"),
+            Map.entry("CAREER_PSYCH_COUNSELING_CENTER", "D300"),
+            Map.entry("CAREER_EMPLOYMENT_SUPPORT", "D400")
+    );
+
     private static final List<Seed> SEEDS = List.of(
-            // 프로그램 유형 — ExtracurricularProgram.programTypeCodeId 가 참조
-            new Seed("PROGRAM_TYPE", "STUDY", "학습", 1),
-            new Seed("PROGRAM_TYPE", "CONTEST", "공모전", 2),
-            new Seed("PROGRAM_TYPE", "CAREER_STARTUP", "진로창업", 3),
-            new Seed("PROGRAM_TYPE", "PSYCH_COUNSEL", "심리상담", 4),
-            new Seed("PROGRAM_TYPE", "VOLUNTEER", "사회봉사", 5),
-            new Seed("PROGRAM_TYPE", "GLOBAL", "국제화", 6),
+            // 프로그램 유형 — ExtracurricularProgram.programTypeCodeId 가 참조.
+            // 접두어(PT)+100단위 일련번호: 나중에 세분류를 PT150처럼 중간에 끼워넣을 여유를 둠
+            new Seed("PROGRAM_TYPE", "PT100", "학습", 1),
+            new Seed("PROGRAM_TYPE", "PT200", "공모전", 2),
+            new Seed("PROGRAM_TYPE", "PT300", "진로창업", 3),
+            new Seed("PROGRAM_TYPE", "PT400", "심리상담", 4),
+            new Seed("PROGRAM_TYPE", "PT500", "사회봉사", 5),
+            new Seed("PROGRAM_TYPE", "PT600", "국제화", 6),
 
             // 학년도 — academicYear는 각 엔티티에 스칼라(Integer)로 저장되지만(FK 아님),
             // 프론트 드롭다운이 쓸 선택 가능 연도 목록의 기준점으로 최소 범위만 제공
@@ -64,15 +85,19 @@ public class CommonCodeSeeder implements CommandLineRunner {
             new Seed("SEMESTER", "FALL", "2학기", 3),
             new Seed("SEMESTER", "WINTER", "겨울학기", 4),
 
-            // 부서 — AppUser.departmentCode, SecurityConfig 2단계 부서 판정의 기준값
-            new Seed("DEPARTMENT", "STUDENT_COMPETENCY_CENTER", "학생역량센터", 1),
-            new Seed("DEPARTMENT", "EXTRACURRICULAR_OPS", "비교과운영부서", 2),
-            new Seed("DEPARTMENT", "CAREER_PSYCH_COUNSELING_CENTER", "진로심리상담센터", 3),
-            new Seed("DEPARTMENT", "CAREER_EMPLOYMENT_SUPPORT", "취창업지원과", 4)
+            // 부서 — AppUser.departmentCode, SecurityConfig 2단계 부서 판정의 기준값.
+            // 접두어(D)+100단위 일련번호
+            new Seed("DEPARTMENT", "D100", "학생역량센터", 1),
+            new Seed("DEPARTMENT", "D200", "비교과운영부서", 2),
+            new Seed("DEPARTMENT", "D300", "진로심리상담센터", 3),
+            new Seed("DEPARTMENT", "D400", "취창업지원과", 4)
     );
 
     @Override
     public void run(String... args) {
+        RENAMES.forEach((oldCode, newCode) ->
+                jdbcTemplate.update("UPDATE common_code SET code = ? WHERE code = ?", newCode, oldCode));
+
         Instant now = Instant.now();
         int inserted = 0;
         for (Seed seed : SEEDS) {
