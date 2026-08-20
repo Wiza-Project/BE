@@ -28,14 +28,22 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                     @NonNull FilterChain filterChain)
             throws ServletException, IOException {
         String token = resolveToken(request);
-        if (token != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+        if (token != null && SecurityContextHolder.getContext().getAuthentication() == null
+                && jwtTokenProvider.isAccessToken(token)) {
             Integer userId = jwtTokenProvider.parseUserId(token);
             if (userId != null) {
                 try {
                     UserDetails userDetails = authUserService.loadUserById(userId);
-                    SecurityContextHolder.getContext().setAuthentication(
-                            new UsernamePasswordAuthenticationToken(
-                                    userDetails, null, userDetails.getAuthorities()));
+                    // isEnabled()/isAccountNonLocked() 는 AuthenticationManager 를 거치지 않으면
+                    // 자동으로 검사되지 않으므로 여기서 직접 확인합니다. 어차피 매 요청 DB 조회를
+                    // 하고 있으니(완전한 stateless는 아님), 로그인 이후 계정이
+                    // LOCKED/DORMANT/WITHDRAWN 으로 바뀌었을 때 access 토큰 만료 전이라도
+                    // 즉시 차단하기 위함입니다.
+                    if (userDetails.isEnabled() && userDetails.isAccountNonLocked()) {
+                        SecurityContextHolder.getContext().setAuthentication(
+                                new UsernamePasswordAuthenticationToken(
+                                        userDetails, null, userDetails.getAuthorities()));
+                    }
                 } catch (Exception exception) {
                     SecurityContextHolder.clearContext();
                 }
