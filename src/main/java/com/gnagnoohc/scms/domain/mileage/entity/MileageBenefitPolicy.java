@@ -12,6 +12,7 @@ import org.hibernate.type.SqlTypes;
 import java.math.BigDecimal;
 import java.time.Instant;
 
+/** 학기별 인증·장학금 혜택의 최소 점수와 신청 기간을 정의한다. */
 @Entity @Getter @Table(name = "mileage_benefit_policy")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class MileageBenefitPolicy extends BaseTimeEntity {

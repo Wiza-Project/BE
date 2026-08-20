@@ -7,6 +7,7 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+/** 마일리지를 적립할 활동의 분류·핵심역량·적립 경로를 정의한다. */
 @Entity @Getter @Table(name = "mileage_activity_type")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class MileageActivityType extends BaseTimeEntity {

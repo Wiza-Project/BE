@@ -9,6 +9,7 @@ import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 import java.time.Instant;
 
+/** 학생이 인증서·장학금 등 마일리지 혜택을 신청한 이력을 관리한다. */
 @Entity @Getter
 @Table(name = "mileage_benefit_application", uniqueConstraints = @UniqueConstraint(
         name = "uq_mileage_benefit_application_policy_student", columnNames = {"benefit_policy_id", "student_id"}))
