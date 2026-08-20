@@ -99,6 +99,13 @@ tasks.withType(JavaCompile).configureEach {
 	options.compilerArgs << '-parameters'
 	options.encoding = 'UTF-8'
 }
+sourceSets {
+	main {
+		java {
+			srcDirs += generatedDir
+		}
+	}
+}
 clean {
 	delete generatedDir
 }
