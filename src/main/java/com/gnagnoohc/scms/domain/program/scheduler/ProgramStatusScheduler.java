@@ -29,7 +29,11 @@ public class ProgramStatusScheduler {
         int operatingToClosed = programRepository.transitionOperatingToClosed(now);
         // 방금(또는 이전 사이클에) CLOSED로 전환됐지만 아직 이수 판정이 안 된 승인 건을 판정한다.
         // judgeCompletion 자체가 completion_status IS NULL 조건으로 멱등하므로 매분 호출해도 안전하다.
+        // (이수번호(certificate_no) 채번도 이 안에서 함께 처리된다 — ProgramApplicationRepository.judgeCompletion 참고.)
         int completionJudged = applicationRepository.judgeCompletion(now);
+        // TODO: 마일리지 자동 적립 연동 (마일리지 도메인 개발 완료 후) — 방금 COMPLETED로 판정된 신청 건에 대해
+        //   프로그램에 연결된 mileagePolicy만큼 mileage_transaction을 적립해야 한다. 지금은 마일리지 도메인이
+        //   개발 중이라 이 스케줄러에서 직접 연동하지 않는다.
 
         if (recruitingToOperating > 0 || operatingToClosed > 0 || completionJudged > 0) {
             log.info("프로그램 상태 자동 전환 - 모집중→운영중: {}건, 운영중→종료: {}건, 이수 판정: {}건",

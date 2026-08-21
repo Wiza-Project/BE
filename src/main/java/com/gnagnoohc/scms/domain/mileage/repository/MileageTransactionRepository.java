@@ -9,9 +9,13 @@ import org.springframework.data.repository.query.Param;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 /** 마일리지 거래 원장을 기준으로 대시보드 집계와 최근 내역을 조회한다. */
 public interface MileageTransactionRepository extends JpaRepository<MileageTransaction, Integer> {
+
+    /** 동일 비교과 신청으로 이미 생성된 적립 원장을 찾아 중복 적립을 막는다. */
+    Optional<MileageTransaction> findBySourceProgramApplication_ApplicationId(Integer applicationId);
 
     /** 모든 학기의 확정 거래를 합산해 학생의 누적 마일리지를 조회한다. */
     @Query("""

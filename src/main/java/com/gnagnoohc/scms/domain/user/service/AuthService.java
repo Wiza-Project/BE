@@ -4,6 +4,7 @@ import com.gnagnoohc.scms.domain.user.dto.LoginResponse;
 import com.gnagnoohc.scms.domain.user.dto.UserSummaryResponse;
 import com.gnagnoohc.scms.domain.user.entity.AppUser;
 import com.gnagnoohc.scms.domain.user.repository.AppUserRepository;
+import com.gnagnoohc.scms.domain.user.repository.UserRoleRepository;
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
 import com.gnagnoohc.scms.global.security.AuthUser;
@@ -16,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.ZoneId;
+import java.util.List;
 
 /**
  * 로그인 / 토큰 재발급.
@@ -77,6 +79,7 @@ public class AuthService {
             new BCryptPasswordEncoder().encode("no-such-user-timing-guard");
 
     private final AppUserRepository appUserRepository;
+    private final UserRoleRepository userRoleRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
     private final DormantAccountLocker dormantAccountLocker;
@@ -166,10 +169,18 @@ public class AuthService {
         String accessToken = jwtTokenProvider.createAccessToken(authUser);
         String refreshToken = jwtTokenProvider.createRefreshToken(authUser);
 
+        // FE ProtectedRoute의 role_code 기반 분기(WP-82)를 위해 응답 바디에만 실어 보냅니다.
+        // JWT claim에는 안 담습니다 — authUser 는 JwtTokenProvider 가 claim 생성에만 쓰고
+        // getAuthorities()를 호출하지 않는 role-less 인스턴스라(AuthUser 1-인자 생성자 참고),
+        // 여기서 SecurityContext principal 로 재사용하면 안 됩니다.
+        List<String> roleCodes = userRoleRepository.findByUser_UserId(user.getUserId()).stream()
+                .map(userRole -> userRole.getId().getRoleCode())
+                .toList();
+
         LoginResponse body = LoginResponse.of(
                 accessToken,
                 jwtTokenProvider.getAccessTokenValiditySeconds(),
-                UserSummaryResponse.from(user)
+                UserSummaryResponse.from(user, roleCodes)
         );
         return new AuthResult(body, refreshToken);
     }
