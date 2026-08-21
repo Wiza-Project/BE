@@ -34,15 +34,17 @@ public class ProgramApplicationController {
     private final ProgramApplicationService programApplicationService;
 
     @Operation(summary = "프로그램 참여 신청", description = "비교과 프로그램에 참여 신청합니다. 정원 초과 시 대기순번이 자동으로 부여됩니다.")
-    // HTTP POST 요청, 즉 "/api/students/programs/{programId}/applications" 로 오는 요청을 이 메서드가 처리한다.
+    /** HTTP POST 요청, 즉 "/api/students/programs/{programId}/applications" 로 오는 요청을 이 메서드가 처리한다. */
     @PostMapping("/{programId}/applications")
-    // 신청 접수에 성공하면 HTTP 상태코드로 200(OK) 대신 201(CREATED, "새로 생성됨")을 응답한다.
+    /** 신청 접수에 성공하면 HTTP 상태코드로 200(OK) 대신 201(CREATED, "새로 생성됨")을 응답한다. */
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<ProgramApplyResponseDTO> apply(
-            // @PathVariable: URL 경로 중 "{programId}" 부분에 실제로 들어온 값을 그대로 매개변수로 받는다.
+            /** @PathVariable: URL 경로 중 "{programId}" 부분에 실제로 들어온 값을 그대로 매개변수로 받는다. */
             @PathVariable Integer programId,
-            // @AuthenticationPrincipal: 로그인 토큰에서 스프링 시큐리티가 미리 뽑아둔 "지금 로그인한 사용자 정보"를 꺼내온다.
-            // 신청자는 이 값으로만 결정하며, 클라이언트가 body로 보내는 값이 아니므로 위조가 불가능하다.
+            /**
+             * @AuthenticationPrincipal: 로그인 토큰에서 스프링 시큐리티가 미리 뽑아둔 "지금 로그인한 사용자 정보"를 꺼내온다.
+             * 신청자는 이 값으로만 결정하며, 클라이언트가 body로 보내는 값이 아니므로 위조가 불가능하다.
+             */
             @AuthenticationPrincipal AuthUser authUser) {
         return ApiResponse.ok(programApplicationService.apply(programId, authUser.getId()));
     }
@@ -52,7 +54,7 @@ public class ProgramApplicationController {
     public ApiResponse<ProgramApplicationCancelResponseDTO> cancel(
             @PathVariable Integer programId,
             @PathVariable Integer applicationId,
-            // 취소 사유는 선택 입력이라, 요청 바디 자체를 생략해도(required = false) 된다.
+            /** 취소 사유는 선택 입력이라, 요청 바디 자체를 생략해도(required = false) 된다. */
             @RequestBody(required = false) ProgramApplicationCancelRequestDTO request,
             @AuthenticationPrincipal AuthUser authUser) {
         String reason = request != null ? request.reason() : null;

@@ -2,7 +2,7 @@ package com.gnagnoohc.scms.domain.program.dto.response;
 
 import com.gnagnoohc.scms.domain.competency.entity.Competency;
 
-// 프로그램 등록 폼의 핵심역량 드롭다운용 응답 DTO.
+/** 프로그램 등록 폼의 핵심역량 드롭다운용 응답 DTO. */
 
 public record CompetencyOptionResponseDTO(
         Integer competencyId,

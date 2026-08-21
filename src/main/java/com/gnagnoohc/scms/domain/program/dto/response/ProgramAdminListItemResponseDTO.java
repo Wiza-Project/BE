@@ -5,7 +5,7 @@ import com.gnagnoohc.scms.domain.program.entity.ExtracurricularProgram;
 import java.math.BigDecimal;
 import java.time.Instant;
 
-// staff용 프로그램 목록 화면(본인 담당 프로그램만) 카드 하나에 필요한 필드를 담는다.
+/** staff용 프로그램 목록 화면(본인 담당 프로그램만) 카드 하나에 필요한 필드를 담는다. */
 public record ProgramAdminListItemResponseDTO(
         Integer programId,
         String programName,

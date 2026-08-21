@@ -6,7 +6,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 
-// 학생용 프로그램 상세 화면에 필요한 기본정보 전체 + 회차 목록 + 신청자 수를 담는다.
+/** 학생용 프로그램 상세 화면에 필요한 기본정보 전체 + 회차 목록 + 신청자 수를 담는다. */
 public record ProgramDetailResponseDTO(
         Integer programId,
         String programName,

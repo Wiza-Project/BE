@@ -35,12 +35,12 @@ public class ProgramApplicationAdminController {
     private final ProgramApplicationService programApplicationService;
 
     @Operation(summary = "참여 신청 승인", description = "정원 이내인 경우에만 참여 신청을 승인합니다.")
-    // HTTP POST 요청, 즉 "/api/admin/programs/{programId}/applications/{applicationId}/approve" 로 오는 요청을 처리한다.
+    /** HTTP POST 요청, 즉 "/api/admin/programs/{programId}/applications/{applicationId}/approve" 로 오는 요청을 처리한다. */
     @PostMapping("/{applicationId}/approve")
     public ApiResponse<ProgramApplicationDecisionResponseDTO> approve(
             @PathVariable Integer programId,
             @PathVariable Integer applicationId,
-            // 지금 로그인한 운영부서 담당자 정보. 처리자(processedBy)는 이 값으로만 결정한다.
+            /** 지금 로그인한 운영부서 담당자 정보. 처리자(processedBy)는 이 값으로만 결정한다. */
             @AuthenticationPrincipal AuthUser authUser) {
         return ApiResponse.ok(programApplicationService.approve(programId, applicationId, authUser.getId()));
     }
@@ -60,7 +60,7 @@ public class ProgramApplicationAdminController {
     @GetMapping
     public ApiResponse<PageResponse<ProgramApplicationAdminListItemResponseDTO>> list(
             @PathVariable Integer programId,
-            // 신청 상태(APPLIED/WAITLISTED/APPROVED/REJECTED/CANCELLED)로 필터링. 생략하면 전체 상태를 조회한다.
+            /** 신청 상태(APPLIED/WAITLISTED/APPROVED/REJECTED/CANCELLED)로 필터링. 생략하면 전체 상태를 조회한다. */
             @RequestParam(required = false) String status,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
         return ApiResponse.ok(programApplicationService.listByProgram(programId, status, pageable));

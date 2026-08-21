@@ -11,6 +11,7 @@ import com.gnagnoohc.scms.domain.program.entity.ExtracurricularProgram;
 import com.gnagnoohc.scms.domain.program.entity.ProgramApplication;
 import com.gnagnoohc.scms.domain.program.repository.ExtracurricularProgramRepository;
 import com.gnagnoohc.scms.domain.program.repository.ProgramApplicationRepository;
+import com.gnagnoohc.scms.domain.program.repository.ProgramMileageTransactionRepository;
 import com.gnagnoohc.scms.domain.user.entity.AppUser;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;
 import com.gnagnoohc.scms.global.error.BusinessException;
@@ -48,6 +49,9 @@ class ProgramApplicationServiceTest {
 
     @Mock
     ProgramApplicationRepository applicationRepository;
+
+    @Mock
+    ProgramMileageTransactionRepository mileageTransactionRepository;
 
     @InjectMocks
     ProgramApplicationService programApplicationService;
@@ -527,8 +531,10 @@ class ProgramApplicationServiceTest {
                 .isEqualTo(ErrorCode.PROGRAM_NOT_FOUND);
     }
 
-    // ExtracurricularProgram은 protected 기본 생성자만 있고 setter/빌더가 없어(네이티브 SQL로만 값을 채우는 구조),
-    // 테스트 픽스처는 리플렉션으로 생성한 뒤 필요한 필드만 직접 채워 넣는다. (ProgramServiceTest.buildProgramFixture 참고)
+    /**
+     * ExtracurricularProgram은 protected 기본 생성자만 있고 setter/빌더가 없어(네이티브 SQL로만 값을 채우는 구조),
+     * 테스트 픽스처는 리플렉션으로 생성한 뒤 필요한 필드만 직접 채워 넣는다. (ProgramServiceTest.buildProgramFixture 참고)
+     */
     private ExtracurricularProgram buildProgramFixture(
             Integer programId, Instant recruitmentStartsAt, Instant recruitmentEndsAt, Integer capacity) throws Exception {
         Constructor<ExtracurricularProgram> constructor = ExtracurricularProgram.class.getDeclaredConstructor();
@@ -541,7 +547,9 @@ class ProgramApplicationServiceTest {
         return program;
     }
 
-    // ProgramApplication도 같은 이유(protected 기본 생성자, setter/빌더 없음)로 리플렉션 픽스처를 사용한다.
+    /**
+     * ProgramApplication도 같은 이유(protected 기본 생성자, setter/빌더 없음)로 리플렉션 픽스처를 사용한다.
+     */
     private ProgramApplication buildApplicationFixture(
             Integer applicationId, ExtracurricularProgram program, String applicationStatus) throws Exception {
         Constructor<ProgramApplication> constructor = ProgramApplication.class.getDeclaredConstructor();
@@ -553,7 +561,9 @@ class ProgramApplicationServiceTest {
         return application;
     }
 
-    // listMyApplications 테스트용: 목록 응답 매핑에 필요한 필드까지 채우는 풀필드 픽스처.
+    /**
+     * listMyApplications 테스트용: 목록 응답 매핑에 필요한 필드까지 채우는 풀필드 픽스처.
+     */
     private ProgramApplication buildApplicationSummaryFixture(
             Integer applicationId, ExtracurricularProgram program, String applicationStatus,
             Integer waitlistOrder, Instant createdAt, Instant processedAt, String decisionReason,
@@ -572,7 +582,9 @@ class ProgramApplicationServiceTest {
         return application;
     }
 
-    // student(AppUser)까지 채워야 하는 취소 테스트용 오버로드. AppUser도 같은 이유로 리플렉션 픽스처를 쓴다.
+    /**
+     * student(AppUser)까지 채워야 하는 취소 테스트용 오버로드. AppUser도 같은 이유로 리플렉션 픽스처를 쓴다.
+     */
     private ProgramApplication buildApplicationFixture(
             Integer applicationId, ExtracurricularProgram program, String applicationStatus, Integer studentId) throws Exception {
         ProgramApplication application = buildApplicationFixture(applicationId, program, applicationStatus);

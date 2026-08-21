@@ -46,7 +46,7 @@ public class ProgramController {
     public ApiResponse<PageResponse<ProgramAdminListItemResponseDTO>> list(
             @RequestParam(required = false) ProgramStatus status,
             @RequestParam(required = false) String keyword,
-            // 연계 핵심역량 id로 필터링. 생략하면 역량으로 거르지 않는다.
+            /** 연계 핵심역량 id로 필터링. 생략하면 역량으로 거르지 않는다. */
             @RequestParam(required = false) Integer competencyId,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable,
             @AuthenticationPrincipal AuthUser authUser) {
@@ -54,16 +54,20 @@ public class ProgramController {
     }
 
     @Operation(summary = "프로그램 등록", description = "비교과 프로그램을 신규 등록합니다 (모집중 상태로 시작)")
-    // HTTP POST 요청, 즉 "/api/admin/programs" 로 오는 요청을 이 메서드가 처리한다.
+    /** HTTP POST 요청, 즉 "/api/admin/programs" 로 오는 요청을 이 메서드가 처리한다. */
     @PostMapping
-    // 등록에 성공하면 HTTP 상태코드로 200(OK) 대신 201(CREATED, "새로 생성됨")을 응답한다.
+    /** 등록에 성공하면 HTTP 상태코드로 200(OK) 대신 201(CREATED, "새로 생성됨")을 응답한다. */
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<ProgramRegisterResponseDTO> register(
-            // @Valid: request 안의 @NotNull, @NotBlank 같은 검증 어노테이션들을 실제로 검사하라는 표시.
-            // @RequestBody: HTTP 요청 body에 담긴 JSON을 ProgramRegisterRequestDTO 객체로 자동 변환.
+            /**
+             * @Valid: request 안의 @NotNull, @NotBlank 같은 검증 어노테이션들을 실제로 검사하라는 표시.
+             * @RequestBody: HTTP 요청 body에 담긴 JSON을 ProgramRegisterRequestDTO 객체로 자동 변환.
+             */
             @Valid @RequestBody ProgramRegisterRequestDTO request,
-            // @AuthenticationPrincipal: 로그인 토큰(JWT 등)에서 스프링 시큐리티가 미리 뽑아둔
-            // "지금 로그인한 사용자 정보"를 그대로 꺼내온다. 클라이언트가 body에 넣어 보내는 값이 아니므로 위조가 불가능하다.
+            /**
+             * @AuthenticationPrincipal: 로그인 토큰(JWT 등)에서 스프링 시큐리티가 미리 뽑아둔
+             * "지금 로그인한 사용자 정보"를 그대로 꺼내온다. 클라이언트가 body에 넣어 보내는 값이 아니므로 위조가 불가능하다.
+             */
             @AuthenticationPrincipal AuthUser authUser) {
         // authUser.getId()로 등록 담당자를 서버가 직접 결정해서 서비스에 넘긴다.
         return ApiResponse.ok(programService.register(request, authUser.getId(), authUser.getDepartmentCodeId()));
@@ -76,29 +80,33 @@ public class ProgramController {
     }
 
     @Operation(summary = "프로그램 수정", description = "모집중 상태의 비교과 프로그램을 전체 필드 수정합니다 (등록자 본인만 가능)")
-    // HTTP PUT 요청, 즉 "/api/admin/programs/{programId}" 로 오는 요청을 이 메서드가 처리한다.
-    // PUT은 "이 리소스 전체를 이 내용으로 통째로 교체해줘"라는 의미의 HTTP 메서드다(일부 필드만 보내는 PATCH와 다름).
+    /**
+     * HTTP PUT 요청, 즉 "/api/admin/programs/{programId}" 로 오는 요청을 이 메서드가 처리한다.
+     * PUT은 "이 리소스 전체를 이 내용으로 통째로 교체해줘"라는 의미의 HTTP 메서드다(일부 필드만 보내는 PATCH와 다름).
+     */
     @PutMapping("/{programId}")
     public ApiResponse<ProgramUpdateResponseDTO> update(
-            // @PathVariable: URL 경로 중 "{programId}" 부분에 실제로 들어온 값을 그대로 매개변수로 받는다.
-            // 예를 들어 요청이 "/api/admin/programs/5"라면 programId에는 5가 담긴다.
+            /**
+             * @PathVariable: URL 경로 중 "{programId}" 부분에 실제로 들어온 값을 그대로 매개변수로 받는다.
+             * 예를 들어 요청이 "/api/admin/programs/5"라면 programId에는 5가 담긴다.
+             */
             @PathVariable Integer programId,
-            // 등록 때와 마찬가지로, 요청 body(JSON)를 검증하면서 ProgramUpdateRequestDTO로 변환한다.
+            /** 등록 때와 마찬가지로, 요청 body(JSON)를 검증하면서 ProgramUpdateRequestDTO로 변환한다. */
             @Valid @RequestBody ProgramUpdateRequestDTO request,
-            // 지금 로그인한 사용자 정보. 서비스 계층에서 "이 프로그램을 등록한 사람과 같은 사람인지" 확인하는 데 쓰인다.
+            /** 지금 로그인한 사용자 정보. 서비스 계층에서 "이 프로그램을 등록한 사람과 같은 사람인지" 확인하는 데 쓰인다. */
             @AuthenticationPrincipal AuthUser authUser) {
         // authUser.getId()를 그대로 서비스에 넘겨서, 소유자 검증(본인이 등록한 프로그램인지)을 서비스 계층에서 수행하게 한다.
         return ApiResponse.ok(programService.update(programId, request, authUser.getId()));
     }
 
     @Operation(summary = "프로그램 삭제", description = "모집중인 비교과 프로그램을 삭제합니다 (등록자 본인만 가능)")
-    // HTTP DELETE 요청, 즉 "/api/admin/programs/{programId}" 로 오는 요청을 이 메서드가 처리한다.
+    /** HTTP DELETE 요청, 즉 "/api/admin/programs/{programId}" 로 오는 요청을 이 메서드가 처리한다. */
     @DeleteMapping("/{programId}")
-    // 삭제에 성공하면 돌려줄 데이터가 없으므로 204(NO_CONTENT)로 응답한다.
+    /** 삭제에 성공하면 돌려줄 데이터가 없으므로 204(NO_CONTENT)로 응답한다. */
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(
             @PathVariable Integer programId,
-            // 지금 로그인한 사용자 정보. 서비스 계층에서 "이 프로그램을 등록한 사람과 같은 사람인지" 확인하는 데 쓰인다.
+            /** 지금 로그인한 사용자 정보. 서비스 계층에서 "이 프로그램을 등록한 사람과 같은 사람인지" 확인하는 데 쓰인다. */
             @AuthenticationPrincipal AuthUser authUser) {
         programService.delete(programId, authUser.getId());
     }

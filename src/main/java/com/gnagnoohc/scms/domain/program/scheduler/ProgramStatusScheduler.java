@@ -18,9 +18,11 @@ public class ProgramStatusScheduler {
     private final ExtracurricularProgramRepository programRepository;
     private final ProgramApplicationRepository applicationRepository;
 
-    // 매분 정각에 실행. 모집중(DRAFT)→운영중(OPERATING)→종료(CLOSED)→이수 판정 순서로 처리해야
-    // 스케줄러가 한동안 멈췄다 재개된 경우에도(여러 단계를 모두 지난 프로그램이 있는 경우) 같은 사이클
-    // 안에서 최종 상태(이수 판정까지)를 한 번에 따라잡을 수 있다.
+    /**
+     * 매분 정각에 실행. 모집중(DRAFT)→운영중(OPERATING)→종료(CLOSED)→이수 판정 순서로 처리해야
+     * 스케줄러가 한동안 멈췄다 재개된 경우에도(여러 단계를 모두 지난 프로그램이 있는 경우) 같은 사이클
+     * 안에서 최종 상태(이수 판정까지)를 한 번에 따라잡을 수 있다.
+     */
     @Scheduled(cron = "0 * * * * *")
     @Transactional
     public void transitionProgramStatuses() {

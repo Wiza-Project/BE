@@ -38,11 +38,15 @@ import java.util.stream.Collectors;
 public class ProgramService {
 
     private static final BigDecimal DEFAULT_COMPLETION_RATE = new BigDecimal("80");
-    // 등록 직후의 상태. 값 자체는 기존과 동일한 DRAFT이지만, 이제 "모집중"을 의미하는 상수로 취급한다
-    // (ProgramStatus 참고 — 모집 마감/운영 종료가 지나면 스케줄러가 OPERATING/CLOSED로 자동 전환한다).
+    /**
+     * 등록 직후의 상태. 값 자체는 기존과 동일한 DRAFT이지만, 이제 "모집중"을 의미하는 상수로 취급한다
+     * (ProgramStatus 참고 — 모집 마감/운영 종료가 지나면 스케줄러가 OPERATING/CLOSED로 자동 전환한다).
+     */
     private static final ProgramStatus INITIAL_STATUS = ProgramStatus.DRAFT;
-    // 요청에 부서/프로그램 유형 코드가 없을 때 채워 넣을 기본값(CommonCode의 code_group/code).
-    // 코드값은 CommonCodeSeeder 기준(접두어+100단위 형식으로 리네임됨: 학습=PT100, 비교과운영부서=D200).
+    /**
+     * 요청에 부서/프로그램 유형 코드가 없을 때 채워 넣을 기본값(CommonCode의 code_group/code).
+     * 코드값은 CommonCodeSeeder 기준(접두어+100단위 형식으로 리네임됨: 학습=PT100, 비교과운영부서=D200).
+     */
     private static final String DEPARTMENT_GROUP = "DEPARTMENT";
     private static final String DEFAULT_DEPARTMENT_CODE = "D200"; // 비교과운영부서
     private static final String PROGRAM_TYPE_GROUP = "PROGRAM_TYPE";
@@ -54,14 +58,16 @@ public class ProgramService {
     private final ProgramSessionRepository programSessionRepository;
     private final ProgramApplicationRepository applicationRepository;
 
-    // ── "등록(Create)" 기능 ──────────────────────────────────────────────
-    //
-    // 비교과프로그램을 새로 등록하는 메서드. 매개변수 2개의 의미:
-    //   request       : 등록할 내용이 담긴 요청 DTO (요청 바디에서 옴)
-    //   managerUserId : 지금 로그인해서 이 요청을 보낸 사용자의 id (인증 정보에서 옴, 클라이언트가 위조 불가)
-    //                    → 이 값이 그대로 등록 담당자(managerUser)가 된다.
-    //   departmentCodeId : 로그인한 사용자가 소속된 부서의 CommonCode PK (인증 정보에서 옴, 클라이언트가 위조 불가)
-    //                    → 비교과운영부서(D200) 소속인지 검증하는 데만 쓰인다.
+    /**
+     * ── "등록(Create)" 기능 ──────────────────────────────────────────────
+     *
+     * 비교과프로그램을 새로 등록하는 메서드. 매개변수 2개의 의미:
+     *   request       : 등록할 내용이 담긴 요청 DTO (요청 바디에서 옴)
+     *   managerUserId : 지금 로그인해서 이 요청을 보낸 사용자의 id (인증 정보에서 옴, 클라이언트가 위조 불가)
+     *                    → 이 값이 그대로 등록 담당자(managerUser)가 된다.
+     *   departmentCodeId : 로그인한 사용자가 소속된 부서의 CommonCode PK (인증 정보에서 옴, 클라이언트가 위조 불가)
+     *                    → 비교과운영부서(D200) 소속인지 검증하는 데만 쓰인다.
+     */
     public ProgramRegisterResponseDTO register(ProgramRegisterRequestDTO request, Integer managerUserId,
                                                 Integer departmentCodeId) {
         // (0) 부서 권한 확인 -----------------------------------------------------------
@@ -140,12 +146,14 @@ public class ProgramService {
         );
     }
 
-    // ── "수정(Update)" 기능 ──────────────────────────────────────────────
-    //
-    // 프로그램 하나를 수정하는 메서드. 매개변수 3개의 의미:
-    //   programId     : 수정할 프로그램의 PK (URL 경로에서 옴)
-    //   request       : 수정할 내용이 담긴 요청 DTO (요청 바디에서 옴)
-    //   currentUserId : 지금 로그인해서 이 요청을 보낸 사용자의 id (인증 정보에서 옴, 클라이언트가 위조 불가)
+    /**
+     * ── "수정(Update)" 기능 ──────────────────────────────────────────────
+     *
+     * 프로그램 하나를 수정하는 메서드. 매개변수 3개의 의미:
+     *   programId     : 수정할 프로그램의 PK (URL 경로에서 옴)
+     *   request       : 수정할 내용이 담긴 요청 DTO (요청 바디에서 옴)
+     *   currentUserId : 지금 로그인해서 이 요청을 보낸 사용자의 id (인증 정보에서 옴, 클라이언트가 위조 불가)
+     */
     public ProgramUpdateResponseDTO update(Integer programId, ProgramUpdateRequestDTO request, Integer currentUserId) {
 
         // (a) 존재 확인 ------------------------------------------------------------
@@ -242,11 +250,13 @@ public class ProgramService {
         );
     }
 
-    // ── "목록 조회(List)" 기능 ──────────────────────────────────────────────
-    //
-    // 학생이 프로그램 목록 페이지에서 탐색할 때 쓰는 조회. 상태/이름 키워드/연계 핵심역량으로 걸러 페이지 단위로 내려준다.
-    // 셋 다 없으면 전체 프로그램을 페이지네이션해서 반환한다. 정렬(신규순=createdAt, 마감임박순=recruitmentEndsAt 등)은
-    // 이 메서드가 아니라 Pageable의 sort 쿼리 파라미터로 이미 처리된다(ExtracurricularProgramRepositoryImpl.resolveOrderSpecifiers 참고).
+    /**
+     * ── "목록 조회(List)" 기능 ──────────────────────────────────────────────
+     *
+     * 학생이 프로그램 목록 페이지에서 탐색할 때 쓰는 조회. 상태/이름 키워드/연계 핵심역량으로 걸러 페이지 단위로 내려준다.
+     * 셋 다 없으면 전체 프로그램을 페이지네이션해서 반환한다. 정렬(신규순=createdAt, 마감임박순=recruitmentEndsAt 등)은
+     * 이 메서드가 아니라 Pageable의 sort 쿼리 파라미터로 이미 처리된다(ExtracurricularProgramRepositoryImpl.resolveOrderSpecifiers 참고).
+     */
     @Transactional(readOnly = true)
     public PageResponse<ProgramListItemResponseDTO> list(ProgramStatus status, String keyword, Integer competencyId,
                                                            Pageable pageable) {
@@ -256,9 +266,11 @@ public class ProgramService {
                 ProgramListItemResponseDTO.from(program, applicantCounts.getOrDefault(program.getProgramId(), 0L))));
     }
 
-    // ── "staff용 목록 조회(List)" 기능 ──────────────────────────────────────
-    //
-    // list()와 거의 같지만, 로그인한 staff 본인이 담당(managerUser)한 프로그램으로만 범위를 좁힌다.
+    /**
+     * ── "staff용 목록 조회(List)" 기능 ──────────────────────────────────────
+     *
+     * list()와 거의 같지만, 로그인한 staff 본인이 담당(managerUser)한 프로그램으로만 범위를 좁힌다.
+     */
     @Transactional(readOnly = true)
     public PageResponse<ProgramAdminListItemResponseDTO> listMine(Integer managerUserId, ProgramStatus status,
                                                                     String keyword, Integer competencyId,
@@ -270,9 +282,11 @@ public class ProgramService {
                 program, applicantCounts.getOrDefault(program.getProgramId(), 0L))));
     }
 
-    // ── "학생용 상세 조회(Detail)" 기능 ──────────────────────────────────────
-    //
-    // 학생이 프로그램 상세 화면에서 볼 기본정보 전체 + 회차 목록 + 신청자 수를 한 번에 조립한다.
+    /**
+     * ── "학생용 상세 조회(Detail)" 기능 ──────────────────────────────────────
+     *
+     * 학생이 프로그램 상세 화면에서 볼 기본정보 전체 + 회차 목록 + 신청자 수를 한 번에 조립한다.
+     */
     @Transactional(readOnly = true)
     public ProgramDetailResponseDTO getDetail(Integer programId) {
         ExtracurricularProgram program = programRepository.findDetailById(programId)
@@ -290,7 +304,9 @@ public class ProgramService {
         return ProgramDetailResponseDTO.from(program, applicantCount, sessions);
     }
 
-    // 목록 페이지 한 번에 해당하는 프로그램들의 신청자 수를 한 번의 쿼리로 배치 조회한다(N+1 방지).
+    /**
+     * 목록 페이지 한 번에 해당하는 프로그램들의 신청자 수를 한 번의 쿼리로 배치 조회한다(N+1 방지).
+     */
     private Map<Integer, Long> countApplicantsByProgram(List<ExtracurricularProgram> programs) {
         if (programs.isEmpty()) {
             return Map.of();
@@ -302,7 +318,9 @@ public class ProgramService {
                         ProgramApplicationRepository.ProgramApplicantCount::getCount));
     }
 
-    // 프로그램 등록 폼의 핵심역량 드롭다운용 옵션 목록. 최상위(하위 역량 없음) + 활성 상태만 노출한다.
+    /**
+     * 프로그램 등록 폼의 핵심역량 드롭다운용 옵션 목록. 최상위(하위 역량 없음) + 활성 상태만 노출한다.
+     */
     public List<CompetencyOptionResponseDTO> getCompetencyOptions() {
         return competencyOptionRepository.findByParentCompetencyIsNullAndActiveTrueOrderByDisplayOrderAsc()
                 .stream()
@@ -310,11 +328,13 @@ public class ProgramService {
                 .toList();
     }
 
-    // ── "삭제(Delete)" 기능 ──────────────────────────────────────────────
-    //
-    // 프로그램 하나를 삭제하는 메서드. 매개변수 2개의 의미:
-    //   programId     : 삭제할 프로그램의 PK (URL 경로에서 옴)
-    //   currentUserId : 지금 로그인해서 이 요청을 보낸 사용자의 id (인증 정보에서 옴, 클라이언트가 위조 불가)
+    /**
+     * ── "삭제(Delete)" 기능 ──────────────────────────────────────────────
+     *
+     * 프로그램 하나를 삭제하는 메서드. 매개변수 2개의 의미:
+     *   programId     : 삭제할 프로그램의 PK (URL 경로에서 옴)
+     *   currentUserId : 지금 로그인해서 이 요청을 보낸 사용자의 id (인증 정보에서 옴, 클라이언트가 위조 불가)
+     */
     public void delete(Integer programId, Integer currentUserId) {
 
         // (a) 존재 확인 ------------------------------------------------------------
@@ -345,8 +365,10 @@ public class ProgramService {
         }
     }
 
-    // 로그인한 사용자의 부서 codeId가 비교과운영부서(D200)의 codeId와 같은지 검사한다.
-    // departmentCodeId가 null이면(부서 미배정) 당연히 비교과운영부서가 아니므로 false.
+    /**
+     * 로그인한 사용자의 부서 codeId가 비교과운영부서(D200)의 codeId와 같은지 검사한다.
+     * departmentCodeId가 null이면(부서 미배정) 당연히 비교과운영부서가 아니므로 false.
+     */
     private boolean isOperatingDepartment(Integer departmentCodeId) {
         if (departmentCodeId == null) {
             return false;
@@ -357,8 +379,10 @@ public class ProgramService {
                 .anyMatch(commonCode -> commonCode.getCodeId().equals(departmentCodeId));
     }
 
-    // 요청값이 있으면 그대로 쓰고, 없으면(null) 주어진 그룹에서 defaultCode와 일치하는 CommonCode를 찾아 그 codeId를 대신 쓴다.
-    // (CommonCodeRepository에는 group+code 단건 조회 메서드가 없어, 기존에 있는 그룹 전체 조회 메서드로 가져온 뒤 code로 걸러낸다.)
+    /**
+     * 요청값이 있으면 그대로 쓰고, 없으면(null) 주어진 그룹에서 defaultCode와 일치하는 CommonCode를 찾아 그 codeId를 대신 쓴다.
+     * (CommonCodeRepository에는 group+code 단건 조회 메서드가 없어, 기존에 있는 그룹 전체 조회 메서드로 가져온 뒤 code로 걸러낸다.)
+     */
     private Integer resolveCodeId(Integer requestedCodeId, String codeGroup, String defaultCode,
                                    ErrorCode notFoundError) {
         if (requestedCodeId != null) {
@@ -372,8 +396,10 @@ public class ProgramService {
                 .getCodeId();
     }
 
-    // FK 제약 위반 메시지에는 PostgreSQL이 항상 위반된 컬럼명을 "Key (컬럼명)=(값) is not present..." 형식으로 담아준다.
-    // 제약 조건 이름(마이그레이션에서 어떻게 명명했는지)에 기대지 않고 컬럼명 문자열만으로 어떤 참조 값이 없는지 구분한다.
+    /**
+     * FK 제약 위반 메시지에는 PostgreSQL이 항상 위반된 컬럼명을 "Key (컬럼명)=(값) is not present..." 형식으로 담아준다.
+     * 제약 조건 이름(마이그레이션에서 어떻게 명명했는지)에 기대지 않고 컬럼명 문자열만으로 어떤 참조 값이 없는지 구분한다.
+     */
     private BusinessException resolveForeignKeyViolation(DataIntegrityViolationException e) {
         // e.getMostSpecificCause()는 스프링이 감싸놓은 예외 껍데기를 벗기고, 실제로 DB 드라이버가 던진
         // 가장 안쪽의 원인 예외를 꺼내온다. 그 예외의 메시지 안에 "어떤 컬럼이 문제였는지"가 문자열로 들어있다.
@@ -400,9 +426,11 @@ public class ProgramService {
         return new BusinessException(ErrorCode.INVALID_INPUT, "요청 값이 올바르지 않습니다.");
     }
 
-    // 세 가지 논리적 제약을 검사한다: 모집 시작<종료, 운영 시작<종료, 모집 종료<=운영 시작(모집이 끝나야 운영이 시작됨).
-    // register()와 update() 양쪽에서 공통으로 쓸 수 있도록, DTO 타입 전체가 아니라 Instant 값 4개만 파라미터로 받는다.
-    // (두 DTO는 필드 구성은 같지만 서로 다른 record 타입이라 공통 인터페이스가 없기 때문에, 원시 값을 뽑아서 넘기는 방식을 택했다.)
+    /**
+     * 세 가지 논리적 제약을 검사한다: 모집 시작<종료, 운영 시작<종료, 모집 종료<=운영 시작(모집이 끝나야 운영이 시작됨).
+     * register()와 update() 양쪽에서 공통으로 쓸 수 있도록, DTO 타입 전체가 아니라 Instant 값 4개만 파라미터로 받는다.
+     * (두 DTO는 필드 구성은 같지만 서로 다른 record 타입이라 공통 인터페이스가 없기 때문에, 원시 값을 뽑아서 넘기는 방식을 택했다.)
+     */
     private void validatePeriod(Instant recruitmentStartsAt, Instant recruitmentEndsAt,
                                  Instant operationStartsAt, Instant operationEndsAt) {
         // 모집 시작 시각이 모집 종료 시각보다 앞서야 한다(true여야 정상).

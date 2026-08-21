@@ -55,13 +55,14 @@ public class ExtracurricularProgramRepositoryImpl implements ExtracurricularProg
             condition.and(program.competency.competencyId.eq(competencyId));
         }
 
-        // operatingUnitCode/programTypeCode/competency는 목록 DTO 매핑에서 라벨(codeName/competencyName)로
-        // 바로 쓰이므로, LAZY 연관관계를 지연 로딩(N+1)하지 않고 fetch join으로 한 번에 가져온다.
+        // operatingUnitCode/programTypeCode/competency/mileagePolicy는 목록 DTO 매핑에서 라벨(codeName/competencyName)이나
+        // 마일리지 적립점수(mileagePoints)로 바로 쓰이므로, LAZY 연관관계를 지연 로딩(N+1)하지 않고 fetch join으로 한 번에 가져온다.
         List<ExtracurricularProgram> content = queryFactory
                 .selectFrom(program)
                 .leftJoin(program.operatingUnitCode).fetchJoin()
                 .leftJoin(program.programTypeCode).fetchJoin()
                 .leftJoin(program.competency).fetchJoin()
+                .leftJoin(program.mileagePolicy).fetchJoin()
                 .where(condition)
                 .orderBy(resolveOrderSpecifiers(pageable.getSort(), program))
                 .offset(pageable.getOffset())
@@ -96,8 +97,10 @@ public class ExtracurricularProgramRepositoryImpl implements ExtracurricularProg
         return Optional.ofNullable(result);
     }
 
-    // 클라이언트가 보낸 정렬 프로퍼티를 임의로 신뢰하면 존재하지 않는 필드로 쿼리가 깨질 수 있으므로,
-    // 허용된 필드만 화이트리스트로 매핑한다. 매칭되는 정렬 키가 하나도 없으면 등록일 내림차순을 기본값으로 쓴다.
+    /**
+     * 클라이언트가 보낸 정렬 프로퍼티를 임의로 신뢰하면 존재하지 않는 필드로 쿼리가 깨질 수 있으므로,
+     * 허용된 필드만 화이트리스트로 매핑한다. 매칭되는 정렬 키가 하나도 없으면 등록일 내림차순을 기본값으로 쓴다.
+     */
     private OrderSpecifier<?>[] resolveOrderSpecifiers(Sort sort, QExtracurricularProgram program) {
         List<OrderSpecifier<?>> orders = sort.stream()
                 .<OrderSpecifier<?>>map(order -> toOrderSpecifier(order, program))
