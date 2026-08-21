@@ -1,15 +1,20 @@
 package com.gnagnoohc.scms.domain.program.service;
 
-import com.gnagnoohc.scms.domain.program.dto.CompetencyOptionResponseDTO;
-import com.gnagnoohc.scms.domain.program.dto.ProgramListItemResponseDTO;
-import com.gnagnoohc.scms.domain.program.dto.ProgramRegisterRequestDTO;
-import com.gnagnoohc.scms.domain.program.dto.ProgramRegisterResponseDTO;
-import com.gnagnoohc.scms.domain.program.dto.ProgramUpdateRequestDTO;
-import com.gnagnoohc.scms.domain.program.dto.ProgramUpdateResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.CompetencyOptionResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramAdminListItemResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramDetailResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramListItemResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.request.ProgramRegisterRequestDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramRegisterResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.request.ProgramUpdateRequestDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramSessionResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramUpdateResponseDTO;
 import com.gnagnoohc.scms.domain.program.entity.ExtracurricularProgram;
 import com.gnagnoohc.scms.domain.program.entity.ProgramStatus;
 import com.gnagnoohc.scms.domain.program.repository.CompetencyOptionRepository;
 import com.gnagnoohc.scms.domain.program.repository.ExtracurricularProgramRepository;
+import com.gnagnoohc.scms.domain.program.repository.ProgramApplicationRepository;
+import com.gnagnoohc.scms.domain.program.repository.ProgramSessionRepository;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;
 import com.gnagnoohc.scms.global.common.repository.CommonCodeRepository;
 import com.gnagnoohc.scms.global.error.BusinessException;
@@ -24,6 +29,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -44,6 +51,8 @@ public class ProgramService {
     private final ExtracurricularProgramRepository programRepository;
     private final CompetencyOptionRepository competencyOptionRepository;
     private final CommonCodeRepository commonCodeRepository;
+    private final ProgramSessionRepository programSessionRepository;
+    private final ProgramApplicationRepository applicationRepository;
 
     // ── "등록(Create)" 기능 ──────────────────────────────────────────────
     //
@@ -235,12 +244,62 @@ public class ProgramService {
 
     // ── "목록 조회(List)" 기능 ──────────────────────────────────────────────
     //
-    // 학생이 프로그램 목록 페이지에서 탐색할 때 쓰는 조회. 상태/이름 키워드로 걸러 페이지 단위로 내려준다.
-    // status/keyword가 둘 다 없으면 전체 프로그램을 페이지네이션해서 반환한다.
+    // 학생이 프로그램 목록 페이지에서 탐색할 때 쓰는 조회. 상태/이름 키워드/연계 핵심역량으로 걸러 페이지 단위로 내려준다.
+    // 셋 다 없으면 전체 프로그램을 페이지네이션해서 반환한다. 정렬(신규순=createdAt, 마감임박순=recruitmentEndsAt 등)은
+    // 이 메서드가 아니라 Pageable의 sort 쿼리 파라미터로 이미 처리된다(ExtracurricularProgramRepositoryImpl.resolveOrderSpecifiers 참고).
     @Transactional(readOnly = true)
-    public PageResponse<ProgramListItemResponseDTO> list(ProgramStatus status, String keyword, Pageable pageable) {
-        Page<ExtracurricularProgram> page = programRepository.search(status, keyword, pageable);
-        return PageResponse.from(page.map(ProgramListItemResponseDTO::from));
+    public PageResponse<ProgramListItemResponseDTO> list(ProgramStatus status, String keyword, Integer competencyId,
+                                                           Pageable pageable) {
+        Page<ExtracurricularProgram> page = programRepository.search(status, keyword, competencyId, pageable);
+        Map<Integer, Long> applicantCounts = countApplicantsByProgram(page.getContent());
+        return PageResponse.from(page.map(program ->
+                ProgramListItemResponseDTO.from(program, applicantCounts.getOrDefault(program.getProgramId(), 0L))));
+    }
+
+    // ── "staff용 목록 조회(List)" 기능 ──────────────────────────────────────
+    //
+    // list()와 거의 같지만, 로그인한 staff 본인이 담당(managerUser)한 프로그램으로만 범위를 좁힌다.
+    @Transactional(readOnly = true)
+    public PageResponse<ProgramAdminListItemResponseDTO> listMine(Integer managerUserId, ProgramStatus status,
+                                                                    String keyword, Integer competencyId,
+                                                                    Pageable pageable) {
+        Page<ExtracurricularProgram> page = programRepository.searchByManager(
+                managerUserId, status, keyword, competencyId, pageable);
+        Map<Integer, Long> applicantCounts = countApplicantsByProgram(page.getContent());
+        return PageResponse.from(page.map(program -> ProgramAdminListItemResponseDTO.from(
+                program, applicantCounts.getOrDefault(program.getProgramId(), 0L))));
+    }
+
+    // ── "학생용 상세 조회(Detail)" 기능 ──────────────────────────────────────
+    //
+    // 학생이 프로그램 상세 화면에서 볼 기본정보 전체 + 회차 목록 + 신청자 수를 한 번에 조립한다.
+    @Transactional(readOnly = true)
+    public ProgramDetailResponseDTO getDetail(Integer programId) {
+        ExtracurricularProgram program = programRepository.findDetailById(programId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PROGRAM_NOT_FOUND));
+
+        List<ProgramSessionResponseDTO> sessions = programSessionRepository
+                .findByProgram_ProgramIdOrderBySessionNoAsc(programId)
+                .stream()
+                .map(ProgramSessionResponseDTO::from)
+                .toList();
+
+        long applicantCount = applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(
+                programId, List.of(ApplicationStatus.APPLIED.name(), ApplicationStatus.APPROVED.name()));
+
+        return ProgramDetailResponseDTO.from(program, applicantCount, sessions);
+    }
+
+    // 목록 페이지 한 번에 해당하는 프로그램들의 신청자 수를 한 번의 쿼리로 배치 조회한다(N+1 방지).
+    private Map<Integer, Long> countApplicantsByProgram(List<ExtracurricularProgram> programs) {
+        if (programs.isEmpty()) {
+            return Map.of();
+        }
+        List<Integer> programIds = programs.stream().map(ExtracurricularProgram::getProgramId).toList();
+        return applicationRepository.countActiveApplicantsByProgramIds(programIds).stream()
+                .collect(Collectors.toMap(
+                        ProgramApplicationRepository.ProgramApplicantCount::getProgramId,
+                        ProgramApplicationRepository.ProgramApplicantCount::getCount));
     }
 
     // 프로그램 등록 폼의 핵심역량 드롭다운용 옵션 목록. 최상위(하위 역량 없음) + 활성 상태만 노출한다.

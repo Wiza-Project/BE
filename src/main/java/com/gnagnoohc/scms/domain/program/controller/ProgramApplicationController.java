@@ -1,9 +1,10 @@
 package com.gnagnoohc.scms.domain.program.controller;
 
-import com.gnagnoohc.scms.domain.program.dto.ProgramApplicationCancelRequestDTO;
-import com.gnagnoohc.scms.domain.program.dto.ProgramApplicationCancelResponseDTO;
-import com.gnagnoohc.scms.domain.program.dto.ProgramApplicationSummaryResponseDTO;
-import com.gnagnoohc.scms.domain.program.dto.ProgramApplyResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.request.ProgramApplicationCancelRequestDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplicationCancelResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplicationSummaryResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplicationSurveyResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplyResponseDTO;
 import com.gnagnoohc.scms.domain.program.service.ProgramApplicationService;
 import com.gnagnoohc.scms.global.common.dto.ApiResponse;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;
@@ -64,5 +65,14 @@ public class ProgramApplicationController {
             @AuthenticationPrincipal AuthUser authUser,
             @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
         return ApiResponse.ok(programApplicationService.listMyApplications(authUser.getId(), pageable));
+    }
+
+    @Operation(summary = "만족도 설문 완료 처리", description = "본인의 참여 신청 건에 대한 만족도 설문 제출을 완료 처리합니다. 개별 문항 응답 저장은 지원하지 않습니다.")
+    @PostMapping("/{programId}/applications/{applicationId}/survey-complete")
+    public ApiResponse<ProgramApplicationSurveyResponseDTO> completeSurvey(
+            @PathVariable Integer programId,
+            @PathVariable Integer applicationId,
+            @AuthenticationPrincipal AuthUser authUser) {
+        return ApiResponse.ok(programApplicationService.completeSurvey(programId, applicationId, authUser.getId()));
     }
 }

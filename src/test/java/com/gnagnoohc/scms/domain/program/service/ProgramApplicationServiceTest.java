@@ -1,9 +1,12 @@
 package com.gnagnoohc.scms.domain.program.service;
 
-import com.gnagnoohc.scms.domain.program.dto.ProgramApplicationCancelResponseDTO;
-import com.gnagnoohc.scms.domain.program.dto.ProgramApplicationDecisionResponseDTO;
-import com.gnagnoohc.scms.domain.program.dto.ProgramApplicationSummaryResponseDTO;
-import com.gnagnoohc.scms.domain.program.dto.ProgramApplyResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplicationAdminListItemResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplicationBulkDecisionResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplicationCancelResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplicationDecisionResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplicationSummaryResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplicationSurveyResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplyResponseDTO;
 import com.gnagnoohc.scms.domain.program.entity.ExtracurricularProgram;
 import com.gnagnoohc.scms.domain.program.entity.ProgramApplication;
 import com.gnagnoohc.scms.domain.program.repository.ExtracurricularProgramRepository;
@@ -412,6 +415,116 @@ class ProgramApplicationServiceTest {
         programApplicationService.listMyApplications(100, pageable);
 
         verify(applicationRepository).findAllByStudentId(100, pageable);
+    }
+
+    @Test
+    void bulkApprove_whenOneExceedsCapacity_returnsPartialSuccess() throws Exception {
+        ExtracurricularProgram program = buildProgramFixture(1, Instant.now(), Instant.now(), 10);
+        ProgramApplication succeeding = buildApplicationFixture(5, program, "WAITLISTED");
+        ProgramApplication failing = buildApplicationFixture(6, program, "APPLIED");
+
+        when(applicationRepository.findByIdForUpdate(5)).thenReturn(Optional.of(succeeding));
+        when(applicationRepository.findByIdForUpdate(6)).thenReturn(Optional.of(failing));
+        when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
+        // 첫 번째 건을 승인하는 순간 정원이 다 찼다고 가정 — 두 번째 건은 승인 시도 시 정원초과로 실패해야 한다.
+        when(applicationRepository.countByProgram_ProgramIdAndApplicationStatus(1, "APPROVED"))
+                .thenReturn(9L, 10L);
+
+        ProgramApplicationBulkDecisionResponseDTO response =
+                programApplicationService.bulkApprove(1, List.of(5, 6), 200);
+
+        assertThat(response.succeeded()).hasSize(1);
+        assertThat(response.succeeded().get(0).applicationId()).isEqualTo(5);
+        assertThat(response.failed()).hasSize(1);
+        assertThat(response.failed().get(0).applicationId()).isEqualTo(6);
+        assertThat(response.failed().get(0).errorCode()).isEqualTo(ErrorCode.PROGRAM_CAPACITY_EXCEEDED.getCode());
+    }
+
+    @Test
+    void bulkReject_allSucceed_returnsAllInSucceeded() throws Exception {
+        ExtracurricularProgram program = buildProgramFixture(1, Instant.now(), Instant.now(), 10);
+        ProgramApplication first = buildApplicationFixture(5, program, "APPLIED");
+        ProgramApplication second = buildApplicationFixture(6, program, "APPLIED");
+
+        when(applicationRepository.findByIdForUpdate(5)).thenReturn(Optional.of(first));
+        when(applicationRepository.findByIdForUpdate(6)).thenReturn(Optional.of(second));
+
+        ProgramApplicationBulkDecisionResponseDTO response =
+                programApplicationService.bulkReject(1, List.of(5, 6), "정원 외 사유", 200);
+
+        assertThat(response.succeeded()).hasSize(2);
+        assertThat(response.failed()).isEmpty();
+    }
+
+    @Test
+    void completeSurvey_whenApproved_succeeds() throws Exception {
+        ExtracurricularProgram program = buildProgramFixture(1, Instant.now(), Instant.now(), 10);
+        ProgramApplication application = buildApplicationFixture(5, program, "APPROVED", 100);
+
+        when(applicationRepository.findById(5)).thenReturn(Optional.of(application));
+        when(applicationRepository.markSurveyCompleted(eq(5), eq(100), any())).thenReturn(1);
+
+        ProgramApplicationSurveyResponseDTO response = programApplicationService.completeSurvey(1, 5, 100);
+
+        assertThat(response.applicationId()).isEqualTo(5);
+        assertThat(response.surveyCompleted()).isTrue();
+    }
+
+    @Test
+    void completeSurvey_whenNotApproved_throwsSurveyNotAvailable() throws Exception {
+        ExtracurricularProgram program = buildProgramFixture(1, Instant.now(), Instant.now(), 10);
+        ProgramApplication application = buildApplicationFixture(5, program, "APPLIED", 100);
+
+        when(applicationRepository.findById(5)).thenReturn(Optional.of(application));
+        when(applicationRepository.markSurveyCompleted(eq(5), eq(100), any())).thenReturn(0);
+
+        assertThatThrownBy(() -> programApplicationService.completeSurvey(1, 5, 100))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.SURVEY_NOT_AVAILABLE);
+    }
+
+    @Test
+    void completeSurvey_whenNotOwnedByStudent_throwsApplicationNotFound() throws Exception {
+        ExtracurricularProgram program = buildProgramFixture(1, Instant.now(), Instant.now(), 10);
+        ProgramApplication application = buildApplicationFixture(5, program, "APPROVED", 100);
+
+        when(applicationRepository.findById(5)).thenReturn(Optional.of(application));
+
+        assertThatThrownBy(() -> programApplicationService.completeSurvey(1, 5, 999))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.APPLICATION_NOT_FOUND);
+    }
+
+    @Test
+    void listByProgram_whenProgramExists_returnsAdminItems() throws Exception {
+        ExtracurricularProgram program = buildProgramFixture(1, Instant.now(), Instant.now(), 10);
+        ProgramApplication application = buildApplicationFixture(5, program, "APPLIED", 100);
+        ReflectionTestUtils.setField(application.getStudent(), "userName", "홍길동");
+        ReflectionTestUtils.setField(application.getStudent(), "universityNo", "2021000123");
+
+        Pageable pageable = PageRequest.of(0, 20);
+        when(programRepository.existsById(1)).thenReturn(true);
+        when(applicationRepository.findAllByProgramIdAndStatus(1, null, pageable))
+                .thenReturn(new PageImpl<>(List.of(application), pageable, 1));
+
+        PageResponse<ProgramApplicationAdminListItemResponseDTO> response =
+                programApplicationService.listByProgram(1, null, pageable);
+
+        assertThat(response.content()).hasSize(1);
+        assertThat(response.content().get(0).studentName()).isEqualTo("홍길동");
+        assertThat(response.content().get(0).studentNo()).isEqualTo("2021000123");
+    }
+
+    @Test
+    void listByProgram_whenProgramNotFound_throwsProgramNotFound() {
+        when(programRepository.existsById(1)).thenReturn(false);
+
+        assertThatThrownBy(() -> programApplicationService.listByProgram(1, null, PageRequest.of(0, 20)))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.PROGRAM_NOT_FOUND);
     }
 
     // ExtracurricularProgram은 protected 기본 생성자만 있고 setter/빌더가 없어(네이티브 SQL로만 값을 채우는 구조),

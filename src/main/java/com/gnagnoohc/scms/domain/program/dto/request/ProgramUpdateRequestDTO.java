@@ -1,4 +1,4 @@
-package com.gnagnoohc.scms.domain.program.dto;
+package com.gnagnoohc.scms.domain.program.dto.request;
 
 // 유효성 검사(Validation) 어노테이션들을 사용하기 위해 import 한다.
 import jakarta.validation.constraints.DecimalMax;
