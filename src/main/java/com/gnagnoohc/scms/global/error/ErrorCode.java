@@ -14,6 +14,7 @@ import org.springframework.http.HttpStatus;
  *   S###  상담            (P3100)
  *   M###  마일리지        (P4100)
  *   J###  취창업          (P5100)
+ *   N###  알림
  *
  * 새 코드를 추가하면 프론트 담당자에게 반드시 공유하세요.
  */
@@ -81,6 +82,9 @@ public enum ErrorCode {
     DIAGNOSIS_ALREADY_SUBMITTED(HttpStatus.CONFLICT, "Q004", "이미 응답을 제출한 진단검사입니다."),
     INCOMPLETE_ANSWER(HttpStatus.BAD_REQUEST, "Q005", "응답하지 않은 문항이 있습니다."),
     COMPETENCY_LIMIT_EXCEEDED(HttpStatus.CONFLICT, "Q006", "핵심역량은 최대 6개까지 등록할 수 있습니다."),
+    ASSESSMENT_QUESTION_NOT_FOUND(HttpStatus.NOT_FOUND, "Q007", "진단문항을 찾을 수 없습니다."),
+    // 이전 버전으로 대체되어 비활성화된 문항을 직접 수정하려고 할 때 사용하는 에러코드. 최신 버전만 수정 가능.
+    INACTIVE_QUESTION_NOT_EDITABLE(HttpStatus.BAD_REQUEST, "Q008", "비활성화된 문항은 수정할 수 없습니다."),
 
     // ── 상담 ──────────────────────────────────────────────────────
     COUNSELOR_NOT_FOUND(HttpStatus.NOT_FOUND, "S001", "상담사를 찾을 수 없습니다."),
@@ -102,7 +106,10 @@ public enum ErrorCode {
     JOB_POSTING_ALREADY_CLOSED(HttpStatus.BAD_REQUEST, "J005", "이미 마감된 채용공고입니다."),
     INVALID_REVIEW_STATUS(HttpStatus.BAD_REQUEST, "J006", "유효하지 않은 검수 상태값입니다."),
     INVALID_APPLICATION_PERIOD(HttpStatus.BAD_REQUEST, "J007", "신청 종료 일시는 시작 일시보다 빠를 수 없습니다."),
-    COMPANY_ACCOUNT_NOT_FOUND(HttpStatus.NOT_FOUND, "J008", "존재하지 않는 기업 계정입니다.");
+    COMPANY_ACCOUNT_NOT_FOUND(HttpStatus.NOT_FOUND, "J008", "존재하지 않는 기업 계정입니다."),
+
+    // ── 알림 ──────────────────────────────────────────────────────
+    NOTIFICATION_NOT_FOUND(HttpStatus.NOT_FOUND, "N001", "알림을 찾을 수 없습니다.");
 
     private final HttpStatus status;
     private final String code;
