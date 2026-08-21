@@ -41,8 +41,10 @@ public class ProgramApplicationController {
     public ApiResponse<ProgramApplyResponseDTO> apply(
             // @PathVariable: URL 경로 중 "{programId}" 부분에 실제로 들어온 값을 그대로 매개변수로 받는다.
             @PathVariable Integer programId,
-            // @AuthenticationPrincipal: 로그인 토큰에서 스프링 시큐리티가 미리 뽑아둔 "지금 로그인한 사용자 정보"를 꺼내온다.
-            // 신청자는 이 값으로만 결정하며, 클라이언트가 body로 보내는 값이 아니므로 위조가 불가능하다.
+            /**
+             * @AuthenticationPrincipal: 로그인 토큰에서 스프링 시큐리티가 미리 뽑아둔 "지금 로그인한 사용자 정보"를 꺼내온다.
+             * 신청자는 이 값으로만 결정하며, 클라이언트가 body로 보내는 값이 아니므로 위조가 불가능하다.
+             */
             @AuthenticationPrincipal AuthUser authUser) {
         return ApiResponse.ok(programApplicationService.apply(programId, authUser.getId()));
     }

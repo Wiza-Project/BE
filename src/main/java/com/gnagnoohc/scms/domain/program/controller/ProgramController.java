@@ -59,11 +59,15 @@ public class ProgramController {
     // 등록에 성공하면 HTTP 상태코드로 200(OK) 대신 201(CREATED, "새로 생성됨")을 응답한다.
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<ProgramRegisterResponseDTO> register(
-            // @Valid: request 안의 @NotNull, @NotBlank 같은 검증 어노테이션들을 실제로 검사하라는 표시.
-            // @RequestBody: HTTP 요청 body에 담긴 JSON을 ProgramRegisterRequestDTO 객체로 자동 변환.
+            /**
+             * @Valid: request 안의 @NotNull, @NotBlank 같은 검증 어노테이션들을 실제로 검사하라는 표시.
+             * @RequestBody: HTTP 요청 body에 담긴 JSON을 ProgramRegisterRequestDTO 객체로 자동 변환.
+             */
             @Valid @RequestBody ProgramRegisterRequestDTO request,
-            // @AuthenticationPrincipal: 로그인 토큰(JWT 등)에서 스프링 시큐리티가 미리 뽑아둔
-            // "지금 로그인한 사용자 정보"를 그대로 꺼내온다. 클라이언트가 body에 넣어 보내는 값이 아니므로 위조가 불가능하다.
+            /**
+             * @AuthenticationPrincipal: 로그인 토큰(JWT 등)에서 스프링 시큐리티가 미리 뽑아둔
+             * "지금 로그인한 사용자 정보"를 그대로 꺼내온다. 클라이언트가 body에 넣어 보내는 값이 아니므로 위조가 불가능하다.
+             */
             @AuthenticationPrincipal AuthUser authUser) {
         // authUser.getId()로 등록 담당자를 서버가 직접 결정해서 서비스에 넘긴다.
         return ApiResponse.ok(programService.register(request, authUser.getId(), authUser.getDepartmentCodeId()));
@@ -76,12 +80,16 @@ public class ProgramController {
     }
 
     @Operation(summary = "프로그램 수정", description = "모집중 상태의 비교과 프로그램을 전체 필드 수정합니다 (등록자 본인만 가능)")
-    // HTTP PUT 요청, 즉 "/api/admin/programs/{programId}" 로 오는 요청을 이 메서드가 처리한다.
-    // PUT은 "이 리소스 전체를 이 내용으로 통째로 교체해줘"라는 의미의 HTTP 메서드다(일부 필드만 보내는 PATCH와 다름).
+    /**
+     * HTTP PUT 요청, 즉 "/api/admin/programs/{programId}" 로 오는 요청을 이 메서드가 처리한다.
+     * PUT은 "이 리소스 전체를 이 내용으로 통째로 교체해줘"라는 의미의 HTTP 메서드다(일부 필드만 보내는 PATCH와 다름).
+     */
     @PutMapping("/{programId}")
     public ApiResponse<ProgramUpdateResponseDTO> update(
-            // @PathVariable: URL 경로 중 "{programId}" 부분에 실제로 들어온 값을 그대로 매개변수로 받는다.
-            // 예를 들어 요청이 "/api/admin/programs/5"라면 programId에는 5가 담긴다.
+            /**
+             * @PathVariable: URL 경로 중 "{programId}" 부분에 실제로 들어온 값을 그대로 매개변수로 받는다.
+             * 예를 들어 요청이 "/api/admin/programs/5"라면 programId에는 5가 담긴다.
+             */
             @PathVariable Integer programId,
             // 등록 때와 마찬가지로, 요청 body(JSON)를 검증하면서 ProgramUpdateRequestDTO로 변환한다.
             @Valid @RequestBody ProgramUpdateRequestDTO request,
