@@ -93,7 +93,12 @@ public enum ErrorCode {
     // ── 취창업 ────────────────────────────────────────────────────
     JOB_POSTING_NOT_FOUND(HttpStatus.NOT_FOUND, "J001", "구인공고를 찾을 수 없습니다."),
     PORTFOLIO_NOT_FOUND(HttpStatus.NOT_FOUND, "J002", "포트폴리오를 찾을 수 없습니다."),
-    SURVEY_ALREADY_SUBMITTED(HttpStatus.CONFLICT, "J003", "이미 제출한 만족도 조사입니다.");
+    SURVEY_ALREADY_SUBMITTED(HttpStatus.CONFLICT, "J003", "이미 제출한 만족도 조사입니다."),
+    CANNOT_MODIFY_APPROVED_POSTING(HttpStatus.BAD_REQUEST, "J004", "이미 승인/게시된 공고는 수정할 수 없습니다."),
+    JOB_POSTING_ALREADY_CLOSED(HttpStatus.BAD_REQUEST, "J005", "이미 마감된 채용공고입니다."),
+    INVALID_REVIEW_STATUS(HttpStatus.BAD_REQUEST, "J006", "유효하지 않은 검수 상태값입니다."),
+    INVALID_APPLICATION_PERIOD(HttpStatus.BAD_REQUEST, "J007", "신청 종료 일시는 시작 일시보다 빠를 수 없습니다."),
+    COMPANY_ACCOUNT_NOT_FOUND(HttpStatus.NOT_FOUND, "J008", "존재하지 않는 기업 계정입니다.");
 
     private final HttpStatus status;
     private final String code;
