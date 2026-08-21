@@ -29,7 +29,7 @@ public class CompetencyController {
 
     private final CompetencyService competencyService;
 
-    @Operation(summary = "핵심역량 등록", description = "최상위 핵심역량을 등록합니다. 역량코드는 C1~C6로 자동채번됩니다.")
+    @Operation(summary = "핵심역량 등록", description = "최상위 핵심역량을 등록합니다. 역량코드는 C100~C600로 자동채번됩니다.")
     @PostMapping
     public ApiResponse<CompetencyResponse> registerCompetency(
             @Valid @RequestBody CompetencyRegisterRequest request,
