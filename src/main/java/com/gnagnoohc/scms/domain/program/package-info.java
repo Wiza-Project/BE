@@ -33,9 +33,11 @@
  *   <li>[x] ProgramApplication — 학생 참여신청 (정원 초과 시 대기순번 자동 부여). 참여승인/거절 단계는 미구현 ({@code ApprovalStatus} 재사용 예정)</li>
  *   <li>[ ] ProgramResult — 이수 여부, 출석/성과 기록</li>
  *   <li>[ ] 수료증 PDF 생성 (openpdf). 대학 로고·직인 이미지 필요</li>
- *   <li>[ ] <b>이수 확정 시 마일리지 자동 적립</b> — mileage 패키지를 직접 호출하지 말고
+ *   <li>[x] <b>이수 확정 시 마일리지 자동 적립</b> — mileage 패키지를 직접 호출하지 말고
  *           Spring 의 {@code ApplicationEventPublisher} 로 이벤트를 발행하세요.
- *           도메인 간 양방향 의존이 생기면 이후 수정이 매우 어려워집니다.</li>
+ *           도메인 간 양방향 의존이 생기면 이후 수정이 매우 어려워집니다.
+ *           ({@code ProgramStatusScheduler}가 {@code ProgramCompletionJudgedEvent}를 발행하는 부분까지가
+ *           program 도메인 책임이며, 이를 구독해 실제 적립을 수행하는 리스너는 마일리지 도메인 담당.)</li>
  *   <li>[ ] 핵심역량과의 매핑 — P2200 의 "추천 비교과프로그램 조회"를 위해
  *           Program ↔ Competency 다대다 매핑 테이블이 필요합니다.</li>
  * </ul>

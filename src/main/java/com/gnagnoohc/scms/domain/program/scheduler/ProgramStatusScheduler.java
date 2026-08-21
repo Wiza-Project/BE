@@ -1,9 +1,11 @@
 package com.gnagnoohc.scms.domain.program.scheduler;
 
+import com.gnagnoohc.scms.domain.program.event.ProgramCompletionJudgedEvent;
 import com.gnagnoohc.scms.domain.program.repository.ExtracurricularProgramRepository;
 import com.gnagnoohc.scms.domain.program.repository.ProgramApplicationRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,6 +19,7 @@ public class ProgramStatusScheduler {
 
     private final ExtracurricularProgramRepository programRepository;
     private final ProgramApplicationRepository applicationRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     // 매분 정각에 실행. 모집중(DRAFT)→운영중(OPERATING)→종료(CLOSED)→이수 판정 순서로 처리해야
     // 스케줄러가 한동안 멈췄다 재개된 경우에도(여러 단계를 모두 지난 프로그램이 있는 경우) 같은 사이클
@@ -31,9 +34,16 @@ public class ProgramStatusScheduler {
         // judgeCompletion 자체가 completion_status IS NULL 조건으로 멱등하므로 매분 호출해도 안전하다.
         // (이수번호(certificate_no) 채번도 이 안에서 함께 처리된다 — ProgramApplicationRepository.judgeCompletion 참고.)
         int completionJudged = applicationRepository.judgeCompletion(now);
-        // TODO: 마일리지 자동 적립 연동 (마일리지 도메인 개발 완료 후) — 방금 COMPLETED로 판정된 신청 건에 대해
-        //   프로그램에 연결된 mileagePolicy만큼 mileage_transaction을 적립해야 한다. 지금은 마일리지 도메인이
-        //   개발 중이라 이 스케줄러에서 직접 연동하지 않는다.
+        // 방금 COMPLETED로 판정된 신청 건마다 ProgramCompletionJudgedEvent를 발행한다. 이 발행은 이 메서드의
+        // @Transactional 트랜잭션 안에서 동기로 일어나므로, 마일리지 도메인이 같은 트랜잭션 안에서 처리하는
+        // 리스너를 구독시키면 "판정 + 이수증 발급(judgeCompletion 안에서 이미 원자적으로 처리됨) + 마일리지
+        // 반영"이 하나의 트랜잭션으로 묶인다. mileage 패키지를 직접 호출하지 않는 이유는
+        // domain/program/package-info.java의 설계 메모(도메인 간 양방향 직접 의존 방지) 참고.
+        if (completionJudged > 0) {
+            for (Integer applicationId : applicationRepository.findApplicationIdsJudgedCompletedAt(now)) {
+                eventPublisher.publishEvent(new ProgramCompletionJudgedEvent(applicationId));
+            }
+        }
 
         if (recruitingToOperating > 0 || operatingToClosed > 0 || completionJudged > 0) {
             log.info("프로그램 상태 자동 전환 - 모집중→운영중: {}건, 운영중→종료: {}건, 이수 판정: {}건",
