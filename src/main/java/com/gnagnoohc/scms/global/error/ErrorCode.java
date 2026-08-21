@@ -82,6 +82,9 @@ public enum ErrorCode {
     DIAGNOSIS_ALREADY_SUBMITTED(HttpStatus.CONFLICT, "Q004", "이미 응답을 제출한 진단검사입니다."),
     INCOMPLETE_ANSWER(HttpStatus.BAD_REQUEST, "Q005", "응답하지 않은 문항이 있습니다."),
     COMPETENCY_LIMIT_EXCEEDED(HttpStatus.CONFLICT, "Q006", "핵심역량은 최대 6개까지 등록할 수 있습니다."),
+    ASSESSMENT_QUESTION_NOT_FOUND(HttpStatus.NOT_FOUND, "Q007", "진단문항을 찾을 수 없습니다."),
+    // 이전 버전으로 대체되어 비활성화된 문항을 직접 수정하려고 할 때 사용하는 에러코드. 최신 버전만 수정 가능.
+    INACTIVE_QUESTION_NOT_EDITABLE(HttpStatus.BAD_REQUEST, "Q008", "비활성화된 문항은 수정할 수 없습니다."),
 
     // ── 상담 ──────────────────────────────────────────────────────
     COUNSELOR_NOT_FOUND(HttpStatus.NOT_FOUND, "S001", "상담사를 찾을 수 없습니다."),

@@ -4,10 +4,13 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.gnagnoohc.scms.domain.competency.dto.AssessmentQuestionEditRequest;
+import com.gnagnoohc.scms.domain.competency.dto.AssessmentQuestionResponse;
 import com.gnagnoohc.scms.domain.competency.dto.AssessmentQuestionUploadResponse;
 import com.gnagnoohc.scms.domain.competency.entity.AssessmentQuestion;
 import com.gnagnoohc.scms.domain.competency.entity.Competency;
 import com.gnagnoohc.scms.domain.competency.repository.AssessmentQuestionRepository;
+import com.gnagnoohc.scms.domain.competency.repository.AssessmentResponseRepository;
 import com.gnagnoohc.scms.domain.competency.repository.CompetencyRepository;
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
@@ -42,6 +45,7 @@ public class AssessmentQuestionService {
     private static final int RECOMMENDED_MAX_PER_COMPETENCY = 15;
 
     private final AssessmentQuestionRepository assessmentQuestionRepository;
+    private final AssessmentResponseRepository assessmentResponseRepository;
     private final CompetencyRepository competencyRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -130,6 +134,43 @@ public class AssessmentQuestionService {
             }
         }
         return warnings;
+    }
+
+    public AssessmentQuestionResponse getQuestion(Integer questionId) {
+        AssessmentQuestion question = assessmentQuestionRepository.findById(questionId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.ASSESSMENT_QUESTION_NOT_FOUND));
+        return AssessmentQuestionResponse.from(question);
+    }
+
+    public List<AssessmentQuestionResponse> getQuestionsByCompetency(Integer competencyId) {
+        return assessmentQuestionRepository.findByCompetency_CompetencyIdAndActiveTrueOrderByQuestionIdAsc(competencyId)
+                .stream()
+                .map(AssessmentQuestionResponse::from)
+                .toList();
+    }
+
+    // 이미 응시(응답 저장)가 시작된 문항은 제자리 수정 대신 새 버전으로 대체하고 이전 버전은 비활성 처리한다.
+    // 아직 응시 전인 문항은 제자리 수정을 허용한다.
+    public AssessmentQuestionResponse editQuestion(Integer questionId, AssessmentQuestionEditRequest request, Integer staffId) {
+        AssessmentQuestion question = assessmentQuestionRepository.findById(questionId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.ASSESSMENT_QUESTION_NOT_FOUND));
+        if (!question.isActive()) {
+            throw new BusinessException(ErrorCode.INACTIVE_QUESTION_NOT_EDITABLE);
+        }
+
+        JsonNode responseOptions = objectMapper.valueToTree(request.responseOptions());
+        boolean alreadyStarted = assessmentResponseRepository.existsByQuestion_QuestionId(questionId);
+
+        if (!alreadyStarted) {
+            question.editInPlace(request.questionText(), responseOptions, request.reverse());
+            return AssessmentQuestionResponse.from(question);
+        }
+
+        AssessmentQuestion newVersion = AssessmentQuestion.createNewVersion(
+                question, request.questionText(), responseOptions, request.reverse(), staffId);
+        assessmentQuestionRepository.save(newVersion);
+        question.deactivate();
+        return AssessmentQuestionResponse.from(newVersion);
     }
 
     private JsonNode buildDefaultResponseOptions() {
