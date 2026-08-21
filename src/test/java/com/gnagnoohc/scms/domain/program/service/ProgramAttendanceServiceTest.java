@@ -3,6 +3,7 @@ package com.gnagnoohc.scms.domain.program.service;
 import com.gnagnoohc.scms.domain.program.dto.request.ProgramAttendanceRecordRequestDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramAttendanceQrTokenResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramAttendanceResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramMyAttendanceResponseDTO;
 import com.gnagnoohc.scms.domain.program.entity.ExtracurricularProgram;
 import com.gnagnoohc.scms.domain.program.entity.ProgramApplication;
 import com.gnagnoohc.scms.domain.program.entity.ProgramAttendance;
@@ -258,6 +259,37 @@ class ProgramAttendanceServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.APPLICATION_NOT_APPROVED);
+    }
+
+    @Test
+    void listMyAttendance_whenSomeSessionsUnrecorded_fillsUnrecordedSessionsWithNull() throws Exception {
+        ExtracurricularProgram program = buildProgramFixture(1);
+        ProgramSession session1 = buildSessionFixture(10, program, 1);
+        ProgramSession session2 = buildSessionFixture(11, program, 2);
+        ProgramApplication application = buildApplicationFixture(5, program, "APPROVED");
+        ProgramAttendance attendance1 = buildAttendanceFixture(99, application, session1, "PRESENT");
+
+        when(applicationRepository.findByProgram_ProgramIdAndStudent_UserId(1, 100)).thenReturn(Optional.of(application));
+        when(sessionRepository.findByProgram_ProgramIdOrderBySessionNoAsc(1)).thenReturn(List.of(session1, session2));
+        when(attendanceRepository.findByApplication_ApplicationId(5)).thenReturn(List.of(attendance1));
+
+        List<ProgramMyAttendanceResponseDTO> response = programAttendanceService.listMyAttendance(1, 100);
+
+        assertThat(response).hasSize(2);
+        assertThat(response.get(0).programSessionId()).isEqualTo(10);
+        assertThat(response.get(0).attendanceStatus()).isEqualTo("PRESENT");
+        assertThat(response.get(1).programSessionId()).isEqualTo(11);
+        assertThat(response.get(1).attendanceStatus()).isNull();
+    }
+
+    @Test
+    void listMyAttendance_whenApplicationNotFound_throwsApplicationNotFound() {
+        when(applicationRepository.findByProgram_ProgramIdAndStudent_UserId(1, 100)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> programAttendanceService.listMyAttendance(1, 100))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.APPLICATION_NOT_FOUND);
     }
 
     /**

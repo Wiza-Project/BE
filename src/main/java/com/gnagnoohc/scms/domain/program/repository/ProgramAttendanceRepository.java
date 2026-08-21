@@ -43,6 +43,10 @@ public interface ProgramAttendanceRepository extends JpaRepository<ProgramAttend
 
     List<ProgramAttendance> findByProgramSession_ProgramSessionId(Integer programSessionId);
 
+    // 학생 본인의 출결 조회(ProgramAttendanceService.listMyAttendance)에서, 신청 건 하나에 기록된
+    // 회차별 출결을 전부 가져와 회차 목록과 메모리에서 합칠 때 사용한다.
+    List<ProgramAttendance> findByApplication_ApplicationId(Integer applicationId);
+
     // upsertAttendance 실행 직후, 방금 upsert된 row를 다시 읽어 응답 DTO를 만드는 데 사용한다.
     Optional<ProgramAttendance> findByApplication_ApplicationIdAndProgramSession_ProgramSessionId(
             Integer applicationId, Integer programSessionId);

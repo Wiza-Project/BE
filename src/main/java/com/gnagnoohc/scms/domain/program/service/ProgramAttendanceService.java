@@ -3,7 +3,9 @@ package com.gnagnoohc.scms.domain.program.service;
 import com.gnagnoohc.scms.domain.program.dto.request.ProgramAttendanceRecordRequestDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramAttendanceQrTokenResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramAttendanceResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramMyAttendanceResponseDTO;
 import com.gnagnoohc.scms.domain.program.entity.ProgramApplication;
+import com.gnagnoohc.scms.domain.program.entity.ProgramAttendance;
 import com.gnagnoohc.scms.domain.program.entity.ProgramSession;
 import com.gnagnoohc.scms.domain.program.repository.ProgramApplicationRepository;
 import com.gnagnoohc.scms.domain.program.repository.ProgramAttendanceRepository;
@@ -16,6 +18,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -122,6 +127,30 @@ public class ProgramAttendanceService {
                         application.getApplicationId(), session.getProgramSessionId())
                 .map(ProgramAttendanceResponseDTO::from)
                 .orElseThrow(() -> new BusinessException(ErrorCode.INTERNAL_ERROR));
+    }
+
+    /**
+     * 학생이 본인 폰/PC로 자신이 신청한 프로그램의 전체 회차별 출결 현황을 조회한다.
+     * 관리자용 listAttendance(회차 하나에 기록된 출결만 조회)와 달리, 이건 회차 목록을 기준으로
+     * 채운다 — 아직 출결이 기록되지 않은(예: 아직 지나지 않은) 회차도 attendanceStatus=null로
+     * 함께 내려줘야 학생이 "몇 회차가 남았는지/아직 미확인인지"를 볼 수 있기 때문이다.
+     */
+    public List<ProgramMyAttendanceResponseDTO> listMyAttendance(Integer programId, Integer studentId) {
+        ProgramApplication application = applicationRepository
+                .findByProgram_ProgramIdAndStudent_UserId(programId, studentId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.APPLICATION_NOT_FOUND));
+
+        List<ProgramSession> sessions = sessionRepository.findByProgram_ProgramIdOrderBySessionNoAsc(programId);
+
+        Map<Integer, ProgramAttendance> attendanceBySessionId = attendanceRepository
+                .findByApplication_ApplicationId(application.getApplicationId()).stream()
+                .collect(Collectors.toMap(
+                        a -> a.getProgramSession().getProgramSessionId(), Function.identity()));
+
+        return sessions.stream()
+                .map(session -> ProgramMyAttendanceResponseDTO.of(
+                        session, attendanceBySessionId.get(session.getProgramSessionId())))
+                .toList();
     }
 
     private AttendanceStatus parseAttendanceStatus(String value) {
