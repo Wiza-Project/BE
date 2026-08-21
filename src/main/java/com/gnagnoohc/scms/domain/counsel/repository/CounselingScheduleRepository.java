@@ -1,6 +1,7 @@
 package com.gnagnoohc.scms.domain.counsel.repository;
 
 import com.gnagnoohc.scms.domain.counsel.dto.CounselingScheduleAvailabilityResponse;
+import com.gnagnoohc.scms.domain.counsel.dto.CounselorScheduleResponse;
 import com.gnagnoohc.scms.domain.counsel.entity.CounselingSchedule;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -16,6 +17,45 @@ import java.util.Optional;
  * 상담 일정 저장과 일정 변경에 필요한 잠금·겹침 조회를 담당한다.
  */
 public interface CounselingScheduleRepository extends JpaRepository<CounselingSchedule, Integer> {
+
+    /**
+     * 상담사 본인 일정과 예약 이력 존재 여부를 한 번에 조회한다.
+     * 예약 상태와 관계없이 참조 행이 하나라도 있으면 수정이 막히므로 hasReservation도 같은 기준을 사용한다.
+     */
+    @Query("""
+            select new com.gnagnoohc.scms.domain.counsel.dto.CounselorScheduleResponse(
+                schedule.counselingScheduleId,
+                counselingType.counselingTypeId,
+                counselor.userId,
+                schedule.startsAt,
+                schedule.endsAt,
+                schedule.capacity,
+                schedule.bookingDeadline,
+                schedule.location,
+                schedule.scheduleStatus,
+                case when count(reservation.counselingReservationId) > 0 then true else false end
+            )
+            from CounselingSchedule schedule
+            join schedule.counselingType counselingType
+            join schedule.counselor counselor
+            left join CounselingReservation reservation
+              on reservation.counselingSchedule = schedule
+            where counselor.userId = :counselorId
+            group by
+                schedule.counselingScheduleId,
+                counselingType.counselingTypeId,
+                counselor.userId,
+                schedule.startsAt,
+                schedule.endsAt,
+                schedule.capacity,
+                schedule.bookingDeadline,
+                schedule.location,
+                schedule.scheduleStatus
+            order by schedule.startsAt desc, schedule.counselingScheduleId desc
+            """)
+    List<CounselorScheduleResponse> findCounselorSchedules(
+            @Param("counselorId") Integer counselorId
+    );
 
     /**
      * 일정과 점유 예약 수를 한 번에 집계해 목록 조회 중 추가 쿼리가 발생하지 않게 한다.
