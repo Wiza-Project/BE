@@ -28,6 +28,24 @@ public interface CounselUserRepository extends Repository<AppUser, Integer> {
     boolean isActiveStudent(@Param("userId") Integer userId);
 
     /**
+     * 일정 목록 조회 시 URL 권한 외에도 계정 활성 상태와 상담사 역할을 다시 확인한다.
+     * 조회에는 쓰기 잠금이 필요하지 않으므로 일정 등록·수정용 조회와 분리한다.
+     */
+    @Query("""
+            select case when count(user) > 0 then true else false end
+            from AppUser user
+            where user.userId = :userId
+              and user.accountStatus = 'ACTIVE'
+              and exists (
+                  select role.id.userId
+                  from UserRole role
+                  where role.id.userId = user.userId
+                    and role.id.roleCode = 'ST200'
+              )
+            """)
+    boolean isActiveCounselor(@Param("userId") Integer userId);
+
+    /**
      * 같은 상담사의 일정 등록·수정을 한 번에 하나씩 처리하기 위해 사용자 행을 잠근다.
      * 아직 일정 행이 없는 빈 구간도 이 공통 행을 기준으로 직렬화해야 동시 등록을 막을 수 있다.
      */

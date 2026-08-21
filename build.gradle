@@ -62,10 +62,8 @@ dependencies {
 	// 2.x는 Spring Boot 3용, 3.x부터 Boot 4를 지원합니다. 버전을 반드시 맞추세요.
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3'
 
-	// ── 통계/엑셀 (P5100 취업통계조사 생성, 운영현황 다운로드) ──────
-	// 해당 기능 착수 시 주석을 해제
-	// mvnrepository.com 에서 최신 버전을 확인한 뒤 버전을 맞추세요.
-	// implementation 'org.apache.poi:poi-ooxml:5.4.0'
+	// ── 통계/엑셀 (P5100 취업통계조사 생성, 운영현황 다운로드 / WP-102 진단문항 엑셀 업로드) ──
+	implementation 'org.apache.poi:poi-ooxml:5.4.0'
 
 	// ── 수료증 PDF 출력 (P1200) ────────────────────────────────────
 	// implementation 'com.github.librepdf:openpdf:2.0.3'

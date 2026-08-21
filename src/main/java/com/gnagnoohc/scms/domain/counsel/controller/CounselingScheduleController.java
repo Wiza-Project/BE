@@ -2,12 +2,14 @@ package com.gnagnoohc.scms.domain.counsel.controller;
 
 import com.gnagnoohc.scms.domain.counsel.dto.CounselingScheduleRequest;
 import com.gnagnoohc.scms.domain.counsel.dto.CounselingScheduleResponse;
+import com.gnagnoohc.scms.domain.counsel.dto.CounselorScheduleResponse;
 import com.gnagnoohc.scms.domain.counsel.service.CounselingScheduleService;
 import com.gnagnoohc.scms.global.common.dto.ApiResponse;
 import com.gnagnoohc.scms.global.security.AuthUser;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -15,6 +17,8 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 /**
  * 상담사 일정 요청을 HTTP 입력으로 받아 서비스에 전달한다.
@@ -26,6 +30,16 @@ import org.springframework.web.bind.annotation.RestController;
 public class CounselingScheduleController {
 
     private final CounselingScheduleService counselingScheduleService;
+
+    /**
+     * 상담사가 본인 소유 일정과 수정 가능 여부를 한 번에 확인한다.
+     */
+    @GetMapping
+    public ApiResponse<List<CounselorScheduleResponse>> getCounselorSchedules(
+            @AuthenticationPrincipal AuthUser authUser
+    ) {
+        return ApiResponse.ok(counselingScheduleService.getCounselorSchedules(authUser.getId()));
+    }
 
     /**
      * 로그인한 상담사의 예약 가능한 새 일정을 연다.
