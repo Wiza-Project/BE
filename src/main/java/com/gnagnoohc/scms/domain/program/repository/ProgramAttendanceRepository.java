@@ -12,10 +12,12 @@ import java.util.Optional;
 
 public interface ProgramAttendanceRepository extends JpaRepository<ProgramAttendance, Integer> {
 
-    // ProgramAttendance 엔티티도 setter/빌더가 없어 native SQL로 우회한다.
-    // application_id + program_session_id 조합에 uq_program_attendance_application_session
-    // 유니크 제약이 걸려있어, 같은 학생·회차에 대한 재기록(정정)은 ON CONFLICT DO UPDATE로 처리한다
-    // (INSERT와 UPDATE를 서비스 계층에서 미리 구분할 필요 없이 이 쿼리 하나로 upsert된다).
+    /**
+     * ProgramAttendance 엔티티도 setter/빌더가 없어 native SQL로 우회한다.
+     * application_id + program_session_id 조합에 uq_program_attendance_application_session
+     * 유니크 제약이 걸려있어, 같은 학생·회차에 대한 재기록(정정)은 ON CONFLICT DO UPDATE로 처리한다
+     * (INSERT와 UPDATE를 서비스 계층에서 미리 구분할 필요 없이 이 쿼리 하나로 upsert된다).
+     */
     @Modifying(clearAutomatically = true)
     @Query(value = """
         INSERT INTO program_attendance (

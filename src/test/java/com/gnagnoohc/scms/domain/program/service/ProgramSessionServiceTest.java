@@ -109,8 +109,10 @@ class ProgramSessionServiceTest {
                 .isEqualTo(ErrorCode.PROGRAM_NOT_FOUND);
     }
 
-    // ExtracurricularProgram/ProgramSession은 protected 기본 생성자만 있고 setter/빌더가 없어(네이티브 SQL로만
-    // 값을 채우는 구조), 테스트 픽스처는 리플렉션으로 생성한다 (ProgramApplicationServiceTest 참고).
+    /**
+     * ExtracurricularProgram/ProgramSession은 protected 기본 생성자만 있고 setter/빌더가 없어(네이티브 SQL로만
+     * 값을 채우는 구조), 테스트 픽스처는 리플렉션으로 생성한다 (ProgramApplicationServiceTest 참고).
+     */
     private ExtracurricularProgram buildProgramFixture(Integer programId) throws Exception {
         Constructor<ExtracurricularProgram> constructor = ExtracurricularProgram.class.getDeclaredConstructor();
         constructor.setAccessible(true);

@@ -23,10 +23,12 @@ public class ProgramSessionService {
     private final ExtracurricularProgramRepository programRepository;
     private final ProgramSessionRepository sessionRepository;
 
-    // 운영부서가 프로그램의 회차(교육 일정)를 등록한다. 매개변수 3개의 의미:
-    //   programId : 회차를 등록할 프로그램의 PK (URL 경로에서 옴)
-    //   request   : 등록할 회차 내용 (요청 바디에서 옴)
-    //   staffId   : 지금 로그인해서 이 요청을 보낸 운영부서 담당자의 id (인증 정보에서 옴)
+    /**
+     * 운영부서가 프로그램의 회차(교육 일정)를 등록한다. 매개변수 3개의 의미:
+     *   programId : 회차를 등록할 프로그램의 PK (URL 경로에서 옴)
+     *   request   : 등록할 회차 내용 (요청 바디에서 옴)
+     *   staffId   : 지금 로그인해서 이 요청을 보낸 운영부서 담당자의 id (인증 정보에서 옴)
+     */
     public ProgramSessionResponseDTO registerSession(Integer programId, ProgramSessionRegisterRequestDTO request, Integer staffId) {
         if (!programRepository.existsById(programId)) {
             throw new BusinessException(ErrorCode.PROGRAM_NOT_FOUND);
