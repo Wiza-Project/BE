@@ -5,9 +5,11 @@ import java.math.BigDecimal;
 // Instant: 날짜+시간을 표현하는 타입. 생성 시각(createdAt) 등에 사용.
 import java.time.Instant;
 
-// 비교과프로그램 "등록" 응답 DTO. 등록이 성공적으로 끝난 뒤 클라이언트(프론트엔드)에게 돌려줄 값들만 담는다.
-// programId(새로 생성된 PK), programStatus(항상 "모집중"), createdAt처럼 요청 DTO엔 없던
-// "서버가 결정한 값"들이 포함되고, FK id처럼 클라이언트가 이미 알고 있는 값은 응답에서 뺐다.
+/**
+ * 비교과프로그램 "등록" 응답 DTO. 등록이 성공적으로 끝난 뒤 클라이언트(프론트엔드)에게 돌려줄 값들만 담는다.
+ * programId(새로 생성된 PK), programStatus(항상 "모집중"), createdAt처럼 요청 DTO엔 없던
+ * "서버가 결정한 값"들이 포함되고, FK id처럼 클라이언트가 이미 알고 있는 값은 응답에서 뺐다.
+ */
 public record ProgramRegisterResponseDTO(
         // 새로 등록된 프로그램의 PK. DB가 자동으로 채번한 값이라 등록 전에는 클라이언트가 알 수 없으므로 응답으로 알려준다.
         Integer programId,
