@@ -31,12 +31,13 @@ public class CompetencyService {
         }
 
         int sequence = (int) existingCount + 1;
+        int codeAndOrder = sequence * 100;
         Competency competency = Competency.createTop(
-                "C" + sequence,
+                "C" + codeAndOrder,
                 request.competencyName(),
                 request.englishName(),
                 request.description(),
-                sequence,
+                codeAndOrder,
                 staffId
         );
 
@@ -60,7 +61,7 @@ public class CompetencyService {
             return List.of(CompetencyResponse.from(competency));
         }
 
-        // 거절하지 않고 스왑하는 이유: 역량이 6개(1~6 전부 사용중)로 다 차면
+        // 거절하지 않고 스왑하는 이유: 역량이 6개(100~600 전부 사용중)로 다 차면
         // 어떤 역량이든 자기 값 외에는 항상 "이미 사용중"이라 거절 방식으로는 영구히 재배치가 불가능해짐
         Competency swapped = conflicting.get();
         swapped.changeDisplayOrder(previousOrder);
