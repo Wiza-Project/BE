@@ -527,8 +527,10 @@ class ProgramApplicationServiceTest {
                 .isEqualTo(ErrorCode.PROGRAM_NOT_FOUND);
     }
 
-    // ExtracurricularProgram은 protected 기본 생성자만 있고 setter/빌더가 없어(네이티브 SQL로만 값을 채우는 구조),
-    // 테스트 픽스처는 리플렉션으로 생성한 뒤 필요한 필드만 직접 채워 넣는다. (ProgramServiceTest.buildProgramFixture 참고)
+    /**
+     * ExtracurricularProgram은 protected 기본 생성자만 있고 setter/빌더가 없어(네이티브 SQL로만 값을 채우는 구조),
+     * 테스트 픽스처는 리플렉션으로 생성한 뒤 필요한 필드만 직접 채워 넣는다. (ProgramServiceTest.buildProgramFixture 참고)
+     */
     private ExtracurricularProgram buildProgramFixture(
             Integer programId, Instant recruitmentStartsAt, Instant recruitmentEndsAt, Integer capacity) throws Exception {
         Constructor<ExtracurricularProgram> constructor = ExtracurricularProgram.class.getDeclaredConstructor();

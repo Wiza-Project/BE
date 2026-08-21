@@ -10,7 +10,7 @@
  *   <li>[x] 로그인 / 토큰 재발급 / 로그아웃 API — {@link com.gnagnoohc.scms.domain.user.controller.AuthController},
  *           {@link com.gnagnoohc.scms.domain.user.service.AuthService}.
  *           30분 미활동 자동 로그아웃은 Access 토큰 만료(app.jwt.access-token-validity-seconds)로,
- *           6개월 이상 미접속 후 로그인 시도 시 휴면 잠금은 AuthService.rejectIfNotLoginable() 로 구현했습니다.
+ *           6개월 이상 미접속 후 로그인 시도 시 휴면 잠금은 AuthService.rejectIfNewlyDormant() 로 구현했습니다.
  *           AppUser 엔티티는 손대지 않고, 상태 변경은 AppUserRepository 의 벌크 업데이트로 처리합니다
  *           (엔티티에 세터/비즈니스 메서드가 없기 때문 — DormantAccountLocker 주석 참고).</li>
  *   <li>[ ] 비밀번호 정책 / 초기 비밀번호 변경 강제</li>

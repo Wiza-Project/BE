@@ -36,9 +36,11 @@ public class StudentProgramController {
             @RequestParam(required = false) String keyword,
             // 연계 핵심역량 id로 필터링. 생략하면 역량으로 거르지 않는다.
             @RequestParam(required = false) Integer competencyId,
-            // page/size/sort 쿼리 파라미터를 스프링이 자동으로 Pageable로 변환한다.
-            // 기본값은 최신 등록순 20건씩. 마감임박순 등 다른 정렬은 sort=recruitmentEndsAt,asc 처럼 그대로 넘기면 된다
-            // (ExtracurricularProgramRepositoryImpl.resolveOrderSpecifiers가 허용하는 필드만 화이트리스트로 반영한다).
+            /**
+             * page/size/sort 쿼리 파라미터를 스프링이 자동으로 Pageable로 변환한다.
+             * 기본값은 최신 등록순 20건씩. 마감임박순 등 다른 정렬은 sort=recruitmentEndsAt,asc 처럼 그대로 넘기면 된다
+             * (ExtracurricularProgramRepositoryImpl.resolveOrderSpecifiers가 허용하는 필드만 화이트리스트로 반영한다).
+             */
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
         return ApiResponse.ok(programService.list(status, keyword, competencyId, pageable));
     }
