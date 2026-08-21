@@ -31,4 +31,25 @@ public class CounselingReservation extends BaseTimeEntity {
     @Column(name = "canceled_at") private Instant canceledAt;
     @Column(name = "cancellation_reason", columnDefinition = "text") private String cancellationReason;
     @Column(name = "change_reason", columnDefinition = "text") private String changeReason;
+
+    /**
+     * 예약 생성 시점의 학생, 유형, 동의 이력과 선택 일정만 고정한다.
+     * 승인·배정은 별도 유스케이스이므로 여기서 처리 상태를 바꾸지 않는다.
+     */
+    public static CounselingReservation create(
+            CounselingType counselingType,
+            CounselingSchedule counselingSchedule,
+            AppUser student,
+            UserConsent userConsent,
+            String requestContent
+    ) {
+        CounselingReservation reservation = new CounselingReservation();
+        reservation.counselingType = counselingType;
+        reservation.counselingSchedule = counselingSchedule;
+        reservation.student = student;
+        reservation.userConsent = userConsent;
+        reservation.requestContent = requestContent;
+        reservation.reservationStatus = "REQUESTED";
+        return reservation;
+    }
 }
