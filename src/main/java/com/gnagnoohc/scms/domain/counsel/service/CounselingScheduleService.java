@@ -3,6 +3,7 @@ package com.gnagnoohc.scms.domain.counsel.service;
 import com.gnagnoohc.scms.domain.counsel.dto.CounselingScheduleRequest;
 import com.gnagnoohc.scms.domain.counsel.dto.CounselingScheduleAvailabilityResponse;
 import com.gnagnoohc.scms.domain.counsel.dto.CounselingScheduleResponse;
+import com.gnagnoohc.scms.domain.counsel.dto.CounselorScheduleResponse;
 import com.gnagnoohc.scms.domain.counsel.entity.CounselingSchedule;
 import com.gnagnoohc.scms.domain.counsel.entity.CounselingType;
 import com.gnagnoohc.scms.domain.counsel.repository.CounselUserRepository;
@@ -50,6 +51,18 @@ public class CounselingScheduleService {
                 counselingTypeId,
                 Instant.now()
         );
+    }
+
+    /**
+     * 상담사는 과거와 마감된 일정을 포함해 본인 소유 일정만 최신 시작 시각 순으로 조회한다.
+     * 목록의 예약 이력 표시는 화면 안내용이며, 수정 시에는 별도 트랜잭션에서 다시 검증한다.
+     */
+    @Transactional(readOnly = true)
+    public List<CounselorScheduleResponse> getCounselorSchedules(Integer counselorId) {
+        if (!counselUserRepository.isActiveCounselor(counselorId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        return counselingScheduleRepository.findCounselorSchedules(counselorId);
     }
 
     /**

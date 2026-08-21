@@ -33,17 +33,24 @@ import java.util.List;
  * 아니라 "로그인 시도 시" 판정하는 방식임에 주의하세요 (요구사항 원문 그대로).
  * 휴면 전환이 실제로 커밋되도록 하는 이유는 DormantAccountLocker 주석 참고.
  * 휴면 해제(본인확인) 절차는 이 기능 범위 밖입니다.
+ * 이 "동적 전환" 판정(rejectIfNewlyDormant)만큼은 비밀번호 검증에 성공한 뒤에만
+ * 실행합니다 — 비밀번호를 모르는 사람이 아이디만 알고 반복 시도해서 남의 멀쩡한 계정을
+ * 휴면으로 만들어 버리는 걸 막기 위해서입니다. (이미 DORMANT 로 저장돼 있는 계정은
+ * 이 값과 무관하게 rejectIfAlreadyBlocked 에서 비밀번호 검증 전에 걸러집니다.)
  *
  * ── 로그인 실패 잠금 정책 ─────────────────────────────────────────
  * 비밀번호를 {@value #MAX_FAILED_LOGIN_ATTEMPTS}회 연속으로 틀리면 계정을 LOCKED 로
  * 전환합니다. 존재하는 아이디에만 적용됩니다(존재하지 않는 아이디는 애초에 카운트할
  * failedLoginCount 가 없음). 정상 로그인에 성공하면 카운트는 0으로 초기화됩니다
  * (recordSuccessfulLogin 참고).
- * 잠금을 유발한 그 시도조차 응답은 항상 PASSWORD_MISMATCH 로만 내려갑니다 — "지금 이
- * 시도로 잠겼다"는 사실 자체를 비밀번호가 틀린 요청에 노출하지 않기 위해서입니다
- * (프론트도 반복 실패를 "잠김 확정"으로 단정하지 않고 안내만 하는 걸로 이미 맞춰져
- * 있습니다). 계정이 잠겼다는 사실은 이후 올바른 비밀번호로 재시도했을 때
- * rejectIfNotLoginable() 을 거치면서만 드러납니다.
+ * 잠금을 "유발한 바로 그 시도"의 응답은 여전히 PASSWORD_MISMATCH 입니다 — 그 순간까지는
+ * 계정이 아직 ACTIVE 였고, 상태 판정(rejectIfAlreadyBlocked)은 비밀번호 검증보다 먼저
+ * 실행되기 때문입니다. 하지만 그 다음 시도부터는 비밀번호를 맞히든 틀리든 즉시
+ * ACCOUNT_LOCKED 로 응답합니다.
+ * (QA-106: "비밀번호가 틀린 건지 계정이 잠긴 건지 구분이 안 된다" 반영. 이전에는 올바른
+ * 비밀번호를 넣어야만 잠김 사실이 드러났는데, "이미 잠긴 계정인지"는 비밀번호를 몰라도
+ * 노출해도 되는 정보로 판단해 순서를 바꿨습니다 — 대신 존재하지 않는 아이디는 여전히
+ * PASSWORD_MISMATCH만 반환하므로 "아이디가 아예 존재하는지" 자체는 노출되지 않습니다.)
  * 관리자에 의한 잠금 해제 절차는 이 기능 범위 밖입니다(휴면 해제와 동일).
  *
  * ── Refresh Token 보관 위치 결정 ──────────────────────────────────
@@ -59,9 +66,13 @@ import java.util.List;
  *    아이디(BCrypt 연산으로 수백ms 소요)와 응답 시간 차이가 커 아이디 존재 여부가 노출됐습니다.
  *    (실측: 존재 0.3~0.5초 vs 미존재 0.01초) → 아이디가 없어도 더미 해시로 BCrypt 검증을
  *    똑같이 태워서 시간을 맞춥니다.
- * 2) 학번·교번 앞뒤 공백: trim 없이 조회해서 공백 섞인 입력이 "아이디 없음"으로 처리되어
- *    사용자에게 "비밀번호 불일치"라는 오해를 주는 메시지가 나갔습니다 → trim 후 조회.
- *    (비밀번호는 trim하지 않습니다 — 공백이 비밀번호의 일부일 수 있어서입니다.)
+ * 2) (WP-106 이전 이력) 학번·교번 앞뒤 공백: trim 없이 조회해서 공백 섞인 입력이 "아이디
+ *    없음"으로 처리되어 사용자에게 "비밀번호 불일치"라는 오해를 주는 메시지가 나갔습니다.
+ *    지금은 LoginRequest 의 @Pattern("\\d{8}") 이 공백 섞인 입력 자체를 "숫자 8자리로
+ *    입력해주세요"로 먼저 걸러내므로(WP-106: 아이디에 공백을 허용하지 않기로 확정),
+ *    HTTP 요청 경로에서는 이 메서드까지 공백이 섞인 값이 들어오지 않습니다. 아래 trim() 은
+ *    DTO 검증을 거치지 않고 이 메서드를 직접 호출하는 경우(테스트 등)에 대한 방어용으로만
+ *    남겨둡니다. (비밀번호는 trim하지 않습니다 — 공백이 비밀번호의 일부일 수 있어서입니다.)
  */
 @Service
 @RequiredArgsConstructor
@@ -97,12 +108,17 @@ public class AuthService {
             throw new BusinessException(ErrorCode.PASSWORD_MISMATCH);
         }
 
+        // 이미 확정되어 저장된 상태(LOCKED/DORMANT/WITHDRAWN)는 비밀번호 검증보다 먼저
+        // 판정합니다 — 비밀번호를 맞히든 틀리든 상관없이 정확한 사유를 보여주기 위해서입니다.
+        rejectIfAlreadyBlocked(user);
+
         if (!passwordEncoder.matches(rawPassword, user.getPasswordHash())) {
             registerLoginFailure(user);
             throw new BusinessException(ErrorCode.PASSWORD_MISMATCH);
         }
 
-        rejectIfNotLoginable(user);
+        // 6개월 미접속 휴면 전환은 상태 변경을 동반하므로 비밀번호 검증을 통과한 뒤에만 판정합니다.
+        rejectIfNewlyDormant(user);
 
         appUserRepository.recordSuccessfulLogin(user.getUserId(), Instant.now());
 
@@ -122,15 +138,16 @@ public class AuthService {
         }
 
         // 재발급은 "활동 중" 세션 연장이지 새 로그인 시도가 아니므로
-        // 휴면 판정(rejectIfNotLoginable)과 lastLoginAt 갱신은 하지 않습니다.
+        // 휴면 판정(rejectIfAlreadyBlocked/rejectIfNewlyDormant)과 lastLoginAt 갱신은 하지 않습니다.
         return issueTokens(user);
     }
 
     /**
-     * ACTIVE 가 아니면 로그인을 거부합니다. ACTIVE 인 경우에도 마지막 활동으로부터
-     * {@value #DORMANT_THRESHOLD_MONTHS}개월이 지났다면 이번 시도에서 DORMANT 로 전환하고 거부합니다.
+     * 이미 저장돼 있는 상태(DORMANT/LOCKED/WITHDRAWN)면 로그인을 거부합니다. 비밀번호 검증
+     * 이전에 호출되므로, 비밀번호를 몰라도 "이미 확정된" 계정 상태는 그대로 노출됩니다.
+     * ACTIVE(혹은 값이 비정상적으로 비어있는 경우)는 여기서 통과시키고 이후 비밀번호 검증으로 넘어갑니다.
      */
-    private void rejectIfNotLoginable(AppUser user) {
+    private void rejectIfAlreadyBlocked(AppUser user) {
         String status = user.getAccountStatus();
         if ("DORMANT".equals(status)) {
             throw new BusinessException(ErrorCode.ACCOUNT_DORMANT);
@@ -141,8 +158,13 @@ public class AuthService {
         if ("WITHDRAWN".equals(status)) {
             throw new BusinessException(ErrorCode.ACCOUNT_WITHDRAWN);
         }
-        // ACTIVE (혹은 값이 비정상적으로 비어있는 경우까지 포함) 인 경우만 아래 휴면 기준일 검사로 진행합니다.
+    }
 
+    /**
+     * 비밀번호 검증을 통과한 ACTIVE 계정에 대해서만 호출합니다. 마지막 활동으로부터
+     * {@value #DORMANT_THRESHOLD_MONTHS}개월이 지났다면 이번 시도에서 DORMANT 로 전환하고 거부합니다.
+     */
+    private void rejectIfNewlyDormant(AppUser user) {
         Instant lastActivity = user.getLastLoginAt() != null ? user.getLastLoginAt() : user.getCreatedAt();
         Instant dormantSince = Instant.now().atZone(ZoneId.systemDefault())
                 .minusMonths(DORMANT_THRESHOLD_MONTHS)
