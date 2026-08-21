@@ -25,4 +25,14 @@ public class AssessmentQuestion extends BaseCreatedAtEntity {
     private JsonNode responseOptions;
     @Column(name = "is_active", nullable = false) private boolean active = true;
     @Column(name = "created_by", nullable = false) private Integer createdBy;
+
+    public static AssessmentQuestion createFromUpload(Competency competency, String questionText,
+                                                        JsonNode responseOptions, Integer createdBy) {
+        AssessmentQuestion question = new AssessmentQuestion();
+        question.competency = competency;
+        question.questionText = questionText;
+        question.responseOptions = responseOptions;
+        question.createdBy = createdBy;
+        return question;
+    }
 }
