@@ -14,6 +14,7 @@ import org.springframework.http.HttpStatus;
  *   S###  상담            (P3100)
  *   M###  마일리지        (P4100)
  *   J###  취창업          (P5100)
+ *   N###  알림
  *
  * 새 코드를 추가하면 프론트 담당자에게 반드시 공유하세요.
  */
@@ -98,7 +99,10 @@ public enum ErrorCode {
     JOB_POSTING_ALREADY_CLOSED(HttpStatus.BAD_REQUEST, "J005", "이미 마감된 채용공고입니다."),
     INVALID_REVIEW_STATUS(HttpStatus.BAD_REQUEST, "J006", "유효하지 않은 검수 상태값입니다."),
     INVALID_APPLICATION_PERIOD(HttpStatus.BAD_REQUEST, "J007", "신청 종료 일시는 시작 일시보다 빠를 수 없습니다."),
-    COMPANY_ACCOUNT_NOT_FOUND(HttpStatus.NOT_FOUND, "J008", "존재하지 않는 기업 계정입니다.");
+    COMPANY_ACCOUNT_NOT_FOUND(HttpStatus.NOT_FOUND, "J008", "존재하지 않는 기업 계정입니다."),
+
+    // ── 알림 ──────────────────────────────────────────────────────
+    NOTIFICATION_NOT_FOUND(HttpStatus.NOT_FOUND, "N001", "알림을 찾을 수 없습니다.");
 
     private final HttpStatus status;
     private final String code;
