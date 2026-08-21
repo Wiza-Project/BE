@@ -73,7 +73,7 @@ public class ProgramMileageAccrualService {
                 if (accrueProgramCompletion(application.getApplicationId())) {
                     accruedCount++;
                 }
-            } catch (BusinessException exception) {
+            } catch (RuntimeException exception) {
                 log.warn("비교과 마일리지 자동 적립을 건너뜁니다. applicationId={}, reason={}",
                         application.getApplicationId(), exception.getMessage());
             }
