@@ -11,6 +11,8 @@ import com.gnagnoohc.scms.domain.program.entity.ExtracurricularProgram;
 import com.gnagnoohc.scms.domain.program.entity.ProgramApplication;
 import com.gnagnoohc.scms.domain.program.repository.ExtracurricularProgramRepository;
 import com.gnagnoohc.scms.domain.program.repository.ProgramApplicationRepository;
+import com.gnagnoohc.scms.domain.program.repository.ProgramAttendanceRepository;
+import com.gnagnoohc.scms.domain.program.repository.ProgramMileageTransactionRepository;
 import com.gnagnoohc.scms.domain.user.entity.AppUser;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;
 import com.gnagnoohc.scms.global.error.BusinessException;
@@ -48,6 +50,12 @@ class ProgramApplicationServiceTest {
 
     @Mock
     ProgramApplicationRepository applicationRepository;
+
+    @Mock
+    ProgramAttendanceRepository attendanceRepository;
+
+    @Mock
+    ProgramMileageTransactionRepository mileageTransactionRepository;
 
     @InjectMocks
     ProgramApplicationService programApplicationService;
