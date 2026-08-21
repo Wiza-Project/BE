@@ -90,6 +90,9 @@ public class ProgramAttendanceService {
         ProgramApplication application = applicationRepository
                 .findByProgram_ProgramIdAndStudent_UserId(programId, studentId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.APPLICATION_NOT_FOUND));
+        if (!ApplicationStatus.APPROVED.name().equals(application.getApplicationStatus())) {
+            throw new BusinessException(ErrorCode.APPLICATION_NOT_APPROVED);
+        }
 
         List<ProgramSession> sessions = sessionRepository.findByProgram_ProgramIdOrderBySessionNoAsc(programId);
 

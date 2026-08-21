@@ -191,6 +191,19 @@ class ProgramAttendanceServiceTest {
     }
 
     @Test
+    void listMyAttendance_whenApplicationWaitlisted_throwsApplicationNotApproved() throws Exception {
+        ExtracurricularProgram program = buildProgramFixture(1);
+        ProgramApplication application = buildApplicationFixture(5, program, "WAITLISTED");
+
+        when(applicationRepository.findByProgram_ProgramIdAndStudent_UserId(1, 100)).thenReturn(Optional.of(application));
+
+        assertThatThrownBy(() -> programAttendanceService.listMyAttendance(1, 100))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.APPLICATION_NOT_APPROVED);
+    }
+
+    @Test
     void listMyAttendance_whenApplicationNotFound_throwsApplicationNotFound() {
         when(applicationRepository.findByProgram_ProgramIdAndStudent_UserId(1, 100)).thenReturn(Optional.empty());
 

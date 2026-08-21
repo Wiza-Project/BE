@@ -30,6 +30,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.lang.reflect.Constructor;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -39,6 +40,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -376,6 +378,63 @@ class ProgramApplicationServiceTest {
         assertThat(response.content().get(1).applicationStatusLabel()).isEqualTo("대기");
         assertThat(response.content().get(2).decisionReason()).isEqualTo("정원 외 사유");
         assertThat(response.content().get(2).applicationStatusLabel()).isEqualTo("반려");
+    }
+
+    @Test
+    void listMyApplications_withAttendanceAndMileageData_mapsAggregatesCorrectly() throws Exception {
+        ExtracurricularProgram program = buildProgramFixture(1, Instant.now(), Instant.now(), 10);
+        ReflectionTestUtils.setField(program, "programName", "테스트 프로그램");
+
+        Instant now = Instant.now();
+        ProgramApplication first = buildApplicationSummaryFixture(
+                1, program, "APPROVED", null, now, null, null, null, null, null, null, null);
+        ProgramApplication second = buildApplicationSummaryFixture(
+                2, program, "APPROVED", null, now, null, null, null, null, null, null, null);
+
+        Pageable pageable = PageRequest.of(0, 10);
+        Page<ProgramApplication> page = new PageImpl<>(List.of(first, second), pageable, 2);
+        when(applicationRepository.findAllByStudentId(100, pageable)).thenReturn(page);
+
+        ProgramAttendanceRepository.AttendanceCountProjection attendanceForFirst =
+                mock(ProgramAttendanceRepository.AttendanceCountProjection.class);
+        when(attendanceForFirst.getApplicationId()).thenReturn(1);
+        when(attendanceForFirst.getTotalCount()).thenReturn(4L);
+        when(attendanceForFirst.getPresentCount()).thenReturn(3L);
+
+        ProgramAttendanceRepository.AttendanceCountProjection attendanceForSecond =
+                mock(ProgramAttendanceRepository.AttendanceCountProjection.class);
+        when(attendanceForSecond.getApplicationId()).thenReturn(2);
+        when(attendanceForSecond.getTotalCount()).thenReturn(2L);
+        when(attendanceForSecond.getPresentCount()).thenReturn(0L);
+
+        when(attendanceRepository.countAttendanceByApplicationIds(List.of(1, 2)))
+                .thenReturn(List.of(attendanceForFirst, attendanceForSecond));
+
+        ProgramMileageTransactionRepository.EarnedPointsProjection pointsForFirst =
+                mock(ProgramMileageTransactionRepository.EarnedPointsProjection.class);
+        when(pointsForFirst.getApplicationId()).thenReturn(1);
+        when(pointsForFirst.getPoints()).thenReturn(new BigDecimal("500"));
+
+        when(mileageTransactionRepository.findPostedPointsByApplicationIds(List.of(1, 2)))
+                .thenReturn(List.of(pointsForFirst));
+
+        PageResponse<ProgramApplicationSummaryResponseDTO> response =
+                programApplicationService.listMyApplications(100, pageable);
+
+        ProgramApplicationSummaryResponseDTO firstDto = response.content().get(0);
+        assertThat(firstDto.totalAttendanceCount()).isEqualTo(4);
+        assertThat(firstDto.presentAttendanceCount()).isEqualTo(3);
+        assertThat(firstDto.attendanceRate()).isEqualTo(75.0);
+        assertThat(firstDto.earnedMileagePoints()).isEqualByComparingTo("500");
+
+        ProgramApplicationSummaryResponseDTO secondDto = response.content().get(1);
+        assertThat(secondDto.totalAttendanceCount()).isEqualTo(2);
+        assertThat(secondDto.presentAttendanceCount()).isEqualTo(0);
+        assertThat(secondDto.attendanceRate()).isEqualTo(0.0);
+        assertThat(secondDto.earnedMileagePoints()).isNull();
+
+        verify(attendanceRepository).countAttendanceByApplicationIds(List.of(1, 2));
+        verify(mileageTransactionRepository).findPostedPointsByApplicationIds(List.of(1, 2));
     }
 
     @Test
