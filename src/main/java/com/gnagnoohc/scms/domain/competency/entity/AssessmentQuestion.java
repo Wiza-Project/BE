@@ -35,4 +35,29 @@ public class AssessmentQuestion extends BaseCreatedAtEntity {
         question.createdBy = createdBy;
         return question;
     }
+
+    // 아직 응시 이력이 없는 문항만 제자리 수정 허용 (호출 전 응답 존재 여부는 서비스에서 판단)
+    public void editInPlace(String questionText, JsonNode responseOptions, boolean reverse) {
+        this.questionText = questionText;
+        this.responseOptions = responseOptions;
+        this.reverse = reverse;
+    }
+
+    // 이미 응시 이력이 있는 문항은 제자리 수정 대신 새 버전으로 대체한다 (연도별 추이 분석을 위해 이전 버전 보존)
+    public static AssessmentQuestion createNewVersion(AssessmentQuestion previous, String questionText,
+                                                        JsonNode responseOptions, boolean reverse, Integer createdBy) {
+        AssessmentQuestion question = new AssessmentQuestion();
+        question.competency = previous.competency;
+        question.previousQuestion = previous;
+        question.versionNo = previous.versionNo + 1;
+        question.questionText = questionText;
+        question.responseOptions = responseOptions;
+        question.reverse = reverse;
+        question.createdBy = createdBy;
+        return question;
+    }
+
+    public void deactivate() {
+        this.active = false;
+    }
 }
