@@ -17,9 +17,13 @@ reviews:
   review_status: true
   collapse_walkthrough: false
 
+  finishing_touches:
+    autofix:
+      enabled: false   # 🪄 Autofix 체크박스/명령 자체를 숨김
+
   auto_review:
     enabled: true
-    auto_incremental_review: true
+    auto_incremental_review: false
     drafts: false
     base_branches:
       - "^develop$"
