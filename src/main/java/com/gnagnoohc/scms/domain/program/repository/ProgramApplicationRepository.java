@@ -181,6 +181,19 @@ public interface ProgramApplicationRepository extends JpaRepository<ProgramAppli
         """, nativeQuery = true)
     int judgeCompletion(@Param("now") Instant now);
 
+    // judgeCompletion은 COMPLETED/FAILED를 가리지 않고 영향받은 행 수(int)만 돌려주므로, 방금 COMPLETED로
+    // 확정된 신청 건의 id만 별도로 조회한다. judgeCompletion 호출 때 넘긴 것과 같은 now 값을 그대로 넘기면
+    // 같은 트랜잭션 안에서 방금 갱신한 completed_at과 정확히 일치하는 행만 걸러진다.
+    // ProgramStatusScheduler가 이 id들로 ProgramCompletionJudgedEvent를 발행해, 마일리지 반영을 판정과
+    // 같은 트랜잭션에서 트리거한다.
+    @Query("""
+            select a.applicationId
+            from ProgramApplication a
+            where a.completionStatus = 'COMPLETED'
+              and a.completedAt = :now
+            """)
+    List<Integer> findApplicationIdsJudgedCompletedAt(@Param("now") Instant now);
+
     // ── 여기부터 "스태프용 신청자 목록 조회(Read)" 기능 ──────────────────────────────
     //
     // 스태프가 신청관리/이수판정 화면에서 프로그램 하나의 전체 신청자를 조회한다. student는 지연 로딩(LAZY)이고
