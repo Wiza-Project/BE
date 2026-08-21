@@ -1,14 +1,12 @@
-package com.gnagnoohc.scms.domain.career.dto;
+package com.gnagnoohc.scms.domain.career.dto.posting;
 
 import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.persistence.Column;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.Map;
 

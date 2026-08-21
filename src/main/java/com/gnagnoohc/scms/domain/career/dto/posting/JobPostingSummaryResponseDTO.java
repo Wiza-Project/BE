@@ -1,4 +1,4 @@
-package com.gnagnoohc.scms.domain.career.dto;
+package com.gnagnoohc.scms.domain.career.dto.posting;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
@@ -60,4 +60,7 @@ public class JobPostingSummaryResponseDTO {
 
     @Schema(description = "게시 상태 (posting_status)", example = "PUBLISHED")
     private String postingStatus;
+
+    @Schema(description = "현재 로그인한 학생의 관심공고(스크랩) 등록 여부 (교직원 조회 시 false)", example = "false")
+    private Boolean isScrapped;
 }

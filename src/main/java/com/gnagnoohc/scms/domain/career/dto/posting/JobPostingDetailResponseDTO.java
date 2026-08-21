@@ -1,4 +1,4 @@
-package com.gnagnoohc.scms.domain.career.dto;
+package com.gnagnoohc.scms.domain.career.dto.posting;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
@@ -101,4 +101,7 @@ public class JobPostingDetailResponseDTO {
 
     @Schema(description = "수정 일시 (updated_at)", example = "2026-08-20T14:30:00+09:00")
     private OffsetDateTime updatedAt;
+
+    @Schema(description = "현재 로그인한 학생의 관심공고(스크랩) 등록 여부 (교직원 조회 시 false)", example = "false")
+    private Boolean isScrapped;
 }
