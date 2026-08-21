@@ -36,13 +36,13 @@ public interface CounselUserRepository extends Repository<AppUser, Integer> {
     Optional<AppUser> findByIdForUpdate(@Param("userId") Integer userId);
 
     /**
-     * 활성 계정 여부와 별도로 COUNSELOR 업무 역할이 실제 부여됐는지 확인한다.
+     * 활성 계정 여부와 별도로 ST200 상담사 업무 역할이 실제 부여됐는지 확인한다.
      */
     @Query("""
             select case when count(role) > 0 then true else false end
             from UserRole role
             where role.id.userId = :userId
-              and role.id.roleCode = 'COUNSELOR'
+              and role.id.roleCode = 'ST200'
             """)
     boolean hasCounselorRole(@Param("userId") Integer userId);
 }

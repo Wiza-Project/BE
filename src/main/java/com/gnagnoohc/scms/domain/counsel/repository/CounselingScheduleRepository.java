@@ -50,7 +50,7 @@ public interface CounselingScheduleRepository extends JpaRepository<CounselingSc
                   select role.id.userId
                   from UserRole role
                   where role.id.userId = counselor.userId
-                    and role.id.roleCode = 'COUNSELOR'
+                    and role.id.roleCode = 'ST200'
               )
             group by
                 schedule.counselingScheduleId,
