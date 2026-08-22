@@ -43,7 +43,29 @@ public interface ProgramAttendanceRepository extends JpaRepository<ProgramAttend
 
     List<ProgramAttendance> findByProgramSession_ProgramSessionId(Integer programSessionId);
 
+    // 학생 본인의 출결 조회(ProgramAttendanceService.listMyAttendance)에서, 신청 건 하나에 기록된
+    // 회차별 출결을 전부 가져와 회차 목록과 메모리에서 합칠 때 사용한다.
+    List<ProgramAttendance> findByApplication_ApplicationId(Integer applicationId);
+
     // upsertAttendance 실행 직후, 방금 upsert된 row를 다시 읽어 응답 DTO를 만드는 데 사용한다.
     Optional<ProgramAttendance> findByApplication_ApplicationIdAndProgramSession_ProgramSessionId(
             Integer applicationId, Integer programSessionId);
+
+    // 신청 내역 목록 화면의 출석률 표시를 위해, 신청 건 여러 개의 출석 집계를 한 번에 조회한다(N+1 방지).
+    @Query("""
+        SELECT a.application.applicationId AS applicationId,
+               COUNT(a) AS totalCount,
+               SUM(CASE WHEN a.attendanceStatus = 'PRESENT' THEN 1L ELSE 0L END) AS presentCount
+        FROM ProgramAttendance a
+        WHERE a.application.applicationId IN :applicationIds
+        GROUP BY a.application.applicationId
+        """)
+    List<AttendanceCountProjection> countAttendanceByApplicationIds(@Param("applicationIds") List<Integer> applicationIds);
+
+    /** 신청 건별 출석 집계 쿼리의 조회 전용 결과다. */
+    interface AttendanceCountProjection {
+        Integer getApplicationId();
+        Long getTotalCount();
+        Long getPresentCount();
+    }
 }

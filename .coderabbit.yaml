@@ -1,0 +1,64 @@
+# CodeRabbit 설정 파일 - scms-be (Spring Boot / Gradle)
+# 참고: https://docs.coderabbit.ai/reference/configuration
+
+language: "ko-KR"
+
+tone_instructions: >
+  모든 리뷰 코멘트와 요약은 한국어로 작성해주세요. 존댓말을 사용하고,
+  적절한 대체어가 없는 기술 용어는 영어를 그대로 사용해도 됩니다.
+
+early_access: false
+
+reviews:
+  profile: "chill"
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: false
+
+  finishing_touches:
+    autofix:
+      enabled: false   # 🪄 Autofix 체크박스/명령 자체를 숨김
+
+  auto_review:
+    enabled: true
+    auto_incremental_review: false
+    drafts: false
+    base_branches:
+      - "^develop$"
+      - "^main$"
+    labels:
+      - "✨ Feature"
+      - "🐛 BugFix"
+      - "🔧 Refactor"
+      - "⚙️ Setting"
+
+  # 리뷰 대상에서 제외할 경로 (gitignore 문법, ! 로 시작하면 제외)
+  path_filters:
+    # 테스트 코드 제외
+    - "!src/test/**"
+    - "!**/*Test.java"
+    - "!**/*Tests.java"
+    - "!**/*IT.java"
+    # 빌드/의존성 설정 파일 제외
+    - "!build.gradle"
+    - "!settings.gradle"
+    - "!gradle/**"
+    - "!gradlew"
+    - "!gradlew.bat"
+    # 빌드 산출물 제외
+    - "!build/**"
+    - "!**/*.log"
+
+  path_instructions:
+    - path: "src/main/**/*.java"
+      instructions: |
+        Spring Boot 백엔드 코드입니다. 다음을 중점적으로 검토해주세요:
+        - Controller-Service-Repository 계층 분리가 지켜지는지
+        - 예외 처리 및 트랜잭션(@Transactional) 사용이 적절한지
+        - N+1 쿼리 등 JPA 관련 성능 이슈가 없는지
+        - 널(null) 안전성과 검증(validation) 누락 여부
+
+chat:
+  auto_reply: true

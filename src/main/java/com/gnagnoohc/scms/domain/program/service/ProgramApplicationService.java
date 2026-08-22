@@ -11,6 +11,8 @@ import com.gnagnoohc.scms.domain.program.entity.ExtracurricularProgram;
 import com.gnagnoohc.scms.domain.program.entity.ProgramApplication;
 import com.gnagnoohc.scms.domain.program.repository.ExtracurricularProgramRepository;
 import com.gnagnoohc.scms.domain.program.repository.ProgramApplicationRepository;
+import com.gnagnoohc.scms.domain.program.repository.ProgramAttendanceRepository;
+import com.gnagnoohc.scms.domain.program.repository.ProgramMileageTransactionRepository;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
@@ -21,9 +23,12 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -32,6 +37,8 @@ public class ProgramApplicationService {
 
     private final ExtracurricularProgramRepository programRepository;
     private final ProgramApplicationRepository applicationRepository;
+    private final ProgramAttendanceRepository attendanceRepository;
+    private final ProgramMileageTransactionRepository mileageTransactionRepository;
 
     /**
      * 학생의 프로그램 참여 신청을 접수한다. 매개변수 2개의 의미:
@@ -216,7 +223,34 @@ public class ProgramApplicationService {
     @Transactional(readOnly = true)
     public PageResponse<ProgramApplicationSummaryResponseDTO> listMyApplications(Integer studentId, Pageable pageable) {
         Page<ProgramApplication> applications = applicationRepository.findAllByStudentId(studentId, pageable);
-        return PageResponse.from(applications.map(this::toSummary));
+        List<Integer> applicationIds = applications.getContent().stream()
+                .map(ProgramApplication::getApplicationId).toList();
+        Map<Integer, ProgramAttendanceRepository.AttendanceCountProjection> attendanceByApplication =
+                summarizeAttendance(applicationIds);
+        Map<Integer, BigDecimal> earnedPointsByApplication = summarizeEarnedMileage(applicationIds);
+        return PageResponse.from(applications.map(a -> toSummary(
+                a, attendanceByApplication.get(a.getApplicationId()), earnedPointsByApplication.get(a.getApplicationId()))));
+    }
+
+    // 신청 내역 목록 한 페이지에 해당하는 신청 건들의 출석 집계를 한 번의 쿼리로 배치 조회한다(N+1 방지).
+    private Map<Integer, ProgramAttendanceRepository.AttendanceCountProjection> summarizeAttendance(List<Integer> applicationIds) {
+        if (applicationIds.isEmpty()) {
+            return Map.of();
+        }
+        return attendanceRepository.countAttendanceByApplicationIds(applicationIds).stream()
+                .collect(Collectors.toMap(
+                        ProgramAttendanceRepository.AttendanceCountProjection::getApplicationId, p -> p));
+    }
+
+    // 신청 내역 목록 한 페이지에 해당하는 신청 건들의 확정 적립 마일리지를 한 번의 쿼리로 배치 조회한다(N+1 방지).
+    private Map<Integer, BigDecimal> summarizeEarnedMileage(List<Integer> applicationIds) {
+        if (applicationIds.isEmpty()) {
+            return Map.of();
+        }
+        return mileageTransactionRepository.findPostedPointsByApplicationIds(applicationIds).stream()
+                .collect(Collectors.toMap(
+                        ProgramMileageTransactionRepository.EarnedPointsProjection::getApplicationId,
+                        ProgramMileageTransactionRepository.EarnedPointsProjection::getPoints));
     }
 
     /**
@@ -262,14 +296,23 @@ public class ProgramApplicationService {
         return new ProgramApplicationSurveyResponseDTO(applicationId, true);
     }
 
-    private ProgramApplicationSummaryResponseDTO toSummary(ProgramApplication a) {
+    private ProgramApplicationSummaryResponseDTO toSummary(
+            ProgramApplication a,
+            ProgramAttendanceRepository.AttendanceCountProjection attendance,
+            BigDecimal earnedMileagePoints) {
         ApplicationStatus status = ApplicationStatus.valueOf(a.getApplicationStatus());
+        int totalAttendanceCount = attendance != null ? attendance.getTotalCount().intValue() : 0;
+        int presentAttendanceCount = attendance != null ? attendance.getPresentCount().intValue() : 0;
+        Double attendanceRate = totalAttendanceCount > 0
+                ? presentAttendanceCount * 100.0 / totalAttendanceCount
+                : null;
         return new ProgramApplicationSummaryResponseDTO(
                 a.getApplicationId(), a.getProgram().getProgramId(), a.getProgram().getProgramName(),
                 a.getApplicationStatus(), status.getLabel(), a.getWaitlistOrder(),
                 a.getCreatedAt(), a.getProcessedAt(), a.getDecisionReason(),
                 a.getCanceledAt(), a.getCancellationReason(),
-                a.getCompletionStatus(), a.getCertificateNo(), a.getCertificateIssuedAt());
+                a.getCompletionStatus(), a.getCertificateNo(), a.getCertificateIssuedAt(),
+                totalAttendanceCount, presentAttendanceCount, attendanceRate, earnedMileagePoints);
     }
 
     /**

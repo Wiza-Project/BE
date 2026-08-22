@@ -56,14 +56,16 @@ public class ExtracurricularProgramRepositoryImpl implements ExtracurricularProg
         }
 
         /**
-         * operatingUnitCode/programTypeCode/competency는 목록 DTO 매핑에서 라벨(codeName/competencyName)로
-         * 바로 쓰이므로, LAZY 연관관계를 지연 로딩(N+1)하지 않고 fetch join으로 한 번에 가져온다.
+         * operatingUnitCode/programTypeCode/competency/mileagePolicy는 목록 DTO 매핑에서
+         * 라벨(codeName/competencyName)이나 적립 점수(mileagePolicy.points)로 바로 쓰이므로,
+         * LAZY 연관관계를 지연 로딩(N+1)하지 않고 fetch join으로 한 번에 가져온다.
          */
         List<ExtracurricularProgram> content = queryFactory
                 .selectFrom(program)
                 .leftJoin(program.operatingUnitCode).fetchJoin()
                 .leftJoin(program.programTypeCode).fetchJoin()
                 .leftJoin(program.competency).fetchJoin()
+                .leftJoin(program.mileagePolicy).fetchJoin()
                 .where(condition)
                 .orderBy(resolveOrderSpecifiers(pageable.getSort(), program))
                 .offset(pageable.getOffset())
