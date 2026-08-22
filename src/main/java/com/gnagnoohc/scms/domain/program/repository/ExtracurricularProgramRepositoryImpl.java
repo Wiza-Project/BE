@@ -37,6 +37,10 @@ public class ExtracurricularProgramRepositoryImpl implements ExtracurricularProg
         return search(managerUserId, status, keyword, competencyId, pageable);
     }
 
+    /**
+     * search()/searchByManager()의 공통 구현. managerUserId가 null이면 전체 프로그램을,
+     * 값이 있으면 해당 담당자가 등록한 프로그램만 대상으로 status/keyword/competencyId 조건을 동적으로 조합해 조회한다.
+     */
     private Page<ExtracurricularProgram> search(Integer managerUserId, ProgramStatus status, String keyword,
                                                   Integer competencyId, Pageable pageable) {
         QExtracurricularProgram program = extracurricularProgram;

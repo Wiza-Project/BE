@@ -21,6 +21,10 @@ public record ProgramMyAttendanceResponseDTO(
         Integer attendedMinutes,
         String note
 ) {
+    /**
+     * 회차 정보와 (있다면) 해당 회차의 출결 기록을 조합해 응답 DTO를 만든다.
+     * attendance가 null이면 아직 그 회차의 출결이 기록되지 않았다는 뜻이며, 출결 관련 필드는 전부 null로 내려간다.
+     */
     public static ProgramMyAttendanceResponseDTO of(ProgramSession session, ProgramAttendance attendance) {
         return new ProgramMyAttendanceResponseDTO(
                 session.getProgramSessionId(),
