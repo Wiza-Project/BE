@@ -2,10 +2,13 @@ package com.gnagnoohc.scms.global.common.ncs;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 import java.net.URI;
+import java.net.http.HttpClient;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -27,13 +30,22 @@ public class NcsApiClient {
     /** 공공데이터포털 고정 엔드포인트 — 환경(로컬/운영)에 따라 달라지지 않아 상수로 둔다. */
     private static final String BASE_URL = "https://apis.data.go.kr/B490007/hrdkapi";
     private static final int DEFAULT_PAGE_SIZE = 100;
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
+    private static final Duration READ_TIMEOUT = Duration.ofSeconds(10);
 
     private final RestClient restClient;
     private final String serviceKey;
 
     public NcsApiClient(@Value("${app.ncs.service-key:}") String serviceKey) {
         this.serviceKey = serviceKey;
-        this.restClient = RestClient.create();
+        // NcsCodeSyncRunner가 앱 기동 중 동기 호출하므로, 타임아웃이 없으면 외부 API 지연이
+        // 기동 자체를 무기한 멈추게 할 수 있다. 커넥션/읽기 타임아웃을 명시적으로 건다.
+        HttpClient httpClient = HttpClient.newBuilder()
+                .connectTimeout(CONNECT_TIMEOUT)
+                .build();
+        JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
+        requestFactory.setReadTimeout(READ_TIMEOUT);
+        this.restClient = RestClient.builder().requestFactory(requestFactory).build();
     }
 
     /** NCS 대분류 전체를 조회한다(NCS001, USG_YN=Y — 최신 차수만). 총 24건 고정. */
@@ -89,7 +101,8 @@ public class NcsApiClient {
                 .retrieve()
                 .body(itemType);
 
-        if (response == null || response.response() == null || response.response().header() == null) {
+        if (response == null || response.response() == null || response.response().header() == null
+                || response.response().body() == null) {
             throw new IllegalStateException("NCS API 응답 형식이 예상과 다릅니다");
         }
         String resultCode = response.response().header().resultCode();
