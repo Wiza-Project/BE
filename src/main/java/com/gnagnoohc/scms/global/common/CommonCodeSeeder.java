@@ -27,6 +27,10 @@ import java.util.Map;
  * 언급돼 있었지만 실제로는 구현된 적이 없고, UserSummaryResponse 주석에 "department는
  * 스윔레인 표에 실제 등장하는 4개 부서로 확정: 학생역량센터 / 비교과운영부서 /
  * 진로심리상담센터 / 취창업지원과.
+ *
+ * ── 함께 챙겨야 하는 별도 시드 ─────────────────────────────────────
+ * docs/ddl/2026-08-21_competency_seed.sql (핵심역량 competency 테이블)은 common_code가
+ * 여기서 자동 실행하지 않고, 로컬/배포 시 그 SQL을 별도로 수동 실행해야 한다.
  */
 @Slf4j
 @Component
@@ -61,6 +65,11 @@ public class CommonCodeSeeder implements CommandLineRunner {
             Map.entry("CAREER_EMPLOYMENT_SUPPORT", "D400")
     );
 
+    /**
+     * 상담(counsel) 도메인 그룹명 선점 — COUNSEL_METHOD / COUNSEL_CANCEL_REASON /
+     * COUNSEL_REJECT_REASON. 값은 상담 BE가 정책 확정 후 전달할 예정이라 아직 아래
+     * SEEDS엔 없음 — 다른 그룹이 이 이름들을 먼저 가져다 쓰지 않도록 여기 기록만 해둔다.
+     */
     private static final List<Seed> SEEDS = List.of(
             // 프로그램 유형 — ExtracurricularProgram.programTypeCodeId 가 참조.
             // 접두어(PT)+100단위 일련번호: 나중에 세분류를 PT150처럼 중간에 끼워넣을 여유를 둠
@@ -104,7 +113,28 @@ public class CommonCodeSeeder implements CommandLineRunner {
             new Seed("USER_ROLE", "ST100", "일반교직원", 2),
             new Seed("USER_ROLE", "ST200", "카운셀러", 3),
             new Seed("USER_ROLE", "ST300", "교수", 4),
-            new Seed("USER_ROLE", "AD100", "관리자", 5)
+            new Seed("USER_ROLE", "AD100", "관리자", 5),
+
+            // 지역 — JobPosting.regionCode, JobPreference.preferredRegionCode 가 common_code로
+            // FK 참조(WP-136). 광역시/도 17개 단위로 확정
+            // 접두어(RG)+100단위 일련번호: 나중에 세분류가 필요하면 RG150처럼 끼워넣을 여유를 둠
+            new Seed("REGION_CODE", "RG100", "서울", 1),
+            new Seed("REGION_CODE", "RG200", "부산", 2),
+            new Seed("REGION_CODE", "RG300", "대구", 3),
+            new Seed("REGION_CODE", "RG400", "인천", 4),
+            new Seed("REGION_CODE", "RG500", "광주", 5),
+            new Seed("REGION_CODE", "RG600", "대전", 6),
+            new Seed("REGION_CODE", "RG700", "울산", 7),
+            new Seed("REGION_CODE", "RG800", "세종", 8),
+            new Seed("REGION_CODE", "RG900", "경기", 9),
+            new Seed("REGION_CODE", "RG1000", "강원", 10),
+            new Seed("REGION_CODE", "RG1100", "충북", 11),
+            new Seed("REGION_CODE", "RG1200", "충남", 12),
+            new Seed("REGION_CODE", "RG1300", "전북", 13),
+            new Seed("REGION_CODE", "RG1400", "전남", 14),
+            new Seed("REGION_CODE", "RG1500", "경북", 15),
+            new Seed("REGION_CODE", "RG1600", "경남", 16),
+            new Seed("REGION_CODE", "RG1700", "제주", 17)
     );
 
     @Override
