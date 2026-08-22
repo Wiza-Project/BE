@@ -1,5 +1,6 @@
 package com.gnagnoohc.scms.domain.user.service;
 
+import com.gnagnoohc.scms.domain.user.dto.LoginFailureResponse;
 import com.gnagnoohc.scms.domain.user.dto.LoginResponse;
 import com.gnagnoohc.scms.domain.user.dto.UserSummaryResponse;
 import com.gnagnoohc.scms.domain.user.entity.AppUser;
@@ -52,6 +53,10 @@ import java.util.List;
  * 노출해도 되는 정보로 판단해 순서를 바꿨습니다 — 대신 존재하지 않는 아이디는 여전히
  * PASSWORD_MISMATCH만 반환하므로 "아이디가 아예 존재하는지" 자체는 노출되지 않습니다.)
  * 관리자에 의한 잠금 해제 절차는 이 기능 범위 밖입니다(휴면 해제와 동일).
+ * 잠금을 유발한 그 시도의 U003 응답에는 {@link LoginFailureResponse}(잔여 시도 횟수,
+ * 이 시도로 계정이 방금 잠겼는지)를 data 로 함께 실어 보냅니다 — FE가 새로고침/다른 탭에서도
+ * 정확한 안내를 띄울 수 있도록 로컬 카운터 대신 서버 값을 쓰게 하기 위해서입니다
+ * (registerLoginFailure 참고).
  *
  * ── Refresh Token 보관 위치 결정 ──────────────────────────────────
  * domain/user/package-info.java 체크리스트의 미결정 사항이었습니다.
@@ -113,8 +118,8 @@ public class AuthService {
         rejectIfAlreadyBlocked(user);
 
         if (!passwordEncoder.matches(rawPassword, user.getPasswordHash())) {
-            registerLoginFailure(user);
-            throw new BusinessException(ErrorCode.PASSWORD_MISMATCH);
+            LoginFailureResponse failureInfo = registerLoginFailure(user);
+            throw BusinessException.withData(ErrorCode.PASSWORD_MISMATCH, failureInfo);
         }
 
         // 6개월 미접속 휴면 전환은 상태 변경을 동반하므로 비밀번호 검증을 통과한 뒤에만 판정합니다.
@@ -179,11 +184,15 @@ public class AuthService {
      * 실패 횟수를 늘리고, {@value #MAX_FAILED_LOGIN_ATTEMPTS}회에 도달하면 계정을 잠급니다.
      * DormantAccountLocker와 동일한 이유로 커밋을 보장하기 위해 반영 자체는
      * LoginFailureTracker(REQUIRES_NEW)에 위임합니다.
+     * 반환값은 그대로 U003 응답 바디에 실어 보낼 {@link LoginFailureResponse} 입니다.
      */
-    private void registerLoginFailure(AppUser user) {
+    private LoginFailureResponse registerLoginFailure(AppUser user) {
         int newFailedCount = user.getFailedLoginCount() + 1;
         boolean shouldLock = newFailedCount >= MAX_FAILED_LOGIN_ATTEMPTS;
         loginFailureTracker.registerFailure(user.getUserId(), newFailedCount, shouldLock);
+
+        int remainingAttempts = Math.max(MAX_FAILED_LOGIN_ATTEMPTS - newFailedCount, 0);
+        return new LoginFailureResponse(remainingAttempts, shouldLock);
     }
 
     private AuthResult issueTokens(AppUser user) {
