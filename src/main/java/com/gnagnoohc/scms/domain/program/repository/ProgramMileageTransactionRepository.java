@@ -30,7 +30,9 @@ public interface ProgramMileageTransactionRepository extends JpaRepository<Milea
 
     /** 신청 건별 확정 적립 마일리지 조회 전용 결과다. */
     interface EarnedPointsProjection {
+        /** 신청 건 PK */
         Integer getApplicationId();
+        /** 해당 신청 건에 대해 확정(POSTED)된 적립 마일리지 점수 */
         BigDecimal getPoints();
     }
 }
