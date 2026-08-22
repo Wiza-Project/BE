@@ -265,7 +265,6 @@ public class JobPostingService {
     }
 
     // --- Private 매핑 및 헬퍼 메서드 ---
-
     private CommonCode findCommonCodeOrNull(Integer codeId) {
         if (codeId == null) {
             return null;
