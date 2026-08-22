@@ -1,5 +1,6 @@
 package com.gnagnoohc.scms.domain.program.dto.response;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 
 // 학생 본인의 프로그램 참여 신청 현황 조회 응답 DTO. 신청 목록 화면 한 건에 해당한다.
@@ -38,6 +39,18 @@ public record ProgramApplicationSummaryResponseDTO(
         // 수료증 발급 번호. 미발급이면 null. 프론트가 수료증 출력 가능 여부를 판단하는 데 사용한다.
         String certificateNo,
 
-        Instant certificateIssuedAt
+        Instant certificateIssuedAt,
+
+        // 이 신청 건에 기록된 전체 출석 대상 회차 수. 출석 기록이 하나도 없으면 0.
+        Integer totalAttendanceCount,
+
+        // 그중 출석("PRESENT")으로 기록된 회차 수.
+        Integer presentAttendanceCount,
+
+        // presentAttendanceCount / totalAttendanceCount * 100. 출석 기록이 없으면 null.
+        Double attendanceRate,
+
+        // 이 신청 건으로 실제 확정(POSTED) 적립된 마일리지 점수. 아직 적립되지 않았으면 null.
+        BigDecimal earnedMileagePoints
 ) {
 }
