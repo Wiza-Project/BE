@@ -12,6 +12,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 
 import java.lang.reflect.Field;
 import java.time.Instant;
@@ -104,6 +105,23 @@ class AssessmentRoundServiceTest {
         verify(assessmentRoundRepository, never()).save(any());
     }
 
+    // 사전 중복검사(validateNoDuplicate)를 통과한 직후 동시 요청이 먼저 저장되는 레이스 상황을
+    // save()가 uq_assessment_round_period_type 위반으로 던지는 상황으로 재현.
+    @Test
+    void registerRound_whenConcurrentDuplicateViolatesUniqueConstraint_throwsDuplicateAssessmentRound() {
+        Instant startsAt = Instant.now();
+        Instant endsAt = startsAt.plus(7, ChronoUnit.DAYS);
+        when(assessmentRoundRepository.findByAcademicYearAndSemesterCodeAndAssessmentType(2026, "SPRING", "PRE"))
+                .thenReturn(Optional.empty());
+        when(assessmentRoundRepository.save(any(AssessmentRound.class)))
+                .thenThrow(new DataIntegrityViolationException("uq_assessment_round_period_type"));
+
+        assertThatThrownBy(() -> assessmentRoundService.registerRound(buildRequest(startsAt, endsAt, null), 1))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.DUPLICATE_ASSESSMENT_ROUND);
+    }
+
     @Test
     void registerRound_whenStartsAtNotBeforeEndsAt_throwsInvalidAssessmentPeriod() {
         Instant startsAt = Instant.now();
@@ -136,6 +154,28 @@ class AssessmentRoundServiceTest {
 
         assertThat(response.endsAt()).isEqualTo(newEndsAt);
         assertThat(response.targetCondition()).containsEntry("major", "컴퓨터공학과");
+    }
+
+    // update()는 관리 중인 엔티티만 변경하므로 saveAndFlush에서 유니크 제약 위반을 재현.
+    @Test
+    void updateRound_whenConcurrentDuplicateViolatesUniqueConstraint_throwsDuplicateAssessmentRound() {
+        Instant startsAt = Instant.now();
+        Instant endsAt = startsAt.plus(7, ChronoUnit.DAYS);
+        AssessmentRound round = AssessmentRound.create("초안", 2026, "SPRING", "PRE", startsAt, endsAt, null, 1);
+        setRoundId(round, 100);
+
+        when(assessmentRoundRepository.findById(100)).thenReturn(Optional.of(round));
+        when(assessmentAttemptRepository.existsByAssessmentRound_AssessmentRoundIdAndStartedAtIsNotNull(100))
+                .thenReturn(false);
+        when(assessmentRoundRepository.findByAcademicYearAndSemesterCodeAndAssessmentTypeAndAssessmentRoundIdNot(
+                2026, "SPRING", "PRE", 100)).thenReturn(Optional.empty());
+        when(assessmentRoundRepository.saveAndFlush(round))
+                .thenThrow(new DataIntegrityViolationException("uq_assessment_round_period_type"));
+
+        assertThatThrownBy(() -> assessmentRoundService.updateRound(100, buildRequest(startsAt, endsAt, null)))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.DUPLICATE_ASSESSMENT_ROUND);
     }
 
     @Test

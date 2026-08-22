@@ -11,6 +11,7 @@ import com.gnagnoohc.scms.domain.competency.repository.AssessmentRoundRepository
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -40,7 +41,15 @@ public class AssessmentRoundService {
                 staffId
         );
 
-        return toResponse(assessmentRoundRepository.save(round));
+        try {
+            assessmentRoundRepository.save(round);
+        } catch (DataIntegrityViolationException e) {
+            // uq_assessment_round_period_type 유니크 제약 위반 = 사전 중복검사(validateNoDuplicate) 통과 직후
+            // 동시에 들어온 요청이 같은 학년도·학기·구분 회차를 먼저 저장한 경우.
+            throw new BusinessException(ErrorCode.DUPLICATE_ASSESSMENT_ROUND);
+        }
+
+        return toResponse(round);
     }
 
     // 이미 응시(문항 응답)가 시작된 회차는 통째로 수정을 막는다 — 학년도·기간 등 일부만 잠그면
@@ -66,6 +75,14 @@ public class AssessmentRoundService {
                 request.endsAt(),
                 mapToJsonNode(request.targetCondition())
         );
+
+        try {
+            // round.update()는 관리 중인 엔티티를 변경할 뿐이라 saveAndFlush로 강제로 flush해야
+            // 유니크 제약 위반이 트랜잭션 커밋 시점이 아니라 이 메서드 안에서 즉시 예외로 드러난다.
+            assessmentRoundRepository.saveAndFlush(round);
+        } catch (DataIntegrityViolationException e) {
+            throw new BusinessException(ErrorCode.DUPLICATE_ASSESSMENT_ROUND);
+        }
 
         return toResponse(round);
     }
