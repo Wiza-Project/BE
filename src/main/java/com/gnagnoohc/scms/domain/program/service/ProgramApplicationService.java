@@ -232,7 +232,12 @@ public class ProgramApplicationService {
                 a, attendanceByApplication.get(a.getApplicationId()), earnedPointsByApplication.get(a.getApplicationId()))));
     }
 
-    // 신청 내역 목록 한 페이지에 해당하는 신청 건들의 출석 집계를 한 번의 쿼리로 배치 조회한다(N+1 방지).
+    /**
+     * 신청 내역 목록 한 페이지에 해당하는 신청 건들의 출석 집계를 한 번의 쿼리로 배치 조회한다(N+1 방지).
+     *
+     * @param applicationIds 집계 대상 신청 건 PK 목록
+     * @return 신청 건 PK를 key로 하는 출석 집계 결과 맵
+     */
     private Map<Integer, ProgramAttendanceRepository.AttendanceCountProjection> summarizeAttendance(List<Integer> applicationIds) {
         if (applicationIds.isEmpty()) {
             return Map.of();
@@ -242,7 +247,12 @@ public class ProgramApplicationService {
                         ProgramAttendanceRepository.AttendanceCountProjection::getApplicationId, p -> p));
     }
 
-    // 신청 내역 목록 한 페이지에 해당하는 신청 건들의 확정 적립 마일리지를 한 번의 쿼리로 배치 조회한다(N+1 방지).
+    /**
+     * 신청 내역 목록 한 페이지에 해당하는 신청 건들의 확정 적립 마일리지를 한 번의 쿼리로 배치 조회한다(N+1 방지).
+     *
+     * @param applicationIds 집계 대상 신청 건 PK 목록
+     * @return 신청 건 PK를 key로 하는 확정 적립 마일리지 맵
+     */
     private Map<Integer, BigDecimal> summarizeEarnedMileage(List<Integer> applicationIds) {
         if (applicationIds.isEmpty()) {
             return Map.of();
@@ -296,6 +306,10 @@ public class ProgramApplicationService {
         return new ProgramApplicationSurveyResponseDTO(applicationId, true);
     }
 
+    /**
+     * 신청 엔티티와, 별도로 배치 조회해온 출석 집계·확정 적립 마일리지를 조합해 목록 응답 DTO 한 건을 만든다.
+     * attendance가 null(해당 신청 건에 출결 기록이 아예 없음)이면 attendanceRate는 null로 내려간다.
+     */
     private ProgramApplicationSummaryResponseDTO toSummary(
             ProgramApplication a,
             ProgramAttendanceRepository.AttendanceCountProjection attendance,

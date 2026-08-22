@@ -23,6 +23,10 @@ public record ProgramListItemResponseDTO(
         Instant operationEndsAt,
         BigDecimal mileagePoints
 ) {
+    /**
+     * 엔티티와 (별도로 집계된) 신청자 수를 조합해 목록 카드용 DTO를 만든다.
+     * applicantCount를 파라미터로 받는 이유는 신청자 수가 별도 COUNT 쿼리로 집계되어 엔티티 자체에는 없기 때문이다.
+     */
     public static ProgramListItemResponseDTO from(ExtracurricularProgram program, long applicantCount) {
         return new ProgramListItemResponseDTO(
                 program.getProgramId(),
