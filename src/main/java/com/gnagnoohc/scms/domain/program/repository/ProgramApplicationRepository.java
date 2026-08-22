@@ -45,8 +45,8 @@ public interface ProgramApplicationRepository extends JpaRepository<ProgramAppli
     }
 
     /**
-     * QR 자기체크인(ProgramAttendanceService.checkInWithQr)에서, "이 학생이 이 프로그램에 낸 신청 건"을
-     * applicationId 없이 (programId, 로그인한 학생 id)만으로 찾을 때 사용한다.
+     * "이 학생이 이 프로그램에 낸 신청 건"을 applicationId 없이 (programId, 로그인한 학생 id)만으로 찾을 때 사용한다
+     * (예: ProgramAttendanceService.listMyAttendance).
      * program_id+student_id 조합은 uq_program_application_program_student 유니크 제약이 걸려있어 항상 0건 또는 1건이다.
      */
     Optional<ProgramApplication> findByProgram_ProgramIdAndStudent_UserId(Integer programId, Integer studentId);

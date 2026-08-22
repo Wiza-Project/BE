@@ -132,4 +132,15 @@ public class StudentJobRelation extends BaseTimeEntity {
             return false;
         }
     }
+
+    /**
+     * 학생-채용공고 신규 매핑용 생성자
+     *
+     * @param student    지원/스크랩 대상 학생 (AppUser)
+     * @param jobPosting 대상 채용공고 (JobPosting)
+     */
+    public StudentJobRelation(AppUser student, JobPosting jobPosting) {
+        this.student = student;
+        this.jobPosting = jobPosting;
+    }
 }

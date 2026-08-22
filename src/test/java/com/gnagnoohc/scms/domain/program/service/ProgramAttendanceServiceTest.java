@@ -1,8 +1,8 @@
 package com.gnagnoohc.scms.domain.program.service;
 
 import com.gnagnoohc.scms.domain.program.dto.request.ProgramAttendanceRecordRequestDTO;
-import com.gnagnoohc.scms.domain.program.dto.response.ProgramAttendanceQrTokenResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramAttendanceResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramMyAttendanceResponseDTO;
 import com.gnagnoohc.scms.domain.program.entity.ExtracurricularProgram;
 import com.gnagnoohc.scms.domain.program.entity.ProgramApplication;
 import com.gnagnoohc.scms.domain.program.entity.ProgramAttendance;
@@ -27,7 +27,6 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -41,9 +40,6 @@ class ProgramAttendanceServiceTest {
 
     @Mock
     ProgramAttendanceRepository attendanceRepository;
-
-    @Mock
-    ProgramAttendanceQrTokenService qrTokenService;
 
     @InjectMocks
     ProgramAttendanceService programAttendanceService;
@@ -174,90 +170,47 @@ class ProgramAttendanceServiceTest {
     }
 
     @Test
-    void issueQrToken_whenSessionExists_returnsToken() throws Exception {
+    void listMyAttendance_whenSomeSessionsUnrecorded_fillsUnrecordedSessionsWithNull() throws Exception {
         ExtracurricularProgram program = buildProgramFixture(1);
-        ProgramSession session = buildSessionFixture(10, program, 1);
-        Instant expiresAt = Instant.now().plusSeconds(300);
-
-        when(sessionRepository.findByProgramSessionIdAndProgram_ProgramId(10, 1)).thenReturn(Optional.of(session));
-        when(qrTokenService.issue(1, 10)).thenReturn(new ProgramAttendanceQrTokenService.IssuedToken("signed-token", expiresAt));
-
-        ProgramAttendanceQrTokenResponseDTO response = programAttendanceService.issueQrToken(1, 10);
-
-        assertThat(response.token()).isEqualTo("signed-token");
-        assertThat(response.expiresAt()).isEqualTo(expiresAt);
-    }
-
-    @Test
-    void issueQrToken_whenSessionNotFound_throwsProgramSessionNotFound() {
-        when(sessionRepository.findByProgramSessionIdAndProgram_ProgramId(10, 1)).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> programAttendanceService.issueQrToken(1, 10))
-                .isInstanceOf(BusinessException.class)
-                .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(ErrorCode.PROGRAM_SESSION_NOT_FOUND);
-    }
-
-    @Test
-    void checkInWithQr_whenValidTokenAndApproved_upsertsAndReturnsAttendance() throws Exception {
-        ExtracurricularProgram program = buildProgramFixture(1);
-        ProgramSession session = buildSessionFixture(10, program, 1);
+        ProgramSession session1 = buildSessionFixture(10, program, 1);
+        ProgramSession session2 = buildSessionFixture(11, program, 2);
         ProgramApplication application = buildApplicationFixture(5, program, "APPROVED");
-        ProgramAttendance attendance = buildAttendanceFixture(99, application, session, "PRESENT");
+        ProgramAttendance attendance1 = buildAttendanceFixture(99, application, session1, "PRESENT");
 
-        when(sessionRepository.findByProgramSessionIdAndProgram_ProgramId(10, 1)).thenReturn(Optional.of(session));
         when(applicationRepository.findByProgram_ProgramIdAndStudent_UserId(1, 100)).thenReturn(Optional.of(application));
-        when(attendanceRepository.findByApplication_ApplicationIdAndProgramSession_ProgramSessionId(5, 10))
-                .thenReturn(Optional.of(attendance));
+        when(sessionRepository.findByProgram_ProgramIdOrderBySessionNoAsc(1)).thenReturn(List.of(session1, session2));
+        when(attendanceRepository.findByApplication_ApplicationId(5)).thenReturn(List.of(attendance1));
 
-        ProgramAttendanceResponseDTO response = programAttendanceService.checkInWithQr(1, 10, "signed-token", 100);
+        List<ProgramMyAttendanceResponseDTO> response = programAttendanceService.listMyAttendance(1, 100);
 
-        assertThat(response.attendanceId()).isEqualTo(99);
-        assertThat(response.attendanceStatus()).isEqualTo("PRESENT");
+        assertThat(response).hasSize(2);
+        assertThat(response.get(0).programSessionId()).isEqualTo(10);
+        assertThat(response.get(0).attendanceStatus()).isEqualTo("PRESENT");
+        assertThat(response.get(1).programSessionId()).isEqualTo(11);
+        assertThat(response.get(1).attendanceStatus()).isNull();
     }
 
     @Test
-    void checkInWithQr_whenTokenInvalid_throwsQrTokenInvalid() throws Exception {
+    void listMyAttendance_whenApplicationWaitlisted_throwsApplicationNotApproved() throws Exception {
         ExtracurricularProgram program = buildProgramFixture(1);
-        ProgramSession session = buildSessionFixture(10, program, 1);
-
-        when(sessionRepository.findByProgramSessionIdAndProgram_ProgramId(10, 1)).thenReturn(Optional.of(session));
-        doThrow(new BusinessException(ErrorCode.QR_TOKEN_INVALID))
-                .when(qrTokenService).verify("bad-token", 1, 10);
-
-        assertThatThrownBy(() -> programAttendanceService.checkInWithQr(1, 10, "bad-token", 100))
-                .isInstanceOf(BusinessException.class)
-                .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(ErrorCode.QR_TOKEN_INVALID);
-    }
-
-    @Test
-    void checkInWithQr_whenApplicationNotFound_throwsApplicationNotFound() throws Exception {
-        ExtracurricularProgram program = buildProgramFixture(1);
-        ProgramSession session = buildSessionFixture(10, program, 1);
-
-        when(sessionRepository.findByProgramSessionIdAndProgram_ProgramId(10, 1)).thenReturn(Optional.of(session));
-        when(applicationRepository.findByProgram_ProgramIdAndStudent_UserId(1, 100)).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> programAttendanceService.checkInWithQr(1, 10, "signed-token", 100))
-                .isInstanceOf(BusinessException.class)
-                .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(ErrorCode.APPLICATION_NOT_FOUND);
-    }
-
-    @Test
-    void checkInWithQr_whenNotApproved_throwsApplicationNotApproved() throws Exception {
-        ExtracurricularProgram program = buildProgramFixture(1);
-        ProgramSession session = buildSessionFixture(10, program, 1);
         ProgramApplication application = buildApplicationFixture(5, program, "WAITLISTED");
 
-        when(sessionRepository.findByProgramSessionIdAndProgram_ProgramId(10, 1)).thenReturn(Optional.of(session));
         when(applicationRepository.findByProgram_ProgramIdAndStudent_UserId(1, 100)).thenReturn(Optional.of(application));
 
-        assertThatThrownBy(() -> programAttendanceService.checkInWithQr(1, 10, "signed-token", 100))
+        assertThatThrownBy(() -> programAttendanceService.listMyAttendance(1, 100))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.APPLICATION_NOT_APPROVED);
+    }
+
+    @Test
+    void listMyAttendance_whenApplicationNotFound_throwsApplicationNotFound() {
+        when(applicationRepository.findByProgram_ProgramIdAndStudent_UserId(1, 100)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> programAttendanceService.listMyAttendance(1, 100))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.APPLICATION_NOT_FOUND);
     }
 
     /**
