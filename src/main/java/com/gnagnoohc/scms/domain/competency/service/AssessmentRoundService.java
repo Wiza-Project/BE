@@ -22,6 +22,8 @@ import java.util.Map;
 @Transactional
 public class AssessmentRoundService {
 
+    private static final String DUPLICATE_ROUND_CONSTRAINT = "uq_assessment_round_period_type";
+
     private final AssessmentRoundRepository assessmentRoundRepository;
     private final AssessmentAttemptRepository assessmentAttemptRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -44,9 +46,7 @@ public class AssessmentRoundService {
         try {
             assessmentRoundRepository.save(round);
         } catch (DataIntegrityViolationException e) {
-            // uq_assessment_round_period_type 유니크 제약 위반 = 사전 중복검사(validateNoDuplicate) 통과 직후
-            // 동시에 들어온 요청이 같은 학년도·학기·구분 회차를 먼저 저장한 경우.
-            throw new BusinessException(ErrorCode.DUPLICATE_ASSESSMENT_ROUND);
+            throw resolveDuplicateRoundViolation(e);
         }
 
         return toResponse(round);
@@ -81,7 +81,7 @@ public class AssessmentRoundService {
             // 유니크 제약 위반이 트랜잭션 커밋 시점이 아니라 이 메서드 안에서 즉시 예외로 드러난다.
             assessmentRoundRepository.saveAndFlush(round);
         } catch (DataIntegrityViolationException e) {
-            throw new BusinessException(ErrorCode.DUPLICATE_ASSESSMENT_ROUND);
+            throw resolveDuplicateRoundViolation(e);
         }
 
         return toResponse(round);
@@ -103,6 +103,18 @@ public class AssessmentRoundService {
         if (duplicate) {
             throw new BusinessException(ErrorCode.DUPLICATE_ASSESSMENT_ROUND);
         }
+    }
+
+    // uq_assessment_round_period_type 위반만 중복 회차로 간주한다. assessment_round는 FK가 없지만
+    // created_by(Bean Validation이 검증하지 않는 authUser.getId())가 null이면 NOT NULL 위반이 날 수 있는데,
+    // 이런 무관한 무결성 위반까지 "중복 회차"로 둔갑시키지 않기 위해 원인 메시지에서 제약명을 직접 확인한다
+    // (ProgramService.resolveForeignKeyViolation과 같은 패턴).
+    private BusinessException resolveDuplicateRoundViolation(DataIntegrityViolationException e) {
+        String detail = e.getMostSpecificCause().getMessage();
+        if (detail.contains(DUPLICATE_ROUND_CONSTRAINT)) {
+            return new BusinessException(ErrorCode.DUPLICATE_ASSESSMENT_ROUND);
+        }
+        throw e;
     }
 
     private JsonNode mapToJsonNode(Map<String, Object> map) {

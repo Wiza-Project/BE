@@ -122,6 +122,22 @@ class AssessmentRoundServiceTest {
                 .isEqualTo(ErrorCode.DUPLICATE_ASSESSMENT_ROUND);
     }
 
+    // 제약명이 uq_assessment_round_period_type이 아닌 무결성 위반(예: created_by NOT NULL)은
+    // 중복 회차로 둔갑시키지 않고 원래 예외 그대로 다시 던져야 한다.
+    @Test
+    void registerRound_whenUnrelatedIntegrityViolation_rethrowsOriginalException() {
+        Instant startsAt = Instant.now();
+        Instant endsAt = startsAt.plus(7, ChronoUnit.DAYS);
+        DataIntegrityViolationException notNullViolation = new DataIntegrityViolationException(
+                "null value in column \"created_by\" violates not-null constraint");
+        when(assessmentRoundRepository.findByAcademicYearAndSemesterCodeAndAssessmentType(2026, "SPRING", "PRE"))
+                .thenReturn(Optional.empty());
+        when(assessmentRoundRepository.save(any(AssessmentRound.class))).thenThrow(notNullViolation);
+
+        assertThatThrownBy(() -> assessmentRoundService.registerRound(buildRequest(startsAt, endsAt, null), 1))
+                .isSameAs(notNullViolation);
+    }
+
     @Test
     void registerRound_whenStartsAtNotBeforeEndsAt_throwsInvalidAssessmentPeriod() {
         Instant startsAt = Instant.now();
@@ -176,6 +192,26 @@ class AssessmentRoundServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.DUPLICATE_ASSESSMENT_ROUND);
+    }
+
+    @Test
+    void updateRound_whenUnrelatedIntegrityViolation_rethrowsOriginalException() {
+        Instant startsAt = Instant.now();
+        Instant endsAt = startsAt.plus(7, ChronoUnit.DAYS);
+        AssessmentRound round = AssessmentRound.create("초안", 2026, "SPRING", "PRE", startsAt, endsAt, null, 1);
+        setRoundId(round, 100);
+        DataIntegrityViolationException notNullViolation = new DataIntegrityViolationException(
+                "null value in column \"assessment_name\" violates not-null constraint");
+
+        when(assessmentRoundRepository.findById(100)).thenReturn(Optional.of(round));
+        when(assessmentAttemptRepository.existsByAssessmentRound_AssessmentRoundIdAndStartedAtIsNotNull(100))
+                .thenReturn(false);
+        when(assessmentRoundRepository.findByAcademicYearAndSemesterCodeAndAssessmentTypeAndAssessmentRoundIdNot(
+                2026, "SPRING", "PRE", 100)).thenReturn(Optional.empty());
+        when(assessmentRoundRepository.saveAndFlush(round)).thenThrow(notNullViolation);
+
+        assertThatThrownBy(() -> assessmentRoundService.updateRound(100, buildRequest(startsAt, endsAt, null)))
+                .isSameAs(notNullViolation);
     }
 
     @Test
