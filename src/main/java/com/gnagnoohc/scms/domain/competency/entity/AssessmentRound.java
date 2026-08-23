@@ -27,4 +27,31 @@ public class AssessmentRound extends BaseTimeEntity {
     @JdbcTypeCode(SqlTypes.JSON) @Column(name = "target_condition", columnDefinition = "jsonb") private JsonNode targetCondition;
     @Column(name = "round_status", nullable = false, length = 20) private String roundStatus = "DRAFT";
     @Column(name = "created_by", nullable = false) private Integer createdBy;
+
+    public static AssessmentRound create(String assessmentName, Integer academicYear, String semesterCode,
+                                          String assessmentType, Instant startsAt, Instant endsAt,
+                                          JsonNode targetCondition, Integer createdBy) {
+        AssessmentRound round = new AssessmentRound();
+        round.assessmentName = assessmentName;
+        round.academicYear = academicYear;
+        round.semesterCode = semesterCode;
+        round.assessmentType = assessmentType;
+        round.startsAt = startsAt;
+        round.endsAt = endsAt;
+        round.targetCondition = targetCondition;
+        round.createdBy = createdBy;
+        return round;
+    }
+
+    // 응시가 시작된 회차는 서비스 계층에서 전면 차단 후 호출하므로, 여기서는 잠금 여부를 다시 판단하지 않는다.
+    public void update(String assessmentName, Integer academicYear, String semesterCode,
+                        String assessmentType, Instant startsAt, Instant endsAt, JsonNode targetCondition) {
+        this.assessmentName = assessmentName;
+        this.academicYear = academicYear;
+        this.semesterCode = semesterCode;
+        this.assessmentType = assessmentType;
+        this.startsAt = startsAt;
+        this.endsAt = endsAt;
+        this.targetCondition = targetCondition;
+    }
 }

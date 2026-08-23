@@ -14,7 +14,6 @@ import org.springframework.http.HttpStatus;
  *   S###  상담            (P3100)
  *   M###  마일리지        (P4100)
  *   J###  취창업          (P5100)
- *   N###  알림
  *
  * 새 코드를 추가하면 프론트 담당자에게 반드시 공유하세요.
  */
@@ -70,8 +69,6 @@ public enum ErrorCode {
     APPLICATION_NOT_CANCELABLE(HttpStatus.BAD_REQUEST, "P016", "모집이 종료되어 신청을 취소할 수 없습니다."),
     // 이미 반려되었거나 취소된 신청을 다시 취소하려고 할 때 사용하는 에러코드.
     APPLICATION_ALREADY_CANCELED(HttpStatus.CONFLICT, "P017", "이미 취소되었거나 반려된 신청입니다."),
-    // QR 출석체크 토큰이 서명 위조/만료/programId·sessionId 불일치 등으로 유효하지 않을 때 사용하는 에러코드.
-    QR_TOKEN_INVALID(HttpStatus.BAD_REQUEST, "P018", "QR 코드가 유효하지 않거나 만료되었습니다."),
     // 승인(APPROVED)되지 않은 신청 건으로 만족도 설문을 제출하려고 할 때 사용하는 에러코드.
     SURVEY_NOT_AVAILABLE(HttpStatus.BAD_REQUEST, "P019", "승인된 신청 건만 만족도 설문을 제출할 수 있습니다."),
 
@@ -85,7 +82,14 @@ public enum ErrorCode {
     ASSESSMENT_QUESTION_NOT_FOUND(HttpStatus.NOT_FOUND, "Q007", "진단문항을 찾을 수 없습니다."),
     // 이전 버전으로 대체되어 비활성화된 문항을 직접 수정하려고 할 때 사용하는 에러코드. 최신 버전만 수정 가능.
     INACTIVE_QUESTION_NOT_EDITABLE(HttpStatus.BAD_REQUEST, "Q008", "비활성화된 문항은 수정할 수 없습니다."),
-
+    ASSESSMENT_ROUND_NOT_FOUND(HttpStatus.NOT_FOUND, "Q009", "진단 회차를 찾을 수 없습니다."),
+    // 같은 학년도·학기·진단구분(사전/사후)의 회차를 중복 개설하려고 할 때 사용하는 에러코드.
+    DUPLICATE_ASSESSMENT_ROUND(HttpStatus.CONFLICT, "Q010", "같은 학년도·학기·진단구분의 회차가 이미 존재합니다."),
+    INVALID_ASSESSMENT_PERIOD(HttpStatus.BAD_REQUEST, "Q011", "응시 시작일은 종료일보다 빨라야 합니다."),
+    // 이미 응시(문항 응답)가 시작된 회차를 수정하려고 할 때 사용하는 에러코드.
+    ASSESSMENT_ROUND_NOT_EDITABLE(HttpStatus.BAD_REQUEST, "Q012", "이미 응시가 시작된 회차는 수정할 수 없습니다."),
+    // 진단 동의 화면에서 사용할 유효한 ConsentPolicy(module_code=ASSESSMENT)가 시딩되지 않았을 때 사용하는 에러코드.
+    CONSENT_POLICY_NOT_FOUND(HttpStatus.INTERNAL_SERVER_ERROR, "Q013", "진단 동의 정책을 찾을 수 없습니다."),
     // ── 상담 ──────────────────────────────────────────────────────
     COUNSELOR_NOT_FOUND(HttpStatus.NOT_FOUND, "S001", "상담사를 찾을 수 없습니다."),
     SCHEDULE_NOT_AVAILABLE(HttpStatus.CONFLICT, "S002", "이미 예약된 시간입니다."),
@@ -107,6 +111,10 @@ public enum ErrorCode {
     INVALID_REVIEW_STATUS(HttpStatus.BAD_REQUEST, "J006", "유효하지 않은 검수 상태값입니다."),
     INVALID_APPLICATION_PERIOD(HttpStatus.BAD_REQUEST, "J007", "신청 종료 일시는 시작 일시보다 빠를 수 없습니다."),
     COMPANY_ACCOUNT_NOT_FOUND(HttpStatus.NOT_FOUND, "J008", "존재하지 않는 기업 계정입니다."),
+    JOB_POSTING_NOT_PUBLISHED(HttpStatus.BAD_REQUEST, "J009", "게시(승인)되지 않은 공고에는 지원할 수 없습니다."),
+    APPLICATION_PERIOD_EXPIRED(HttpStatus.BAD_REQUEST, "J010", "접수 마감 기간이 경과하여 지원 또는 취소할 수 없습니다."),
+    JOB_POSTING_ALREADY_APPLIED(HttpStatus.CONFLICT, "J011", "이미 해당 채용공고에 지원 완료된 상태입니다."),
+    JOB_POSTING_APPLICATION_NOT_FOUND(HttpStatus.NOT_FOUND, "J012", "채용 지원 이력을 찾을 수 없거나 이미 취소된 상태입니다."),
 
     // ── 알림 ──────────────────────────────────────────────────────
     NOTIFICATION_NOT_FOUND(HttpStatus.NOT_FOUND, "N001", "알림을 찾을 수 없습니다.");
