@@ -11,6 +11,7 @@ import com.gnagnoohc.scms.domain.competency.repository.AssessmentRoundRepository
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,6 +21,8 @@ import java.util.Map;
 @RequiredArgsConstructor
 @Transactional
 public class AssessmentRoundService {
+
+    private static final String DUPLICATE_ROUND_CONSTRAINT = "uq_assessment_round_period_type";
 
     private final AssessmentRoundRepository assessmentRoundRepository;
     private final AssessmentAttemptRepository assessmentAttemptRepository;
@@ -40,7 +43,13 @@ public class AssessmentRoundService {
                 staffId
         );
 
-        return toResponse(assessmentRoundRepository.save(round));
+        try {
+            assessmentRoundRepository.save(round);
+        } catch (DataIntegrityViolationException e) {
+            throw resolveDuplicateRoundViolation(e);
+        }
+
+        return toResponse(round);
     }
 
     // 이미 응시(문항 응답)가 시작된 회차는 통째로 수정을 막는다 — 학년도·기간 등 일부만 잠그면
@@ -67,6 +76,14 @@ public class AssessmentRoundService {
                 mapToJsonNode(request.targetCondition())
         );
 
+        try {
+            // round.update()는 관리 중인 엔티티를 변경할 뿐이라 saveAndFlush로 강제로 flush해야
+            // 유니크 제약 위반이 트랜잭션 커밋 시점이 아니라 이 메서드 안에서 즉시 예외로 드러난다.
+            assessmentRoundRepository.saveAndFlush(round);
+        } catch (DataIntegrityViolationException e) {
+            throw resolveDuplicateRoundViolation(e);
+        }
+
         return toResponse(round);
     }
 
@@ -86,6 +103,18 @@ public class AssessmentRoundService {
         if (duplicate) {
             throw new BusinessException(ErrorCode.DUPLICATE_ASSESSMENT_ROUND);
         }
+    }
+
+    // uq_assessment_round_period_type 위반만 중복 회차로 간주한다. assessment_round는 FK가 없지만
+    // created_by(Bean Validation이 검증하지 않는 authUser.getId())가 null이면 NOT NULL 위반이 날 수 있는데,
+    // 이런 무관한 무결성 위반까지 "중복 회차"로 둔갑시키지 않기 위해 원인 메시지에서 제약명을 직접 확인한다
+    // (ProgramService.resolveForeignKeyViolation과 같은 패턴).
+    private BusinessException resolveDuplicateRoundViolation(DataIntegrityViolationException e) {
+        String detail = e.getMostSpecificCause().getMessage();
+        if (detail.contains(DUPLICATE_ROUND_CONSTRAINT)) {
+            return new BusinessException(ErrorCode.DUPLICATE_ASSESSMENT_ROUND);
+        }
+        throw e;
     }
 
     private JsonNode mapToJsonNode(Map<String, Object> map) {
