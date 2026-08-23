@@ -11,10 +11,13 @@ import com.gnagnoohc.scms.domain.career.repository.StudentJobRelationRepository;
 import com.gnagnoohc.scms.domain.user.entity.AppUser;
 import com.gnagnoohc.scms.domain.user.repository.AppUserRepository;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;
+import com.gnagnoohc.scms.global.common.util.DateTimeUtils;
 import com.gnagnoohc.scms.global.error.BusinessException;
+import com.gnagnoohc.scms.global.error.DbConstraintViolationMatcher;
 import com.gnagnoohc.scms.global.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -42,7 +45,7 @@ import java.time.ZoneId;
 @Transactional(readOnly = true)
 public class StudentJobRelationService {
 
-    private static final ZoneId KST_ZONE = ZoneId.of("Asia/Seoul");
+    private static final String UQ_STUDENT_POSTING_RELATION = "uq_student_job_relation";
 
     private final StudentJobRelationRepository relationRepository;
     private final JobPostingRepository jobPostingRepository;
@@ -84,9 +87,17 @@ public class StudentJobRelationService {
             throw new BusinessException(ErrorCode.JOB_POSTING_ALREADY_APPLIED);
         }
 
-        StudentJobRelation relation = relationRepository
-                .findByStudent_UserIdAndJobPosting_JobPostingId(studentUserId, requestDTO.getJobPostingId())
-                .orElseGet(() -> relationRepository.save(new StudentJobRelation(student, jobPosting)));
+        StudentJobRelation relation;
+        try {
+            relation = relationRepository
+                    .findByStudent_UserIdAndJobPosting_JobPostingId(studentUserId, requestDTO.getJobPostingId())
+                    .orElseGet(() -> relationRepository.saveAndFlush(new StudentJobRelation(student, jobPosting)));
+        } catch (DataIntegrityViolationException e) {
+            if (DbConstraintViolationMatcher.contains(e, UQ_STUDENT_POSTING_RELATION)) {
+                throw new BusinessException(ErrorCode.JOB_POSTING_ALREADY_APPLIED);
+            }
+            throw e;
+        }
 
         relation.apply(null, "STUDENT_DIRECT");
 
@@ -157,7 +168,7 @@ public class StudentJobRelationService {
         return JobScrapToggleResponseDTO.builder()
                 .jobPostingId(jobPosting.getJobPostingId())
                 .isScrapped(isScrapped)
-                .bookmarkedAt(toOffsetDateTime(relation.getBookmarkedAt()))
+                .bookmarkedAt(DateTimeUtils.toKstOffsetDateTime(relation.getBookmarkedAt()))
                 .build();
     }
 
@@ -201,8 +212,13 @@ public class StudentJobRelationService {
         return PageResponse.from(dtoPage);
     }
 
-    // --- DTO 변환 헬퍼 메서드 ---
-
+    /**
+     * 학생-채용공고 관계 엔티티를 클라이언트 반환용 응답 DTO로 매핑 변환
+     * 시간 데이터는 공통 시간 유틸리티({@link DateTimeUtils})지정한 KST 오프셋 메소드를 호출-변환 처리
+     *
+     * @param relation 학생-공고 관계 엔티티 원장
+     * @return 상세 지원 현황 및 전형 응답 DTO
+     */
     private JobRelationResponseDTO mapToRelationResponseDTO(StudentJobRelation relation) {
         return JobRelationResponseDTO.builder()
                 .studentJobRelationId(relation.getStudentJobRelationId())
@@ -219,11 +235,18 @@ public class StudentJobRelationService {
                 .recommendationSource(relation.getRecommendationSource())
                 .matchingScore(relation.getMatchingScore())
                 .userConsentId(relation.getUserConsent() != null ? relation.getUserConsent().getUserConsentId() : null)
-                .appliedAt(toOffsetDateTime(relation.getAppliedAt()))
-                .canceledAt(toOffsetDateTime(relation.getCanceledAt()))
+                .appliedAt(DateTimeUtils.toKstOffsetDateTime(relation.getAppliedAt()))
+                .canceledAt(DateTimeUtils.toKstOffsetDateTime(relation.getCanceledAt()))
                 .build();
     }
 
+    /**
+     * 학생-채용공고 관계 엔티티를 클라이언트 스크랩 목록 요약 응답 DTO로 매핑 변환
+     * 시간 데이터는 공통 시간 유틸리티({@link DateTimeUtils})지정한 KST 오프셋 메소드를 호출-변환 처리
+     *
+     * @param relation 학생-공고 관계 엔티티 원장
+     * @return 스크랩 목록 요약 응답 DTO
+     */
     private JobScrapSummaryResponseDTO mapToScrapSummaryResponseDTO(StudentJobRelation relation) {
         return JobScrapSummaryResponseDTO.builder()
                 .studentJobRelationId(relation.getStudentJobRelationId())
@@ -235,12 +258,9 @@ public class StudentJobRelationService {
                 .employmentType(relation.getJobPosting().getEmploymentType())
                 .postingType(relation.getJobPosting().getPostingType())
                 .benefitType(relation.getJobPosting().getBenefitType())
-                .applicationEndsAt(toOffsetDateTime(relation.getJobPosting().getApplicationEndsAt()))
-                .bookmarkedAt(toOffsetDateTime(relation.getBookmarkedAt()))
+                .applicationEndsAt(DateTimeUtils.toKstOffsetDateTime(relation.getJobPosting().getApplicationEndsAt()))
+                .bookmarkedAt(DateTimeUtils.toKstOffsetDateTime(relation.getBookmarkedAt()))
                 .build();
     }
 
-    private OffsetDateTime toOffsetDateTime(Instant instant) {
-        return (instant == null) ? null : instant.atZone(KST_ZONE).toOffsetDateTime();
-    }
 }
