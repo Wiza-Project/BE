@@ -54,5 +54,26 @@ VALUES
     ('DEPARTMENT', 'D100', '학생역량센터',       1, true, 0, now(), now()),
     ('DEPARTMENT', 'D200', '비교과운영부서',     2, true, 0, now(), now()),
     ('DEPARTMENT', 'D300', '진로심리상담센터',   3, true, 0, now(), now()),
-    ('DEPARTMENT', 'D400', '취창업지원과',       4, true, 0, now(), now())
+    ('DEPARTMENT', 'D400', '취창업지원과',       4, true, 0, now(), now()),
+
+    -- 지역 — JobPosting.regionCode, JobPreference.preferredRegionCode 가 common_code로
+    -- FK 참조(WP-136). 광역시/도 17개 단위로 확정(시/군/구 세분류는 범위 밖).
+    -- 접두어(RG)+100단위 일련번호: 나중에 세분류가 필요하면 RG150처럼 끼워넣을 여유를 둠
+    ('REGION_CODE', 'RG100',  '서울', 1,  true, 0, now(), now()),
+    ('REGION_CODE', 'RG200',  '부산', 2,  true, 0, now(), now()),
+    ('REGION_CODE', 'RG300',  '대구', 3,  true, 0, now(), now()),
+    ('REGION_CODE', 'RG400',  '인천', 4,  true, 0, now(), now()),
+    ('REGION_CODE', 'RG500',  '광주', 5,  true, 0, now(), now()),
+    ('REGION_CODE', 'RG600',  '대전', 6,  true, 0, now(), now()),
+    ('REGION_CODE', 'RG700',  '울산', 7,  true, 0, now(), now()),
+    ('REGION_CODE', 'RG800',  '세종', 8,  true, 0, now(), now()),
+    ('REGION_CODE', 'RG900',  '경기', 9,  true, 0, now(), now()),
+    ('REGION_CODE', 'RG1000', '강원', 10, true, 0, now(), now()),
+    ('REGION_CODE', 'RG1100', '충북', 11, true, 0, now(), now()),
+    ('REGION_CODE', 'RG1200', '충남', 12, true, 0, now(), now()),
+    ('REGION_CODE', 'RG1300', '전북', 13, true, 0, now(), now()),
+    ('REGION_CODE', 'RG1400', '전남', 14, true, 0, now(), now()),
+    ('REGION_CODE', 'RG1500', '경북', 15, true, 0, now(), now()),
+    ('REGION_CODE', 'RG1600', '경남', 16, true, 0, now(), now()),
+    ('REGION_CODE', 'RG1700', '제주', 17, true, 0, now(), now())
 ON CONFLICT (code_group, code) DO NOTHING;
