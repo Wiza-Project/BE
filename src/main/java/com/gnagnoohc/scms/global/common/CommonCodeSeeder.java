@@ -43,7 +43,15 @@ public class CommonCodeSeeder implements CommandLineRunner {
 
     private final JdbcTemplate jdbcTemplate;
 
-    private record Seed(String group, String code, String name, int sortOrder) {
+    /**
+     * parentCode는 부모 행의 {@code code} 값(그룹 무관, 이 프로젝트 관례상 접두어로 전역
+     * 유일함)을 가리킨다 — {@code run()}에서 실제 삽입 시점에 code_id로 조회해 채운다.
+     * 기존 4-arg 시드 60여 줄이 그대로 컴파일되도록 4-arg 생성자를 남겨둔다(parentCode=null).
+     */
+    private record Seed(String group, String code, String name, int sortOrder, String parentCode) {
+        Seed(String group, String code, String name, int sortOrder) {
+            this(group, code, name, sortOrder, null);
+        }
     }
 
     /**
@@ -134,7 +142,41 @@ public class CommonCodeSeeder implements CommandLineRunner {
             new Seed("REGION_CODE", "RG1400", "전남", 14),
             new Seed("REGION_CODE", "RG1500", "경북", 15),
             new Seed("REGION_CODE", "RG1600", "경남", 16),
-            new Seed("REGION_CODE", "RG1700", "제주", 17)
+            new Seed("REGION_CODE", "RG1700", "제주", 17),
+
+            // 소속학과(MAJOR) — student_academic_detail.major_code_id 가 참조. AppUser.departmentCode
+            // (교내 행정조직 4개)와는 완전히 별개 개념이다
+            // 접두어(MJ)+100단위. code/sort_order는 전체 85개 가나다순 목록 기준으로 부여한다
+            new Seed("MAJOR", "MJ400", "경영학부", 4),
+            new Seed("MAJOR", "MJ3200", "산업공학과", 32),
+            new Seed("MAJOR", "MJ4400", "심리학과", 44),
+            new Seed("MAJOR", "MJ5100", "영어영문학과", 51),
+            new Seed("MAJOR", "MJ6400", "전기·정보공학부", 64),
+            new Seed("MAJOR", "MJ8000", "컴퓨터공학부", 80),
+            new Seed("MAJOR", "MJ8100", "통계학과", 81),
+            new Seed("MAJOR", "MJ8500", "화학생물공학부", 85),
+
+            // 학적변동코드(ACADEMIC_CHANGE_TYPE) — student_academic_change.change_type_code_id 가 참조.
+            // 접두어(AC)+100단위. 값 6개는 설계 문서(2026-08-23_academic-record-table-design.md) 4장 확정.
+            new Seed("ACADEMIC_CHANGE_TYPE", "AC100", "입학", 1),
+            new Seed("ACADEMIC_CHANGE_TYPE", "AC200", "휴학", 2),
+            new Seed("ACADEMIC_CHANGE_TYPE", "AC300", "복학", 3),
+            new Seed("ACADEMIC_CHANGE_TYPE", "AC400", "졸업", 4),
+            new Seed("ACADEMIC_CHANGE_TYPE", "AC500", "제적", 5),
+            new Seed("ACADEMIC_CHANGE_TYPE", "AC600", "자퇴", 6),
+
+            // 학적변동사유(ACADEMIC_CHANGE_REASON) — student_academic_change.change_reason_code_id 가 참조.
+            // parent_code_id로 위 ACADEMIC_CHANGE_TYPE에 종속된다(예: AC200 휴학을 고르면
+            // 사유가 AR200/AR300/AR400으로 좁혀짐). 접두어(AR)+100단위.
+            new Seed("ACADEMIC_CHANGE_REASON", "AR100", "신입학", 1, "AC100"),
+            new Seed("ACADEMIC_CHANGE_REASON", "AR200", "일반휴학", 2, "AC200"),
+            new Seed("ACADEMIC_CHANGE_REASON", "AR300", "군휴학", 3, "AC200"),
+            new Seed("ACADEMIC_CHANGE_REASON", "AR400", "질병휴학", 4, "AC200"),
+            new Seed("ACADEMIC_CHANGE_REASON", "AR500", "일반복학", 5, "AC300"),
+            new Seed("ACADEMIC_CHANGE_REASON", "AR600", "군복학", 6, "AC300"),
+            new Seed("ACADEMIC_CHANGE_REASON", "AR700", "졸업", 7, "AC400"),
+            new Seed("ACADEMIC_CHANGE_REASON", "AR800", "미등록제적", 8, "AC500"),
+            new Seed("ACADEMIC_CHANGE_REASON", "AR900", "자퇴", 9, "AC600")
     );
 
     @Override
@@ -145,13 +187,20 @@ public class CommonCodeSeeder implements CommandLineRunner {
         Instant now = Instant.now();
         int inserted = 0;
         for (Seed seed : SEEDS) {
+            // parentCode가 있으면(ACADEMIC_CHANGE_REASON) 부모 행의 code_id를 먼저 조회한다.
+            // SEEDS 목록에서 부모(ACADEMIC_CHANGE_TYPE)가 자식보다 앞서 나열돼 있어야
+            // 이 시점에 이미 삽입돼 조회된다 — 순서를 바꾸지 말 것.
+            Integer parentCodeId = seed.parentCode() == null ? null
+                    : jdbcTemplate.queryForObject(
+                            "SELECT code_id FROM common_code WHERE code = ?", Integer.class, seed.parentCode());
+
             inserted += jdbcTemplate.update("""
                     INSERT INTO common_code
-                        (code_group, code, code_name, sort_order, is_active, created_by, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, true, ?, ?, ?)
+                        (code_group, code, code_name, sort_order, parent_code_id, is_active, created_by, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, true, ?, ?, ?)
                     ON CONFLICT (code_group, code) DO NOTHING
                     """,
-                    seed.group(), seed.code(), seed.name(), seed.sortOrder(),
+                    seed.group(), seed.code(), seed.name(), seed.sortOrder(), parentCodeId,
                     SYSTEM_CREATED_BY, Timestamp.from(now), Timestamp.from(now));
         }
         if (inserted > 0) {
