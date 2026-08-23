@@ -9,9 +9,11 @@ import java.time.Instant;
 import java.util.Map;
 
 public record AssessmentRoundRequest(
-        @NotBlank(message = "진단명은 필수입니다.") String assessmentName,
+        @NotBlank(message = "진단명은 필수입니다.")
+        @Size(max = 200, message = "진단명은 200자를 초과할 수 없습니다.") String assessmentName,
         @NotNull(message = "학년도는 필수입니다.") Integer academicYear,
-        @NotBlank(message = "학기 구분은 필수입니다.") String semesterCode,
+        @NotBlank(message = "학기 구분은 필수입니다.")
+        @Size(max = 20, message = "학기 구분은 20자를 초과할 수 없습니다.") String semesterCode,
         @NotBlank(message = "진단구분(사전/사후)은 필수입니다.")
         @Pattern(regexp = "PRE|POST", message = "진단구분은 PRE 또는 POST여야 합니다.") String assessmentType,
         @NotNull(message = "응시 시작일시는 필수입니다.") Instant startsAt,
