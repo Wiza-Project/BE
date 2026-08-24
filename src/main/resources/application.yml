@@ -17,7 +17,8 @@ spring:
 
   servlet:
     multipart:
-      # 포트폴리오/이력서/증빙자료 업로드 고려
+      # 포트폴리오/이력서/증빙자료 업로드 고려. FileStorageService(공용 파일 저장 유틸)가
+      # 별도 크기 상한을 두지 않고 이 값에 의존하므로, 여길 바꾸면 전체 업로드 상한이 바뀐다.
       max-file-size: 20MB
       max-request-size: 60MB
 

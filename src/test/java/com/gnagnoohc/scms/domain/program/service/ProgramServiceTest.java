@@ -175,6 +175,9 @@ class ProgramServiceTest {
         AppUser managerUser = mock(AppUser.class);
         when(managerUser.getUserId()).thenReturn(100);
 
+        when(commonCodeRepository.findByCodeGroupAndActiveTrueOrderBySortOrderAsc("DEPARTMENT"))
+                .thenReturn(List.of(buildCommonCodeFixture(11, "DEPARTMENT", "D200")));
+
         Instant now = Instant.now();
         ExtracurricularProgram program = buildProgramFixture(
                 1, managerUser, now.plusSeconds(3600), ProgramStatus.DRAFT);
@@ -197,7 +200,7 @@ class ProgramServiceTest {
                 20, null
         );
 
-        ProgramUpdateResponseDTO response = programService.update(1, request, 100);
+        ProgramUpdateResponseDTO response = programService.update(1, request, 100, 11);
 
         assertThat(response.programStatus()).isEqualTo("모집중");
     }
@@ -206,6 +209,9 @@ class ProgramServiceTest {
     void update_whenRecruitmentEnded_throwsProgramNotEditable() throws Exception {
         AppUser managerUser = mock(AppUser.class);
         when(managerUser.getUserId()).thenReturn(100);
+
+        when(commonCodeRepository.findByCodeGroupAndActiveTrueOrderBySortOrderAsc("DEPARTMENT"))
+                .thenReturn(List.of(buildCommonCodeFixture(11, "DEPARTMENT", "D200")));
 
         Instant now = Instant.now();
         ExtracurricularProgram program = buildProgramFixture(
@@ -221,10 +227,72 @@ class ProgramServiceTest {
                 20, null
         );
 
-        assertThatThrownBy(() -> programService.update(1, request, 100))
+        assertThatThrownBy(() -> programService.update(1, request, 100, 11))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.PROGRAM_NOT_EDITABLE);
+    }
+
+    @Test
+    void update_whenDepartmentIsNotOperatingDepartment_throwsDepartmentForbidden() throws Exception {
+        AppUser managerUser = mock(AppUser.class);
+
+        ExtracurricularProgram program = buildProgramFixture(
+                1, managerUser, Instant.now().plusSeconds(3600), ProgramStatus.DRAFT);
+
+        when(programRepository.findById(1)).thenReturn(Optional.of(program));
+        when(commonCodeRepository.findByCodeGroupAndActiveTrueOrderBySortOrderAsc("DEPARTMENT"))
+                .thenReturn(List.of(buildCommonCodeFixture(11, "DEPARTMENT", "D200")));
+
+        Instant now = Instant.now();
+        ProgramUpdateRequestDTO request = new ProgramUpdateRequestDTO(
+                null, 1, 2, 3, null,
+                "수정된 프로그램명", "설명",
+                now, now.plusSeconds(1800), now.plusSeconds(1800), now.plusSeconds(3600),
+                20, null
+        );
+
+        assertThatThrownBy(() -> programService.update(1, request, 100, 99))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.DEPARTMENT_FORBIDDEN);
+    }
+
+    @Test
+    void delete_whenDepartmentIsOperatingDepartment_succeeds() throws Exception {
+        AppUser managerUser = mock(AppUser.class);
+        when(managerUser.getUserId()).thenReturn(100);
+
+        when(commonCodeRepository.findByCodeGroupAndActiveTrueOrderBySortOrderAsc("DEPARTMENT"))
+                .thenReturn(List.of(buildCommonCodeFixture(11, "DEPARTMENT", "D200")));
+
+        Instant now = Instant.now();
+        ExtracurricularProgram program = buildProgramFixture(
+                1, managerUser, now.plusSeconds(3600), ProgramStatus.DRAFT);
+
+        when(programRepository.findById(1)).thenReturn(Optional.of(program));
+        when(programRepository.deleteProgram(eq(1), any())).thenReturn(1);
+
+        programService.delete(1, 100, 11);
+
+        verify(programRepository).deleteProgram(eq(1), any());
+    }
+
+    @Test
+    void delete_whenDepartmentIsNotOperatingDepartment_throwsDepartmentForbidden() throws Exception {
+        AppUser managerUser = mock(AppUser.class);
+
+        ExtracurricularProgram program = buildProgramFixture(
+                1, managerUser, Instant.now().plusSeconds(3600), ProgramStatus.DRAFT);
+
+        when(programRepository.findById(1)).thenReturn(Optional.of(program));
+        when(commonCodeRepository.findByCodeGroupAndActiveTrueOrderBySortOrderAsc("DEPARTMENT"))
+                .thenReturn(List.of(buildCommonCodeFixture(11, "DEPARTMENT", "D200")));
+
+        assertThatThrownBy(() -> programService.delete(1, 100, 99))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.DEPARTMENT_FORBIDDEN);
     }
 
     @Test
