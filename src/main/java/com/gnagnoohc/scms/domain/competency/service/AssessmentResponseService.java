@@ -8,7 +8,6 @@ import com.gnagnoohc.scms.domain.competency.entity.AssessmentAttempt;
 import com.gnagnoohc.scms.domain.competency.entity.AssessmentQuestion;
 import com.gnagnoohc.scms.domain.competency.entity.AssessmentResponse;
 import com.gnagnoohc.scms.domain.competency.entity.AssessmentRoundQuestion;
-import com.gnagnoohc.scms.domain.competency.repository.AssessmentAttemptRepository;
 import com.gnagnoohc.scms.domain.competency.repository.AssessmentQuestionRepository;
 import com.gnagnoohc.scms.domain.competency.repository.AssessmentResponseRepository;
 import com.gnagnoohc.scms.domain.competency.repository.AssessmentRoundQuestionRepository;
@@ -20,7 +19,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -30,7 +28,7 @@ import java.util.stream.Collectors;
 @Transactional
 public class AssessmentResponseService {
 
-    private final AssessmentAttemptRepository assessmentAttemptRepository;
+    private final AssessmentAttemptAccessGuard assessmentAttemptAccessGuard;
     private final AssessmentResponseRepository assessmentResponseRepository;
     private final AssessmentRoundQuestionRepository assessmentRoundQuestionRepository;
     private final AssessmentQuestionRepository assessmentQuestionRepository;
@@ -39,8 +37,8 @@ public class AssessmentResponseService {
     // 기간 안에 다 못 푼 학생이 어디까지 응답했는지는 볼 수 있어야 하기 때문(제출은 여전히 불가).
     @Transactional(readOnly = true)
     public AssessmentResumeResponse resume(Integer attemptId, Integer studentId) {
-        AssessmentAttempt attempt = getOwnAttempt(attemptId, studentId);
-        assertNotSubmitted(attempt);
+        AssessmentAttempt attempt = assessmentAttemptAccessGuard.getOwnAttempt(attemptId, studentId);
+        assessmentAttemptAccessGuard.assertNotSubmitted(attempt);
 
         Integer roundId = attempt.getAssessmentRound().getAssessmentRoundId();
         List<AssessmentRoundQuestion> roundQuestions =
@@ -55,9 +53,9 @@ public class AssessmentResponseService {
 
     public AssessmentResponseSaveResponse saveResponse(Integer attemptId, Integer questionId,
                                                           BigDecimal selectedValue, Integer studentId) {
-        AssessmentAttempt attempt = getOwnAttempt(attemptId, studentId);
-        assertNotSubmitted(attempt);
-        assertPeriodOpen(attempt);
+        AssessmentAttempt attempt = assessmentAttemptAccessGuard.getOwnAttempt(attemptId, studentId);
+        assessmentAttemptAccessGuard.assertNotSubmitted(attempt);
+        assessmentAttemptAccessGuard.assertPeriodOpen(attempt);
 
         Integer roundId = attempt.getAssessmentRound().getAssessmentRoundId();
         if (!assessmentRoundQuestionRepository.existsByAssessmentRound_AssessmentRoundIdAndQuestion_QuestionId(roundId, questionId)) {
@@ -96,31 +94,6 @@ public class AssessmentResponseService {
         return new AssessmentResponseSaveResponse(
                 questionId, response.getSelectedValue(), response.getSavedAt(),
                 new AssessmentResponseProgress((int) answeredCount, (int) totalCount));
-    }
-
-    // 다른 학생의 attempt에 접근하는 경우와 존재하지 않는 경우를 구분하지 않는다(ProgramApplicationService.cancel과 동일 패턴,
-    // attempt 존재 여부·소유권을 응답으로 노출하지 않기 위함).
-    private AssessmentAttempt getOwnAttempt(Integer attemptId, Integer studentId) {
-        AssessmentAttempt attempt = assessmentAttemptRepository.findById(attemptId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.ASSESSMENT_ATTEMPT_NOT_FOUND));
-        if (!attempt.getStudent().getUserId().equals(studentId)) {
-            throw new BusinessException(ErrorCode.ASSESSMENT_ATTEMPT_NOT_FOUND);
-        }
-        return attempt;
-    }
-
-    private void assertNotSubmitted(AssessmentAttempt attempt) {
-        if (attempt.getSubmittedAt() != null) {
-            throw new BusinessException(ErrorCode.DIAGNOSIS_ALREADY_SUBMITTED);
-        }
-    }
-
-    private void assertPeriodOpen(AssessmentAttempt attempt) {
-        Instant now = Instant.now();
-        var round = attempt.getAssessmentRound();
-        if (now.isBefore(round.getStartsAt()) || now.isAfter(round.getEndsAt())) {
-            throw new BusinessException(ErrorCode.DIAGNOSIS_PERIOD_CLOSED);
-        }
     }
 
     private void assertValidResponseValue(AssessmentQuestion question, BigDecimal selectedValue) {
