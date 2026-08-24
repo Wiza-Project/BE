@@ -1,8 +1,10 @@
 package com.gnagnoohc.scms.domain.counsel.controller;
 
+import com.gnagnoohc.scms.domain.counsel.dto.CounselingReservationCancelRequest;
 import com.gnagnoohc.scms.domain.counsel.dto.CounselingReservationDetailResponse;
 import com.gnagnoohc.scms.domain.counsel.dto.CounselingReservationRequest;
 import com.gnagnoohc.scms.domain.counsel.dto.CounselingReservationResponse;
+import com.gnagnoohc.scms.domain.counsel.dto.CounselingReservationScheduleChangeRequest;
 import com.gnagnoohc.scms.domain.counsel.service.CounselingReservationService;
 import com.gnagnoohc.scms.global.common.dto.ApiResponse;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;
@@ -14,6 +16,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -53,6 +56,32 @@ public class CounselingReservationController {
                 authUser.getId(),
                 page,
                 size
+        ));
+    }
+
+    @PatchMapping("/{reservationId}/cancel")
+    public ApiResponse<CounselingReservationResponse> cancel(
+            @PathVariable Integer reservationId,
+            @Valid @RequestBody CounselingReservationCancelRequest request,
+            @AuthenticationPrincipal AuthUser authUser
+    ) {
+        return ApiResponse.ok(counselingReservationService.cancel(
+                reservationId,
+                authUser.getId(),
+                request
+        ));
+    }
+
+    @PatchMapping("/{reservationId}/schedule")
+    public ApiResponse<CounselingReservationResponse> changeSchedule(
+            @PathVariable Integer reservationId,
+            @Valid @RequestBody CounselingReservationScheduleChangeRequest request,
+            @AuthenticationPrincipal AuthUser authUser
+    ) {
+        return ApiResponse.ok(counselingReservationService.changeSchedule(
+                reservationId,
+                authUser.getId(),
+                request
         ));
     }
 

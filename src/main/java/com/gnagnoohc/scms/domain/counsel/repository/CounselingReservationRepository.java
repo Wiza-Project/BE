@@ -1,10 +1,12 @@
 package com.gnagnoohc.scms.domain.counsel.repository;
 
 import com.gnagnoohc.scms.domain.counsel.entity.CounselingReservation;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -50,6 +52,43 @@ public interface CounselingReservationRepository extends JpaRepository<Counselin
             @Param("studentId") Integer studentId,
             @Param("startsAt") Instant startsAt,
             @Param("endsAt") Instant endsAt
+    );
+
+    /**
+     * 변경 시 본인 시간중복 재검증에서 아직 옛 일정을 참조 중인 예약 자기 자신은 제외해야 한다.
+     * 제외하지 않으면 자신이 참조하던 옛 일정과 항상 겹쳐 오탐이 발생한다.
+     */
+    @Query("""
+            select case when count(reservation) > 0 then true else false end
+            from CounselingReservation reservation
+            join reservation.counselingSchedule schedule
+            where reservation.student.userId = :studentId
+              and reservation.counselingReservationId <> :excludeReservationId
+              and reservation.reservationStatus not in ('REJECTED', 'CANCELED')
+              and schedule.startsAt < :endsAt
+              and schedule.endsAt > :startsAt
+            """)
+    boolean existsOverlappingActiveReservationExcluding(
+            @Param("studentId") Integer studentId,
+            @Param("excludeReservationId") Integer excludeReservationId,
+            @Param("startsAt") Instant startsAt,
+            @Param("endsAt") Instant endsAt
+    );
+
+    /**
+     * 취소·변경은 예약 행 자체를 직렬화해야 하므로 조회와 동시에 쓰기 잠금을 건다.
+     * 다른 학생의 예약인지와 없는 예약인지를 구분하지 않도록 studentId 조건을 함께 건다.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select reservation
+            from CounselingReservation reservation
+            where reservation.counselingReservationId = :reservationId
+              and reservation.student.userId = :studentId
+            """)
+    Optional<CounselingReservation> findByCounselingReservationIdAndStudentUserIdForUpdate(
+            @Param("reservationId") Integer reservationId,
+            @Param("studentId") Integer studentId
     );
 
     @EntityGraph(attributePaths = {"counselingType", "counselingSchedule"})
