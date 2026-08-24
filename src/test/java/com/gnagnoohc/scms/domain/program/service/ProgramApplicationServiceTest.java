@@ -42,6 +42,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
@@ -85,7 +86,7 @@ class ProgramApplicationServiceTest {
         when(applicationRepository.findByProgram_ProgramIdAndStudent_UserIdForUpdate(1, 100))
                 .thenReturn(Optional.empty());
         when(applicationRepository.countByProgram_ProgramIdAndApplicationStatus(1, "APPLIED")).thenReturn(9L);
-        when(applicationRepository.insertApplication(eq(1), eq(100), eq("APPLIED"), eq(null), any()))
+        when(applicationRepository.insertApplication(eq(1), eq(100), eq("APPLIED"), eq(null), eq(false), any()))
                 .thenReturn(1);
 
         ProgramApplyResponseDTO response = programApplicationService.apply(1, 100);
@@ -106,7 +107,7 @@ class ProgramApplicationServiceTest {
                 .thenReturn(Optional.empty());
         when(applicationRepository.countByProgram_ProgramIdAndApplicationStatus(1, "APPLIED")).thenReturn(10L);
         when(applicationRepository.findMaxWaitlistOrderByProgramId(1)).thenReturn(2);
-        when(applicationRepository.insertApplication(eq(1), eq(100), eq("WAITLISTED"), eq(3), any()))
+        when(applicationRepository.insertApplication(eq(1), eq(100), eq("WAITLISTED"), eq(3), eq(false), any()))
                 .thenReturn(1);
 
         ProgramApplyResponseDTO response = programApplicationService.apply(1, 100);
@@ -154,7 +155,7 @@ class ProgramApplicationServiceTest {
         when(applicationRepository.findByProgram_ProgramIdAndStudent_UserIdForUpdate(1, 100))
                 .thenReturn(Optional.empty());
         when(applicationRepository.countByProgram_ProgramIdAndApplicationStatus(1, "APPLIED")).thenReturn(0L);
-        when(applicationRepository.insertApplication(anyInt(), anyInt(), eq("APPLIED"), eq(null), any()))
+        when(applicationRepository.insertApplication(anyInt(), anyInt(), eq("APPLIED"), eq(null), anyBoolean(), any()))
                 .thenThrow(new DataIntegrityViolationException("duplicate"));
 
         assertThatThrownBy(() -> programApplicationService.apply(1, 100))
@@ -179,7 +180,7 @@ class ProgramApplicationServiceTest {
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.ALREADY_APPLIED);
 
-        verify(applicationRepository, never()).insertApplication(anyInt(), anyInt(), any(), any(), any());
+        verify(applicationRepository, never()).insertApplication(anyInt(), anyInt(), any(), any(), anyBoolean(), any());
         verify(applicationRepository, never()).reviveApplication(anyInt(), any(), any(), any());
     }
 
@@ -219,7 +220,7 @@ class ProgramApplicationServiceTest {
 
         assertThat(response.applicationId()).isEqualTo(5);
         assertThat(response.applicationStatus()).isEqualTo("APPLIED");
-        verify(applicationRepository, never()).insertApplication(anyInt(), anyInt(), any(), any(), any());
+        verify(applicationRepository, never()).insertApplication(anyInt(), anyInt(), any(), any(), anyBoolean(), any());
     }
 
     @Test

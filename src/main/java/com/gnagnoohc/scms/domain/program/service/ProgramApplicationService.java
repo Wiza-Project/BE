@@ -126,7 +126,7 @@ public class ProgramApplicationService {
         } else {
             try {
                 applicationId = applicationRepository.insertApplication(
-                        programId, studentId, status.name(), waitlistOrder, now);
+                        programId, studentId, status.name(), waitlistOrder, false, now);
             } catch (DataIntegrityViolationException e) {
                 // uq_program_application_program_student 유니크 제약 위반 = 이미 신청한 프로그램(동시 요청 경쟁).
                 throw new BusinessException(ErrorCode.ALREADY_APPLIED);

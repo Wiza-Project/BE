@@ -359,9 +359,12 @@ public class ProgramService {
         long applicantCount = applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(
                 programId, List.of(ApplicationStatus.APPLIED.name(), ApplicationStatus.APPROVED.name()));
 
+        // CANCELLED는 apply()가 재신청 대상으로 취급하는 상태라, "신청 안 한 것"과 동일하게 null로 내려준다
+        // (findMyApplicationStatusesByProgramIds와 같은 이유 — 재신청 가능한 프로그램에서 버튼을 숨기면 안 됨).
         String myApplicationStatus = applicationRepository
                 .findByProgram_ProgramIdAndStudent_UserId(programId, studentId)
                 .map(ProgramApplication::getApplicationStatus)
+                .filter(status -> !ApplicationStatus.CANCELLED.name().equals(status))
                 .orElse(null);
 
         return ProgramDetailResponseDTO.from(program, applicantCount, sessions, myApplicationStatus);

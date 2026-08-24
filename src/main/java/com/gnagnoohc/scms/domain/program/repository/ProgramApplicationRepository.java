@@ -65,11 +65,15 @@ public interface ProgramApplicationRepository extends JpaRepository<ProgramAppli
      * 여러 프로그램에 대해, 로그인한 학생 본인의 신청 상태를 한 번에 조회한다(목록 조회 N+1 방지,
      * countActiveApplicantsByProgramIds와 같은 이유). program_id+student_id 조합은 유니크 제약이 걸려있어
      * 프로그램 하나당 결과는 0건 또는 1건이다.
+     * CANCELLED는 apply()가 재신청(reviveApplication) 대상으로 취급하는 상태라, 여기서도 "신청 안 한
+     * 것"과 동일하게 취급되도록 제외한다 — 포함시키면 재신청 가능한 프로그램에서도 FE가 신청 버튼을
+     * 숨기게 되어 재신청 기능 자체가 무의미해진다.
      */
     @Query("""
         SELECT a.program.programId AS programId, a.applicationStatus AS status
         FROM ProgramApplication a
         WHERE a.student.userId = :studentId AND a.program.programId IN :programIds
+          AND a.applicationStatus <> 'CANCELLED'
         """)
     List<MyApplicationStatusProjection> findMyApplicationStatusesByProgramIds(
             @Param("studentId") Integer studentId, @Param("programIds") List<Integer> programIds);
@@ -114,9 +118,9 @@ public interface ProgramApplicationRepository extends JpaRepository<ProgramAppli
      */
     @Query(value = """
         INSERT INTO program_application (
-            program_id, student_id, application_status, waitlist_order, created_at, updated_at
+            program_id, student_id, application_status, waitlist_order, survey_completed, created_at, updated_at
         ) VALUES (
-            :programId, :studentId, :applicationStatus, :waitlistOrder, :now, :now
+            :programId, :studentId, :applicationStatus, :waitlistOrder, :surveyCompleted, :now, :now
         )
         RETURNING application_id
         """, nativeQuery = true)
@@ -125,6 +129,11 @@ public interface ProgramApplicationRepository extends JpaRepository<ProgramAppli
      * program_id + student_id 조합은 uq_program_application_program_student 유니크 제약이 걸려있어,
      * 이미 신청한 학생이 다시 신청하면 이 INSERT가 DataIntegrityViolationException을 던진다
      * (서비스 계층에서 ErrorCode.ALREADY_APPLIED로 변환).
+     * survey_completed는 DB 컬럼이 NOT NULL이고 DEFAULT가 없어(엔티티의 자바 필드 초기값은 이
+     * native INSERT에 반영되지 않음) 명시적으로 채워야 한다 — reviveApplication과 동일한 이유.
+     * 항상 false로 호출되지만(신규 신청은 아직 설문 미완료), 다른 컬럼들과 마찬가지로 바인드 파라미터로
+     * 넘긴다 — SQL 리터럴을 JDBC 플레이스홀더와 섞으면 일부 DB/드라이버 조합(H2 PostgreSQL 호환 모드 등)에서
+     * 이 INSERT ... RETURNING 구문 파싱이 깨진다.
      */
     Integer insertApplication(@Param("programId") Integer programId,
                                @Param("studentId") Integer studentId,
@@ -132,6 +141,8 @@ public interface ProgramApplicationRepository extends JpaRepository<ProgramAppli
                                @Param("applicationStatus") String applicationStatus,
                                // 정원 내 신청이면 null, 대기 신청이면 1부터 매겨지는 순번.
                                @Param("waitlistOrder") Integer waitlistOrder,
+                               // 신규 신청은 항상 false(만족도 설문 미완료).
+                               @Param("surveyCompleted") boolean surveyCompleted,
                                @Param("now") Instant now);
 
     // 특정 프로그램에서 특정 상태(주로 "APPLIED")인 신청 건수. 정원과 비교해 대기 여부를 판단하는 데 쓴다.
@@ -263,6 +274,13 @@ public interface ProgramApplicationRepository extends JpaRepository<ProgramAppli
      * 여기서는 그 이스케이프와 짝을 맞추는 ESCAPE '!' 절만 LIKE마다 붙이면 된다. 이스케이프 문자로 백슬래시 대신 '!'를
      * 쓰는 이유: 백슬래시는 Java 텍스트 블록 → JPQL 문자열 리터럴 → (HQL은 이 리터럴을 그대로 SQL로 넘김) SQL 문자열
      * 리터럴까지 여러 계층을 거치며 각 계층의 이스케이프 규칙이 서로 달라 의도한 한 글자로 남는다는 보장이 없다.
+     *
+     * CAST(:keyword AS string): keyword가 null일 때(검색어 없이 전체 조회) PostgreSQL이 CONCAT('%', ?, '%')의
+     * ?(파라미터) 타입을 추론하지 못해 "function lower(bytea) does not exist"로 500이 나던 버그의 수정.
+     * ":keyword IS NULL OR ..."로 논리적으로는 건너뛰어도, Postgres는 플래닝 단계에서 OR의 양쪽 식을 전부
+     * 타입 검사하므로 타입을 알 수 없는 null 파라미터가 CONCAT/LOWER 안에 그대로 들어가면 실패한다(status처럼
+     * 컬럼과 직접 비교되는 경우는 좌변에서 타입을 추론할 수 있어 문제가 없었다). CAST로 명시적으로 타입을
+     * 알려주면 null이어도 planning이 통과한다.
      */
     @Query(value = """
         SELECT a FROM ProgramApplication a
@@ -270,16 +288,16 @@ public interface ProgramApplicationRepository extends JpaRepository<ProgramAppli
         WHERE a.program.programId = :programId
           AND (:status IS NULL OR a.applicationStatus = :status)
           AND (:keyword IS NULL
-               OR LOWER(a.student.userName) LIKE LOWER(CONCAT('%', :keyword, '%')) ESCAPE '!'
-               OR LOWER(a.student.universityNo) LIKE LOWER(CONCAT('%', :keyword, '%')) ESCAPE '!')
+               OR LOWER(a.student.userName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) ESCAPE '!'
+               OR LOWER(a.student.universityNo) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) ESCAPE '!')
         """,
         countQuery = """
         SELECT COUNT(a) FROM ProgramApplication a
         WHERE a.program.programId = :programId
           AND (:status IS NULL OR a.applicationStatus = :status)
           AND (:keyword IS NULL
-               OR LOWER(a.student.userName) LIKE LOWER(CONCAT('%', :keyword, '%')) ESCAPE '!'
-               OR LOWER(a.student.universityNo) LIKE LOWER(CONCAT('%', :keyword, '%')) ESCAPE '!')
+               OR LOWER(a.student.userName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) ESCAPE '!'
+               OR LOWER(a.student.universityNo) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) ESCAPE '!')
         """)
     Page<ProgramApplication> findAllByProgramIdAndStatus(@Param("programId") Integer programId,
                                                            @Param("status") String status,
