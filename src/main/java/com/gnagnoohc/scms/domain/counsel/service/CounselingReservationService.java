@@ -25,7 +25,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 
 /**
- * 학생의 직접 예약과 일정 없는 센터형 신청을 생성하고 본인 예약만 조회한다.
+ * 학생의 DIRECT(온라인 신청) 직접 예약을 생성하고 본인 예약만 조회한다.
+ * CENTER(센터 접수)형 신청은 체크리스트 12번(상담센터 접수 처리) 구현 전까지 거절한다.
  */
 @Service
 @RequiredArgsConstructor
@@ -143,11 +144,15 @@ public class CounselingReservationService {
         if (DIRECT_ROUTE.equals(counselingType.getApplicationRoute())) {
             return getAvailableDirectSchedule(scheduleId, counselingType, studentId, now);
         }
+        // CENTER(센터 접수)는 체크리스트 12번(상담센터 접수 처리) 구현 전까지 학생 신청 경로에서 제외한다.
+        // 프론트 필터만으로는 유형 ID를 직접 보낸 요청을 막지 못하므로 서버가 최종 방어선으로 거절한다.
+        // 상담사 일정 등록의 CENTER 거절(CounselingScheduleService)과 같은 400 C001(INVALID_INPUT)로 통일한다.
+        // enum·시드는 유지하므로 12번 착수 시 REQUESTED 예약 생성 로직을 복원한다.
         if (CENTER_ROUTE.equals(counselingType.getApplicationRoute())) {
-            if (scheduleId != null) {
-                throw new BusinessException(ErrorCode.INVALID_INPUT);
-            }
-            return null;
+            throw new BusinessException(
+                    ErrorCode.INVALID_INPUT,
+                    "센터 접수(CENTER) 상담은 아직 신청할 수 없습니다."
+            );
         }
         throw new BusinessException(ErrorCode.INVALID_INPUT);
     }
