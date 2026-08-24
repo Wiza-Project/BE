@@ -2,6 +2,7 @@ package com.gnagnoohc.scms.domain.program.controller;
 
 import com.gnagnoohc.scms.domain.program.dto.response.CompetencyOptionResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.request.ProgramRegisterRequestDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramAdminDetailResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramAdminListItemResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramRegisterResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.request.ProgramUpdateRequestDTO;
@@ -77,6 +78,14 @@ public class ProgramController {
     @GetMapping("/competencies")
     public ApiResponse<List<CompetencyOptionResponseDTO>> listCompetencyOptions() {
         return ApiResponse.ok(programService.getCompetencyOptions());
+    }
+
+    @Operation(summary = "프로그램 상세 조회", description = "담당 프로그램의 상세정보, 회차 목록, 수정/삭제 가능 여부를 조회합니다 (등록자 본인만 가능)")
+    @GetMapping("/{programId}")
+    public ApiResponse<ProgramAdminDetailResponseDTO> getDetail(
+            @PathVariable Integer programId,
+            @AuthenticationPrincipal AuthUser authUser) {
+        return ApiResponse.ok(programService.getMyDetail(programId, authUser.getId()));
     }
 
     @Operation(summary = "프로그램 수정", description = "모집중 상태의 비교과 프로그램을 전체 필드 수정합니다 (등록자 본인만 가능)")
