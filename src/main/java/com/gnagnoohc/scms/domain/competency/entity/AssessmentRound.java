@@ -54,4 +54,13 @@ public class AssessmentRound extends BaseTimeEntity {
         this.endsAt = endsAt;
         this.targetCondition = targetCondition;
     }
+
+    // 백분위 산출 배치가 이 회차의 전체 응시자 점수에 percentile을 다 채운 뒤 호출한다.
+    // 다음 배치 사이클에서 이 회차를 다시 대상으로 잡지 않기 위한 완료 표시이자,
+    // "집계 완료된 회차만 백분위 확인 가능"의 판정 기준이 된다.
+    // 응시기간(endsAt) 경과 후엔 제출 자체가 막히므로(AssessmentAttemptAccessGuard.assertPeriodOpen)
+    // 완료 처리 이후 이 회차에 새 assessment_score가 생길 일은 없다.
+    public void completePercentileCalculation() {
+        this.roundStatus = "COMPLETED";
+    }
 }
