@@ -78,6 +78,9 @@ public interface CounselingReservationRepository extends JpaRepository<Counselin
     /**
      * 취소·변경은 예약 행 자체를 직렬화해야 하므로 조회와 동시에 쓰기 잠금을 건다.
      * 다른 학생의 예약인지와 없는 예약인지를 구분하지 않도록 studentId 조건을 함께 건다.
+     * PESSIMISTIC_WRITE는 SQL의 SELECT ... FOR UPDATE로 변환된다. 이 행을 조회한 트랜잭션이
+     * 커밋 또는 롤백으로 끝날 때까지 다른 트랜잭션은 같은 행에 대한 잠금 조회나 수정을 기다리게
+     * 되므로, 같은 예약에 대한 취소·변경 요청이 동시에 들어와도 하나씩 순서대로 처리된다.
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""

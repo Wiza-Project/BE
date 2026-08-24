@@ -18,6 +18,9 @@ import java.time.Instant;
 @Entity @Getter @Table(name = "counseling_reservation")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class CounselingReservation extends BaseTimeEntity {
+    // reservationStatus 비교·변경에 쓰는 상태 문자열 상수.
+    // "REQUESTED" 같은 리터럴을 메서드마다 직접 쓰면 오타가 나도 컴파일러가 잡아주지 못하므로,
+    // 상태를 다루는 곳에서는 항상 이 상수를 통해서만 비교·대입한다.
     private static final String REQUESTED_STATUS = "REQUESTED";
     private static final String APPROVED_STATUS = "APPROVED";
     private static final String CANCELED_STATUS = "CANCELED";
@@ -62,8 +65,13 @@ public class CounselingReservation extends BaseTimeEntity {
     /**
      * 학생이 직접 취소 가능한 상태(REQUESTED, APPROVED)와 일정 마감 전인지 여기서 함께 확인한다.
      * 진행중·완료·거절·이미 취소된 예약은 취소 대상이 아니므로 서비스가 아니라 엔티티가 한 곳에서 막는다.
+     * now를 엔티티 내부에서 Instant.now()로 새로 구하지 않고 서비스가 값으로 넘겨주는 이유는,
+     * 같은 요청 안의 여러 검사가 서로 다른 시각을 기준으로 판단하지 않게 하고, 테스트에서 임의의
+     * 시각을 주입해 "마감 직전/직후" 같은 경계 상황을 재현할 수 있게 하기 위해서다.
+     * 두 조건 중 하나라도 어기면 즉시 예외를 던지고 필드는 하나도 바뀌지 않으므로,
+     * 취소 처리가 절반만 반영된 상태(상태만 바뀌고 사유는 안 남는 등)는 생기지 않는다.
      */
-    // ponytail: BLOCKED(체크리스트 6 의존) — APPROVED 취소 시 활성 배정 종료 미처리.
+    // BLOCKED(체크리스트 6 의존) — APPROVED 취소 시 활성 배정 종료 미처리.
     //   현재 승인·배정(6번) 미구현이라 APPROVED 도달 경로가 없어 잠복. 6번 구현 시
     //   이 취소 트랜잭션에서 CounselingAssignment.ended_at을 함께 채워 활성 배정 모순을 막을 것.
     public void cancel(String reason, Instant now) {
