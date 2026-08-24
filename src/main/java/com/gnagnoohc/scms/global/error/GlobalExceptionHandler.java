@@ -16,11 +16,11 @@ import java.util.stream.Collectors;
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(BusinessException.class)
-    public ResponseEntity<ApiResponse<Void>> handleBusiness(BusinessException e) {
+    public ResponseEntity<ApiResponse<Object>> handleBusiness(BusinessException e) {
         ErrorCode ec = e.getErrorCode();
         log.warn("BusinessException: {} - {}", ec.getCode(), e.getMessage());
         return ResponseEntity.status(ec.getStatus())
-                .body(ApiResponse.fail(ec.getCode(), e.getMessage()));
+                .body(ApiResponse.fail(ec.getCode(), e.getMessage(), e.getData()));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

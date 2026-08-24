@@ -1,7 +1,6 @@
 package com.gnagnoohc.scms.domain.program.controller;
 
 import com.gnagnoohc.scms.domain.program.dto.request.ProgramAttendanceRecordRequestDTO;
-import com.gnagnoohc.scms.domain.program.dto.response.ProgramAttendanceQrTokenResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramAttendanceResponseDTO;
 import com.gnagnoohc.scms.domain.program.service.ProgramAttendanceService;
 import com.gnagnoohc.scms.global.common.dto.ApiResponse;
@@ -41,13 +40,5 @@ public class ProgramAttendanceAdminController {
             @PathVariable Integer programId,
             @PathVariable Integer sessionId) {
         return ApiResponse.ok(programAttendanceService.listAttendance(programId, sessionId));
-    }
-
-    @Operation(summary = "QR 출석체크 토큰 발급", description = "학생이 스캔할 QR용 단기 토큰을 발급합니다(5분 유효). 발급된 문자열을 프론트가 QR 이미지로 렌더링합니다.")
-    @GetMapping("/qr-token")
-    public ApiResponse<ProgramAttendanceQrTokenResponseDTO> issueQrToken(
-            @PathVariable Integer programId,
-            @PathVariable Integer sessionId) {
-        return ApiResponse.ok(programAttendanceService.issueQrToken(programId, sessionId));
     }
 }

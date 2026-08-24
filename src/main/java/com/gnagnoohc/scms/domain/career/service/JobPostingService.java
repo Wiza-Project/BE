@@ -8,6 +8,8 @@ import com.gnagnoohc.scms.domain.career.entity.CompanyAccount;
 import com.gnagnoohc.scms.domain.career.entity.JobPosting;
 import com.gnagnoohc.scms.domain.career.repository.CompanyAccountRepository;
 import com.gnagnoohc.scms.domain.career.repository.JobPostingRepository;
+import com.gnagnoohc.scms.domain.user.entity.AppUser;
+import com.gnagnoohc.scms.domain.user.repository.AppUserRepository;
 import com.gnagnoohc.scms.global.common.entity.CommonCode;
 import com.gnagnoohc.scms.global.common.repository.CommonCodeRepository;
 import com.gnagnoohc.scms.global.common.service.CommonCodeService;
@@ -79,6 +81,8 @@ public class JobPostingService {
     private final CommonCodeRepository commonCodeRepository;
     // 공통코드 매핑용 서비스 주입
     private final CommonCodeService commonCodeService;
+    // 사용자 정보 조회용 공통 AppUser 추가 (교직원 중에서도 취창업 부서 검증용)
+    private final AppUserRepository appUserRepository;
 
     // 빈 주입 의존성 경고 방지 및 독립적 JSON 직렬화/역직렬화를 위한 객체 생성
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -212,6 +216,9 @@ public class JobPostingService {
      */
     @Transactional
     public void reviewJobPosting(Integer jobPostingId, Integer reviewerUserId, JobPostingReviewRequestDTO requestDTO) {
+        // TODO: 이후 실제 데이터 넣어서 처리 필요 - 부서 권한 검증: 취창업지원팀 교직원 또는 관리자 여부 확인
+        validateCareerStaff(reviewerUserId);
+
         JobPosting jobPosting = jobPostingRepository.findById(jobPostingId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.JOB_POSTING_NOT_FOUND));
 
@@ -230,6 +237,20 @@ public class JobPostingService {
     }
 
     /**
+     * 교직원 전용 채용공고 검수에사, 부서 권한 검증 헬퍼 메서드 추가
+     *
+     * 예시: user의 부서 정보나 권한을 확인하여 취창업 관련 부서/관리자가 아니면 거부
+     * if (!user.isCareerStaffOrAdmin()) { ... throw new BusinessException(ErrorCode.ACCESS_DENIED); }
+     */
+    private void validateCareerStaff(Integer userId) {
+        if (userId == null) {
+            throw new BusinessException(ErrorCode.UNAUTHORIZED);
+        }
+        AppUser user = appUserRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+    }
+
+    /**
      * [교직원 전용] 채용공고 삭제
      *
      * @param jobPostingId 공고 식별자 (PK)
@@ -244,7 +265,6 @@ public class JobPostingService {
     }
 
     // --- Private 매핑 및 헬퍼 메서드 ---
-
     private CommonCode findCommonCodeOrNull(Integer codeId) {
         if (codeId == null) {
             return null;

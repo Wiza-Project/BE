@@ -37,6 +37,10 @@ public class ExtracurricularProgramRepositoryImpl implements ExtracurricularProg
         return search(managerUserId, status, keyword, competencyId, pageable);
     }
 
+    /**
+     * search()/searchByManager()의 공통 구현. managerUserId가 null이면 전체 프로그램을,
+     * 값이 있으면 해당 담당자가 등록한 프로그램만 대상으로 status/keyword/competencyId 조건을 동적으로 조합해 조회한다.
+     */
     private Page<ExtracurricularProgram> search(Integer managerUserId, ProgramStatus status, String keyword,
                                                   Integer competencyId, Pageable pageable) {
         QExtracurricularProgram program = extracurricularProgram;
@@ -56,14 +60,16 @@ public class ExtracurricularProgramRepositoryImpl implements ExtracurricularProg
         }
 
         /**
-         * operatingUnitCode/programTypeCode/competency는 목록 DTO 매핑에서 라벨(codeName/competencyName)로
-         * 바로 쓰이므로, LAZY 연관관계를 지연 로딩(N+1)하지 않고 fetch join으로 한 번에 가져온다.
+         * operatingUnitCode/programTypeCode/competency/mileagePolicy는 목록 DTO 매핑에서
+         * 라벨(codeName/competencyName)이나 적립 점수(mileagePolicy.points)로 바로 쓰이므로,
+         * LAZY 연관관계를 지연 로딩(N+1)하지 않고 fetch join으로 한 번에 가져온다.
          */
         List<ExtracurricularProgram> content = queryFactory
                 .selectFrom(program)
                 .leftJoin(program.operatingUnitCode).fetchJoin()
                 .leftJoin(program.programTypeCode).fetchJoin()
                 .leftJoin(program.competency).fetchJoin()
+                .leftJoin(program.mileagePolicy).fetchJoin()
                 .where(condition)
                 .orderBy(resolveOrderSpecifiers(pageable.getSort(), program))
                 .offset(pageable.getOffset())
