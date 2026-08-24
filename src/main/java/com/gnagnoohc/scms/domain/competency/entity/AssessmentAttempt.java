@@ -24,4 +24,17 @@ public class AssessmentAttempt extends BaseCreatedAtEntity {
     @Column(name = "started_at") private Instant startedAt;
     @Column(name = "saved_at") private Instant savedAt;
     @Column(name = "submitted_at") private Instant submittedAt;
+
+    // 첫 응답 저장 시점에 한 번만 응시 시작으로 표시한다 (재저장은 시작 시점을 건드리지 않음).
+    // AssessmentRoundService.updateRound가 이 startedAt으로 회차 잠금 여부를 판정하므로 반드시 채워야 한다.
+    public void start() {
+        if (this.startedAt == null) {
+            this.startedAt = Instant.now();
+            this.attemptStatus = "IN_PROGRESS";
+        }
+    }
+
+    public void touchSavedAt() {
+        this.savedAt = Instant.now();
+    }
 }
