@@ -7,9 +7,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import lombok.AccessLevel;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 import java.time.Instant;
 
@@ -62,4 +60,45 @@ public class CompanyAccount extends BaseTimeEntity {
 
     @Column(name = "account_status", nullable = false, length = 20)
     private String accountStatus = "ACTIVE";
+
+    /**
+     * 기업 등록 시 필수/선택 메타데이터를 안전하게 주입하기 위한 전용 빌더 생성자
+     */
+    @Builder
+    private CompanyAccount(String companyName, String businessRegistrationNo, String loginId,
+                           String passwordHash, String representativeName, String contactName,
+                           String contactPhone, String contactEmail, String address,
+                           String verificationStatus, String accountStatus) {
+        this.companyName = companyName;
+        this.businessRegistrationNo = businessRegistrationNo;
+        this.loginId = loginId;
+        this.passwordHash = passwordHash;
+        this.representativeName = representativeName;
+        this.contactName = contactName;
+        this.contactPhone = contactPhone;
+        this.contactEmail = contactEmail;
+        this.address = address;
+        this.verificationStatus = (verificationStatus != null) ? verificationStatus : "PENDING";
+        this.accountStatus = (accountStatus != null) ? accountStatus : "ACTIVE";
+    }
+
+    /**
+     * 교직원 승인 처리
+     */
+    public void verify(Integer reviewerUserId, Instant verifiedAt) {
+        this.verificationStatus = "VERIFIED";
+        this.verifiedBy = reviewerUserId;
+        this.verifiedAt = verifiedAt;
+        this.accountStatus = "ACTIVE";
+    }
+
+    /**
+     * 교직원 반려 처리
+     */
+    public void reject(Integer reviewerUserId) {
+        this.verificationStatus = "REJECTED";
+        this.verifiedBy = reviewerUserId;
+        this.accountStatus = "INACTIVE";
+    }
+
 }
