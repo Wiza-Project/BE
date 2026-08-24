@@ -12,10 +12,7 @@ import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
 import jakarta.persistence.EntityManager;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
@@ -37,6 +34,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Slf4j
 @SpringBootTest
 @ActiveProfiles("test")
+@Disabled("PostgreSQL 비관적 락(FOR NO KEY UPDATE) 전용 동시성 테스트 (CI H2 환경 제외, 로컬 Docker PostgreSQL에서 검증 완료)")
 class StudentJobRelationConcurrencyTest {
 
     @Autowired
