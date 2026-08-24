@@ -223,21 +223,32 @@ public interface ProgramApplicationRepository extends JpaRepository<ProgramAppli
      *
      * 스태프가 신청관리/이수판정 화면에서 프로그램 하나의 전체 신청자를 조회한다. student는 지연 로딩(LAZY)이고
      * 응답에 학생 이름/학번이 필요하므로 JOIN FETCH로 N+1을 방지한다(listMyApplications와 같은 이유).
-     * status가 null이면 상태 필터 없이 전체 신청자를 조회한다.
+     * status가 null이면 상태 필터 없이 전체 신청자를 조회하고, keyword가 null이면 이름/학번 검색 없이 전체 신청자를 조회한다.
+     * keyword는 ProgramApplicationService.escapeLikeKeyword가 %, _, !를 미리 이스케이프해서 넘겨주므로,
+     * 여기서는 그 이스케이프와 짝을 맞추는 ESCAPE '!' 절만 LIKE마다 붙이면 된다. 이스케이프 문자로 백슬래시 대신 '!'를
+     * 쓰는 이유: 백슬래시는 Java 텍스트 블록 → JPQL 문자열 리터럴 → (HQL은 이 리터럴을 그대로 SQL로 넘김) SQL 문자열
+     * 리터럴까지 여러 계층을 거치며 각 계층의 이스케이프 규칙이 서로 달라 의도한 한 글자로 남는다는 보장이 없다.
      */
     @Query(value = """
         SELECT a FROM ProgramApplication a
         JOIN FETCH a.student
         WHERE a.program.programId = :programId
           AND (:status IS NULL OR a.applicationStatus = :status)
+          AND (:keyword IS NULL
+               OR LOWER(a.student.userName) LIKE LOWER(CONCAT('%', :keyword, '%')) ESCAPE '!'
+               OR LOWER(a.student.universityNo) LIKE LOWER(CONCAT('%', :keyword, '%')) ESCAPE '!')
         """,
         countQuery = """
         SELECT COUNT(a) FROM ProgramApplication a
         WHERE a.program.programId = :programId
           AND (:status IS NULL OR a.applicationStatus = :status)
+          AND (:keyword IS NULL
+               OR LOWER(a.student.userName) LIKE LOWER(CONCAT('%', :keyword, '%')) ESCAPE '!'
+               OR LOWER(a.student.universityNo) LIKE LOWER(CONCAT('%', :keyword, '%')) ESCAPE '!')
         """)
     Page<ProgramApplication> findAllByProgramIdAndStatus(@Param("programId") Integer programId,
-                                                           @Param("status") String status, Pageable pageable);
+                                                           @Param("status") String status,
+                                                           @Param("keyword") String keyword, Pageable pageable);
 
     /**
      * ── 여기부터 "만족도 설문 완료 처리(Update)" 기능 ──────────────────────────────
