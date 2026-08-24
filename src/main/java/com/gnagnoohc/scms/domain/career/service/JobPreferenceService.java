@@ -8,20 +8,16 @@ import com.gnagnoohc.scms.domain.career.repository.JobPreferenceRepository;
 import com.gnagnoohc.scms.domain.user.entity.AppUser;
 import com.gnagnoohc.scms.domain.user.repository.AppUserRepository;
 import com.gnagnoohc.scms.global.common.entity.CommonCode;
-import com.gnagnoohc.scms.global.common.repository.CommonCodeRepository;
+import com.gnagnoohc.scms.global.common.helper.JdbcUpsertHelper;
 import com.gnagnoohc.scms.global.common.util.DateTimeUtils;
 import com.gnagnoohc.scms.global.error.BusinessException;
-import com.gnagnoohc.scms.global.error.DbConstraintViolationMatcher;
 import com.gnagnoohc.scms.global.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.time.OffsetDateTime;
-import java.time.ZoneId;
 
 /**
  * 학생 취업 희망조건 핵심 비즈니스 로직 서비스
@@ -41,11 +37,10 @@ import java.time.ZoneId;
 @Transactional(readOnly = true)
 public class JobPreferenceService {
 
-    private static final String UQ_STUDENT_PREFERENCE = "uq_student_job_preference";
-
     private final JobPreferenceRepository jobPreferenceRepository;
     private final AppUserRepository appUserRepository;
     private final CareerBindingHelper careerBindingHelper;
+    private final JdbcUpsertHelper jdbcUpsertHelper;
 
     /**
      * [학생] 본인의 등록된 취업 희망조건 단건을 조회
@@ -64,6 +59,13 @@ public class JobPreferenceService {
     /**
      * [학생] 취업 희망조건을 등록하거나 기존 설정을 수정 (원자적 Upsert).
      *
+     * <p><strong>[비즈니스 로직 처리 순서]</strong></p>
+     * <ul>
+     *   <li>1. 대상 학생 및 공통코드(NCS 직무, 근무지역) 유효성 검증</li>
+     *   <li>2. {@link JdbcUpsertHelper}를 통해 초기 row를 원자적으로 확보 ({@code ON CONFLICT DO NOTHING})</li>
+     *   <li>3. 영속 엔티티 조회 후 {@link JobPreference#update} 비즈니스 메서드로 최종 값 갱신 (Dirty Checking)</li>
+     * </ul>
+     *
      * @param studentUserId 대상 학생 사용자 계정 식별자 (PK)
      * @param requestDTO    희망 직무, 희망 지역, 고용형태, 희망 최소 연봉 정보가 담긴 요청 DTO
      * @return 등록 또는 수정이 완료된 학생 취업 희망조건 상세 응답 DTO
@@ -77,33 +79,31 @@ public class JobPreferenceService {
         CommonCode ncsCode = careerBindingHelper.findValidCommonCodeOrNull(requestDTO.getNcsStandardId());
         CommonCode regionCode = careerBindingHelper.findValidRegionCodeOrNull(requestDTO.getPreferredRegionCodeId());
 
+        // PostgreSQL ON CONFLICT DO NOTHING을 통한 원자적 초기 row 확보 (JPA 트랜잭션 롤백 오염 방지_코드래빗 리뷰 적용)
+        Instant now = Instant.now();
+        String sql = "INSERT INTO job_preference (user_id, ncs_standard_id, preferred_region_code_id, preferred_employment_type, minimum_salary, created_at, updated_at) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?) " +
+                "ON CONFLICT (user_id) DO NOTHING";
+
+        Integer ncsCodeId = ncsCode != null ? ncsCode.getCodeId() : null;
+        Integer regionCodeId = regionCode != null ? regionCode.getCodeId() : null;
+
+        jdbcUpsertHelper.executeInsertDoNothing(
+                sql,
+                student.getUserId(),
+                ncsCodeId,
+                regionCodeId,
+                requestDTO.getPreferredEmploymentType(),
+                requestDTO.getMinimumSalary(),
+                now,
+                now
+        );
+
+        // 엔티티 재조회 후 최신 요청 데이터로 갱신 (더티 체킹)
         JobPreference preference = jobPreferenceRepository.findByStudent_UserId(studentUserId)
-                .map(existing -> {
-                    existing.update(ncsCode, regionCode, requestDTO.getPreferredEmploymentType(), requestDTO.getMinimumSalary());
-                    return existing;
-                })
-                .orElseGet(() -> {
-                    try {
-                        return jobPreferenceRepository.saveAndFlush(
-                                JobPreference.builder()
-                                        .student(student)
-                                        .ncsCode(ncsCode)
-                                        .regionCode(regionCode)
-                                        .preferredEmploymentType(requestDTO.getPreferredEmploymentType())
-                                        .minimumSalary(requestDTO.getMinimumSalary())
-                                        .build()
-                        );
-                    } catch (DataIntegrityViolationException e) {
-                        if (DbConstraintViolationMatcher.contains(e, UQ_STUDENT_PREFERENCE)) {
-                            log.warn("[JobPreferenceService_DbConstraintViolationMatcher 제약조건 예외처리] 동시 생성 충돌 감지 -> 재조회 및 갱신 수행. studentUserId: {}", studentUserId);
-                            JobPreference concurrentPref = jobPreferenceRepository.findByStudent_UserId(studentUserId)
-                                    .orElseThrow(() -> new BusinessException(ErrorCode.INTERNAL_ERROR, "희망조건 저장 중 오류가 발생했습니다."));
-                            concurrentPref.update(ncsCode, regionCode, requestDTO.getPreferredEmploymentType(), requestDTO.getMinimumSalary());
-                            return concurrentPref;
-                        }
-                        throw e;
-                    }
-                });
+                .orElseThrow(() -> new BusinessException(ErrorCode.INTERNAL_ERROR, "희망조건 저장 중 오류가 발생했습니다."));
+
+        preference.update(ncsCode, regionCode, requestDTO.getPreferredEmploymentType(), requestDTO.getMinimumSalary());
         log.info("[JobPreferenceService] 학생 취업 희망조건 저장 완료. studentUserId: {}", studentUserId);
         return mapToResponseDTO(preference);
     }

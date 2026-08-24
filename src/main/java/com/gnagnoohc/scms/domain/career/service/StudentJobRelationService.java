@@ -11,13 +11,12 @@ import com.gnagnoohc.scms.domain.career.repository.StudentJobRelationRepository;
 import com.gnagnoohc.scms.domain.user.entity.AppUser;
 import com.gnagnoohc.scms.domain.user.repository.AppUserRepository;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;
+import com.gnagnoohc.scms.global.common.helper.JdbcUpsertHelper;
 import com.gnagnoohc.scms.global.common.util.DateTimeUtils;
 import com.gnagnoohc.scms.global.error.BusinessException;
-import com.gnagnoohc.scms.global.error.DbConstraintViolationMatcher;
 import com.gnagnoohc.scms.global.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -25,7 +24,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.OffsetDateTime;
-import java.time.ZoneId;
 
 /**
  * 학생-채용공고 관계(온라인 지원, 관심 공고 스크랩, 전형 현황) 비즈니스 로직 서비스
@@ -45,11 +43,10 @@ import java.time.ZoneId;
 @Transactional(readOnly = true)
 public class StudentJobRelationService {
 
-    private static final String UQ_STUDENT_POSTING_RELATION = "uq_student_job_relation";
-
     private final StudentJobRelationRepository relationRepository;
     private final JobPostingRepository jobPostingRepository;
     private final AppUserRepository appUserRepository;
+    private final JdbcUpsertHelper jdbcUpsertHelper;
 
     /**
      * [학생] 온라인 채용공고 지원 신청
@@ -81,22 +78,12 @@ public class StudentJobRelationService {
             throw new BusinessException(ErrorCode.APPLICATION_PERIOD_EXPIRED);
         }
 
-        boolean alreadyApplied = relationRepository
-                .existsByStudent_UserIdAndJobPosting_JobPostingIdAndAppliedAtIsNotNullAndCanceledAtIsNull(studentUserId, requestDTO.getJobPostingId());
-        if (alreadyApplied) {
-            throw new BusinessException(ErrorCode.JOB_POSTING_ALREADY_APPLIED);
-        }
+        // 1. 관계 Row 원자적 확보 (없으면 ON CONFLICT DO NOTHING 삽입 후 조회)
+        StudentJobRelation relation = getOrCreateRelation(student, jobPosting);
 
-        StudentJobRelation relation;
-        try {
-            relation = relationRepository
-                    .findByStudent_UserIdAndJobPosting_JobPostingId(studentUserId, requestDTO.getJobPostingId())
-                    .orElseGet(() -> relationRepository.saveAndFlush(new StudentJobRelation(student, jobPosting)));
-        } catch (DataIntegrityViolationException e) {
-            if (DbConstraintViolationMatcher.contains(e, UQ_STUDENT_POSTING_RELATION)) {
-                throw new BusinessException(ErrorCode.JOB_POSTING_ALREADY_APPLIED);
-            }
-            throw e;
+        // 2. 이미 활성 지원 상태인 경우에만 중복 지원 예외 발생
+        if (relation.getAppliedAt() != null && relation.getCanceledAt() == null) {
+            throw new BusinessException(ErrorCode.JOB_POSTING_ALREADY_APPLIED);
         }
 
         relation.apply(null, "STUDENT_DIRECT");
@@ -159,9 +146,7 @@ public class StudentJobRelationService {
         AppUser student = appUserRepository.findById(studentUserId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
-        StudentJobRelation relation = relationRepository
-                .findByStudent_UserIdAndJobPosting_JobPostingId(studentUserId, jobPostingId)
-                .orElseGet(() -> relationRepository.save(new StudentJobRelation(student, jobPosting)));
+        StudentJobRelation relation = getOrCreateRelation(student, jobPosting);
 
         boolean isScrapped = relation.toggleBookmark();
 
@@ -261,6 +246,31 @@ public class StudentJobRelationService {
                 .applicationEndsAt(DateTimeUtils.toKstOffsetDateTime(relation.getJobPosting().getApplicationEndsAt()))
                 .bookmarkedAt(DateTimeUtils.toKstOffsetDateTime(relation.getBookmarkedAt()))
                 .build();
+    }
+
+    /**
+     * PostgreSQL ON CONFLICT DO NOTHING을 활용한 원자적 관계 엔티티 확보 헬퍼
+     *
+     * @param student    학생 사용자 엔티티
+     * @param jobPosting 채용공고 엔티티
+     * @return 확보된 학생-채용공고 관계 영속 엔티티
+     */
+    private StudentJobRelation getOrCreateRelation(AppUser student, JobPosting jobPosting) {
+        Instant now = Instant.now();
+        String sql = "INSERT INTO student_job_relation (user_id, job_posting_id, created_at, updated_at) " +
+                "VALUES (?, ?, ?, ?) " +
+                "ON CONFLICT (user_id, job_posting_id) DO NOTHING";
+
+        jdbcUpsertHelper.executeInsertDoNothing(
+                sql,
+                student.getUserId(),
+                jobPosting.getJobPostingId(),
+                now,
+                now
+        );
+
+        return relationRepository.findByStudent_UserIdAndJobPosting_JobPostingId(student.getUserId(), jobPosting.getJobPostingId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.INTERNAL_ERROR, "공고 관계 정보를 처리할 수 없습니다."));
     }
 
 }
