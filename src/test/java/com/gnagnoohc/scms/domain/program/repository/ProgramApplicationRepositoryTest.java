@@ -72,12 +72,14 @@ class ProgramApplicationRepositoryTest {
     }
 
     private ExtracurricularProgram saveProgram() throws Exception {
-        String suffix = String.valueOf(System.nanoTime());
-        CommonCode operatingUnitCode = saveCommonCode("DEPARTMENT", "D200-TEST-" + suffix);
-        CommonCode programTypeCode = saveCommonCode("PROGRAM_TYPE", "PT100-TEST-" + suffix);
+        // System.nanoTime()은 플랫폼마다 기준점이 달라(리눅스 CI 컨테이너는 부팅 후 경과시간이라 자릿수가 훨씬 짧을 수 있음)
+        // 자릿수를 가정한 substring이 깨질 수 있으므로, 길이가 고정된 UUID 기반 접미사를 쓴다.
+        String suffix = java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 10);
+        CommonCode operatingUnitCode = saveCommonCode("DEPARTMENT", "D200-T-" + suffix);
+        CommonCode programTypeCode = saveCommonCode("PROGRAM_TYPE", "PT100-T-" + suffix);
         Competency competency = competencyRepository.save(Competency.createTop(
-                "CP-" + suffix.substring(suffix.length() - 15), "테스트역량", "Test Competency", null, 1, 1));
-        AppUser manager = saveStudent("담당자", "MANAGER-" + System.nanoTime());
+                "CP-" + suffix, "테스트역량", "Test Competency", null, 1, 1));
+        AppUser manager = saveStudent("담당자", "MGR-" + suffix);
 
         Constructor<ExtracurricularProgram> constructor = ExtracurricularProgram.class.getDeclaredConstructor();
         constructor.setAccessible(true);
