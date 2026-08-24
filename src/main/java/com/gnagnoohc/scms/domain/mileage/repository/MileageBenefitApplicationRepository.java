@@ -1,6 +1,7 @@
 package com.gnagnoohc.scms.domain.mileage.repository;
 
 import com.gnagnoohc.scms.domain.mileage.entity.MileageBenefitApplication;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -21,6 +22,7 @@ public interface MileageBenefitApplicationRepository extends JpaRepository<Milea
     );
 
     /** 학생 본인의 장학금 신청 이력을 최신 신청순으로 조회한다. */
+    @EntityGraph(attributePaths = "benefitPolicy")
     Page<MileageBenefitApplication> findAllByStudent_UserIdAndBenefitPolicy_BenefitTypeOrderByAppliedAtDesc(
             Integer studentId,
             String benefitType,
