@@ -10,7 +10,11 @@ import java.time.Instant;
 import java.util.Optional;
 
 public interface AppUserRepository extends JpaRepository<AppUser, Integer> {
-    Optional<AppUser> findByUniversityNo(String universityNo);
+
+    //부서코드를 JOIN FETCH로 미리 로딩
+    @Query("SELECT u FROM AppUser u LEFT JOIN FETCH u.departmentCode WHERE u.universityNo = :universityNo")
+    Optional<AppUser> findByUniversityNo(@Param("universityNo") String universityNo);
+
     boolean existsByUniversityNo(String universityNo);
 
     /**
