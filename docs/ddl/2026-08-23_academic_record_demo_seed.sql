@@ -19,56 +19,83 @@
 
 BEGIN;
 
--- 1. 대상 학생 목록 + 데모용 순번. 세션 스코프 임시 테이블이라 이 스크립트를 한 번에
---    실행하는 psql 세션 안에서만 유효하고, 세션이 끝나면 자동으로 사라진다.
-CREATE TEMP TABLE _academic_seed_target AS
-SELECT u.user_id,
-       ROW_NUMBER() OVER (ORDER BY u.user_id) AS rn
-FROM app_user u
-WHERE u.user_type = 'STUDENT'
-  AND NOT EXISTS (SELECT 1 FROM student_academic_detail d WHERE d.user_id = u.user_id);
-
--- 2. student_academic_detail — 시드 대상 MAJOR 8개를 순번으로 돌려가며 배정하고,
---    학년은 1~4를 순번으로 배정하되 졸업 케이스(rn % 6 = 3, 3번 참고)는 4학년으로
+-- 1. 대상 학생 목록 + 데모용 순번 + 학년 + 입학연도. 세션 스코프 임시 테이블이라 이
+--    스크립트를 한 번에 실행하는 psql 세션 안에서만 유효하고, 세션이 끝나면 자동으로
+--    사라진다.
+--
+--    grade: 1~4를 순번으로 배정하되 졸업 케이스(rn % 6 = 3, 4번 참고)는 4학년으로
 --    강제한다(원래 rn%4만으로 학년을 정하면 1학년 졸업생 같은 모순 데이터가 생김).
---    completed_semesters는 항상 이 grade에서 파생시켜(grade*2-1), 졸업 케이스만 8학기로
---    덮어써 grade=4/8학기 조합이 어긋나지 않게 한다. 생년월일은 20살 전후로 흩어지도록
---    rn만큼 날짜를 밀어서 생성한다.
+--
+--    admission_year:  CURRENT_DATE에서 매번 계산한다
+--    — 국내 대학 학년도는 3월에 바뀌므로(3월 이전은 전년도 학년도)
+--    "현재 학년도 -(grade - 1)"로 역산한다. grade·admission_year를 이 표 하나에서만 계산해서 2번(상세
+--    정보)·3번(입학 이력) 두 INSERT가 서로 다른 값을 쓰는 일이 없게 한다.
+CREATE TEMP TABLE _academic_seed_target AS
+WITH base AS (
+    SELECT u.user_id,
+           ROW_NUMBER() OVER (ORDER BY u.user_id) AS rn
+    FROM app_user u
+    WHERE u.user_type = 'STUDENT'
+      AND NOT EXISTS (SELECT 1 FROM student_academic_detail d WHERE d.user_id = u.user_id)
+),
+graded AS (
+    SELECT
+        user_id,
+        rn,
+        CASE WHEN rn % 6 = 3 THEN 4
+             ELSE CASE (rn % 4) WHEN 1 THEN 1 WHEN 2 THEN 2 WHEN 3 THEN 3 ELSE 4 END
+        END AS grade
+    FROM base
+),
+current_academic_year AS (
+    -- 3월 이전(1~2월)이면 아직 전년도 학년도가 진행 중이다.
+    SELECT (CASE WHEN EXTRACT(MONTH FROM CURRENT_DATE) >= 3
+                 THEN EXTRACT(YEAR FROM CURRENT_DATE)
+                 ELSE EXTRACT(YEAR FROM CURRENT_DATE) - 1
+            END)::int AS year
+)
+SELECT
+    g.user_id,
+    g.rn,
+    g.grade,
+    (cy.year - (g.grade - 1)) AS admission_year
+FROM graded g CROSS JOIN current_academic_year cy;
+
+-- 2. student_academic_detail — 시드 대상 MAJOR 8개를 순번으로 돌려가며 배정한다.
+--    grade/completed_semesters는 1번에서 계산한 grade를 그대로 쓴다(grade*2-1, 졸업
+--    케이스만 8학기로 덮어써 grade=4/8학기 조합이 어긋나지 않게 한다). 생년월일은
+--    "만 20세 되는 해의 3/2"를 기준점 삼아 rn만큼 날짜를 밀어서 20살 전후로 흩어지게
+--    생성한다 — 기준점 자체를 CURRENT_DATE에서 매번 계산해서 스크립트를 몇 년 뒤에 실행해도 계속 "20살 전후" 데이터가 나온다.
 INSERT INTO student_academic_detail
     (user_id, major_code_id, grade, gender, birth_date, completed_semesters, created_at, updated_at)
 SELECT
-    g.user_id,
+    t.user_id,
     m.code_id,
-    g.grade,
-    CASE WHEN g.rn % 2 = 0 THEN 'M' ELSE 'F' END,
-    (DATE '2004-03-02' - ((g.rn % 4) * 365 || ' days')::interval - ((g.rn % 30) || ' days')::interval)::date,
-    CASE WHEN g.rn % 6 = 3 THEN 8 ELSE (g.grade * 2) - 1 END,
+    t.grade,
+    CASE WHEN t.rn % 2 = 0 THEN 'M' ELSE 'F' END,
+    (make_date(EXTRACT(YEAR FROM CURRENT_DATE)::int - 20, 3, 2)
+        - ((t.rn % 4) * 365 || ' days')::interval
+        - ((t.rn % 30) || ' days')::interval)::date,
+    CASE WHEN t.rn % 6 = 3 THEN 8 ELSE (t.grade * 2) - 1 END,
     now(), now()
-FROM (
-    SELECT
-        t.user_id,
-        t.rn,
-        CASE WHEN t.rn % 6 = 3 THEN 4
-             ELSE CASE (t.rn % 4) WHEN 1 THEN 1 WHEN 2 THEN 2 WHEN 3 THEN 3 ELSE 4 END
-        END AS grade
-    FROM _academic_seed_target t
-) g
+FROM _academic_seed_target t
 JOIN LATERAL (
     SELECT code_id
     FROM common_code
     WHERE code_group = 'MAJOR'
     ORDER BY sort_order
-    OFFSET (g.rn - 1) % (SELECT count(*) FROM common_code WHERE code_group = 'MAJOR')
+    OFFSET (t.rn - 1) % (SELECT count(*) FROM common_code WHERE code_group = 'MAJOR')
     LIMIT 1
 ) m ON true;
 
 -- 3. student_academic_change — 학생 전원에게 입학(AC100/AR100) 행을 하나씩 넣는다.
---    change_date는 학년 배정과 맞춰 "입학연도 3/2"로 역산한다(2027년 기준 학년도).
+--    change_date는 1번에서 계산해둔 admission_year의 3/2로 만든다 — grade와 같은 표에서
+--    나온 값이라 졸업 케이스도 입학연도·학년·학위정보가 서로 어긋나지 않는다.
 INSERT INTO student_academic_change
     (student_id, change_date, change_type_code_id, change_reason_code_id, note, created_by, created_at)
 SELECT
     t.user_id,
-    make_date(2027 - (CASE (t.rn % 4) WHEN 1 THEN 1 WHEN 2 THEN 2 WHEN 3 THEN 3 ELSE 4 END), 3, 2),
+    make_date(t.admission_year, 3, 2),
     (SELECT code_id FROM common_code WHERE code = 'AC100'),
     (SELECT code_id FROM common_code WHERE code = 'AR100'),
     '신입학',
