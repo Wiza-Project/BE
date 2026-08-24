@@ -82,6 +82,8 @@ class ProgramApplicationServiceTest {
                 1, now.minusSeconds(3600), now.plusSeconds(3600), 10);
 
         when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
+        when(applicationRepository.findByProgram_ProgramIdAndStudent_UserIdForUpdate(1, 100))
+                .thenReturn(Optional.empty());
         when(applicationRepository.countByProgram_ProgramIdAndApplicationStatus(1, "APPLIED")).thenReturn(9L);
         when(applicationRepository.insertApplication(eq(1), eq(100), eq("APPLIED"), eq(null), any()))
                 .thenReturn(1);
@@ -100,6 +102,8 @@ class ProgramApplicationServiceTest {
                 1, now.minusSeconds(3600), now.plusSeconds(3600), 10);
 
         when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
+        when(applicationRepository.findByProgram_ProgramIdAndStudent_UserIdForUpdate(1, 100))
+                .thenReturn(Optional.empty());
         when(applicationRepository.countByProgram_ProgramIdAndApplicationStatus(1, "APPLIED")).thenReturn(10L);
         when(applicationRepository.findMaxWaitlistOrderByProgramId(1)).thenReturn(2);
         when(applicationRepository.insertApplication(eq(1), eq(100), eq("WAITLISTED"), eq(3), any()))
@@ -147,9 +151,89 @@ class ProgramApplicationServiceTest {
                 1, now.minusSeconds(3600), now.plusSeconds(3600), 10);
 
         when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
+        when(applicationRepository.findByProgram_ProgramIdAndStudent_UserIdForUpdate(1, 100))
+                .thenReturn(Optional.empty());
         when(applicationRepository.countByProgram_ProgramIdAndApplicationStatus(1, "APPLIED")).thenReturn(0L);
         when(applicationRepository.insertApplication(anyInt(), anyInt(), eq("APPLIED"), eq(null), any()))
                 .thenThrow(new DataIntegrityViolationException("duplicate"));
+
+        assertThatThrownBy(() -> programApplicationService.apply(1, 100))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.ALREADY_APPLIED);
+    }
+
+    @Test
+    void apply_whenActiveApplicationExists_throwsAlreadyAppliedWithoutInserting() throws Exception {
+        Instant now = Instant.now();
+        ExtracurricularProgram program = buildProgramFixture(
+                1, now.minusSeconds(3600), now.plusSeconds(3600), 10);
+        ProgramApplication existing = buildApplicationFixture(5, program, "APPLIED", 100);
+
+        when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
+        when(applicationRepository.findByProgram_ProgramIdAndStudent_UserIdForUpdate(1, 100))
+                .thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> programApplicationService.apply(1, 100))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.ALREADY_APPLIED);
+
+        verify(applicationRepository, never()).insertApplication(anyInt(), anyInt(), any(), any(), any());
+        verify(applicationRepository, never()).reviveApplication(anyInt(), any(), any(), any());
+    }
+
+    @Test
+    void apply_whenRejectedApplicationExists_throwsAlreadyApplied() throws Exception {
+        Instant now = Instant.now();
+        ExtracurricularProgram program = buildProgramFixture(
+                1, now.minusSeconds(3600), now.plusSeconds(3600), 10);
+        ProgramApplication existing = buildApplicationFixture(5, program, "REJECTED", 100);
+
+        when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
+        when(applicationRepository.findByProgram_ProgramIdAndStudent_UserIdForUpdate(1, 100))
+                .thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> programApplicationService.apply(1, 100))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.ALREADY_APPLIED);
+
+        verify(applicationRepository, never()).reviveApplication(anyInt(), any(), any(), any());
+    }
+
+    @Test
+    void apply_whenCancelledApplicationExists_revivesExistingRow() throws Exception {
+        Instant now = Instant.now();
+        ExtracurricularProgram program = buildProgramFixture(
+                1, now.minusSeconds(3600), now.plusSeconds(3600), 10);
+        ProgramApplication existing = buildApplicationFixture(5, program, "CANCELLED", 100);
+
+        when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
+        when(applicationRepository.findByProgram_ProgramIdAndStudent_UserIdForUpdate(1, 100))
+                .thenReturn(Optional.of(existing));
+        when(applicationRepository.countByProgram_ProgramIdAndApplicationStatus(1, "APPLIED")).thenReturn(0L);
+        when(applicationRepository.reviveApplication(eq(5), eq("APPLIED"), eq(null), any())).thenReturn(1);
+
+        ProgramApplyResponseDTO response = programApplicationService.apply(1, 100);
+
+        assertThat(response.applicationId()).isEqualTo(5);
+        assertThat(response.applicationStatus()).isEqualTo("APPLIED");
+        verify(applicationRepository, never()).insertApplication(anyInt(), anyInt(), any(), any(), any());
+    }
+
+    @Test
+    void apply_whenReviveRaceLost_throwsAlreadyApplied() throws Exception {
+        Instant now = Instant.now();
+        ExtracurricularProgram program = buildProgramFixture(
+                1, now.minusSeconds(3600), now.plusSeconds(3600), 10);
+        ProgramApplication existing = buildApplicationFixture(5, program, "CANCELLED", 100);
+
+        when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
+        when(applicationRepository.findByProgram_ProgramIdAndStudent_UserIdForUpdate(1, 100))
+                .thenReturn(Optional.of(existing));
+        when(applicationRepository.countByProgram_ProgramIdAndApplicationStatus(1, "APPLIED")).thenReturn(0L);
+        when(applicationRepository.reviveApplication(eq(5), eq("APPLIED"), eq(null), any())).thenReturn(0);
 
         assertThatThrownBy(() -> programApplicationService.apply(1, 100))
                 .isInstanceOf(BusinessException.class)

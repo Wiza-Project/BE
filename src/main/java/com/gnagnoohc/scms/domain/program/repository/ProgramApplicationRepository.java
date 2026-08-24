@@ -46,10 +46,38 @@ public interface ProgramApplicationRepository extends JpaRepository<ProgramAppli
 
     /**
      * "이 학생이 이 프로그램에 낸 신청 건"을 applicationId 없이 (programId, 로그인한 학생 id)만으로 찾을 때 사용한다
-     * (예: ProgramAttendanceService.listMyAttendance).
+     * (예: ProgramAttendanceService.listMyAttendance, ProgramService.getDetail).
      * program_id+student_id 조합은 uq_program_application_program_student 유니크 제약이 걸려있어 항상 0건 또는 1건이다.
      */
     Optional<ProgramApplication> findByProgram_ProgramIdAndStudent_UserId(Integer programId, Integer studentId);
+
+    /**
+     * findByProgram_ProgramIdAndStudent_UserId의 락 버전. ProgramApplicationService.apply()가 재신청(취소된
+     * 건을 되살리는 경우) 여부를 판단하고 그대로 UPDATE하는 사이에 같은 학생의 동시 재신청 요청이 끼어드는
+     * 경쟁 조건을 막기 위해 사용한다 (findByIdForUpdate와 동일 패턴).
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT a FROM ProgramApplication a WHERE a.program.programId = :programId AND a.student.userId = :studentId")
+    Optional<ProgramApplication> findByProgram_ProgramIdAndStudent_UserIdForUpdate(
+            @Param("programId") Integer programId, @Param("studentId") Integer studentId);
+
+    /**
+     * 여러 프로그램에 대해, 로그인한 학생 본인의 신청 상태를 한 번에 조회한다(목록 조회 N+1 방지,
+     * countActiveApplicantsByProgramIds와 같은 이유). program_id+student_id 조합은 유니크 제약이 걸려있어
+     * 프로그램 하나당 결과는 0건 또는 1건이다.
+     */
+    @Query("""
+        SELECT a.program.programId AS programId, a.applicationStatus AS status
+        FROM ProgramApplication a
+        WHERE a.student.userId = :studentId AND a.program.programId IN :programIds
+        """)
+    List<MyApplicationStatusProjection> findMyApplicationStatusesByProgramIds(
+            @Param("studentId") Integer studentId, @Param("programIds") List<Integer> programIds);
+
+    interface MyApplicationStatusProjection {
+        Integer getProgramId();
+        String getStatus();
+    }
 
     /**
      * 신청 건 row에 비관적 락을 걸어 조회한다. 승인/반려 처리 중 같은 신청 건이 동시에
@@ -308,4 +336,40 @@ public interface ProgramApplicationRepository extends JpaRepository<ProgramAppli
                             // 취소 사유. 학생이 입력하지 않았으면 null.
                             @Param("reason") String reason,
                             @Param("now") Instant now);
+
+    /**
+     * ── 여기부터 "취소된 신청 되살리기(재신청, Update)" 기능 ────────────────────────────
+     *
+     * 학생이 스스로 취소(CANCELLED)한 신청 건에 같은 프로그램으로 다시 신청하면, program_id+student_id
+     * 유니크 제약 때문에 새 row를 INSERT할 수 없다. 대신 기존 row를 새 신청인 것처럼 되살린다: 신청
+     * 상태/대기순번/시각만 새로 채우고, 이전 취소/반려/이수판정 이력에 해당하는 컬럼은 전부 초기화한다.
+     * WHERE 절의 application_status = 'CANCELLED' 조건은 ProgramApplicationService.apply()에서 이미
+     * 확인한 상태가, 이 UPDATE 실행 직전까지 여전히 CANCELLED인지 재확인한다(updateCancellation과
+     * 동일한 경쟁 조건 방지 패턴) — 0건이면 그 사이 다른 요청이 먼저 되살렸거나 처리했다는 뜻이다.
+     */
+    @Modifying(clearAutomatically = true)
+    @Query(value = """
+        UPDATE program_application
+        SET application_status = :applicationStatus,
+            waitlist_order = :waitlistOrder,
+            processed_by = NULL,
+            processed_at = NULL,
+            decision_reason = NULL,
+            canceled_at = NULL,
+            cancellation_reason = NULL,
+            completion_status = NULL,
+            survey_completed = false,
+            certificate_no = NULL,
+            certificate_issued_at = NULL,
+            judged_by = NULL,
+            completed_at = NULL,
+            updated_at = :now
+        WHERE application_id = :applicationId
+          AND application_status = 'CANCELLED'
+        """, nativeQuery = true)
+    int reviveApplication(@Param("applicationId") Integer applicationId,
+                           // "APPLIED" 또는 "WAITLISTED". apply()가 정원 비교 결과로 결정한다.
+                           @Param("applicationStatus") String applicationStatus,
+                           @Param("waitlistOrder") Integer waitlistOrder,
+                           @Param("now") Instant now);
 }

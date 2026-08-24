@@ -39,6 +39,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -80,7 +81,21 @@ public class ProgramApplicationService {
         }
 
         /**
-         * (c) 정원 확인 및 상태 결정 ----------------------------------------------------
+         * (c) 기존 신청 이력 확인 --------------------------------------------------------
+         * program_id+student_id 조합은 uq_program_application_program_student 유니크 제약이 걸려있어
+         * 이 학생의 이 프로그램에 대한 신청 건은 항상 0건 또는 1건이다. 기존 건이 있는데 그 상태가
+         * CANCELLED(학생이 스스로 취소)가 아니면, 즉 APPLIED/WAITLISTED/APPROVED(진행 중)거나
+         * REJECTED(운영부서가 반려, 재신청 불가 정책)이면 재신청을 허용하지 않는다.
+         * CANCELLED인 경우에만 아래 (e)에서 기존 row를 새 신청으로 되살린다(INSERT 대신 UPDATE).
+         */
+        Optional<ProgramApplication> existing =
+                applicationRepository.findByProgram_ProgramIdAndStudent_UserIdForUpdate(programId, studentId);
+        if (existing.isPresent() && !ApplicationStatus.CANCELLED.name().equals(existing.get().getApplicationStatus())) {
+            throw new BusinessException(ErrorCode.ALREADY_APPLIED);
+        }
+
+        /**
+         * (d) 정원 확인 및 상태 결정 ----------------------------------------------------
          * 정원 내 신청("APPLIED") 건수가 아직 정원(capacity)보다 적으면 정원 내 신청으로,
          * 그렇지 않으면 대기 신청("WAITLISTED")으로 접수하고 다음 대기순번을 매긴다.
          */
@@ -97,14 +112,25 @@ public class ProgramApplicationService {
             waitlistOrder = applicationRepository.findMaxWaitlistOrderByProgramId(programId) + 1;
         }
 
-        // (d) 실제 DB 반영 -------------------------------------------------------------
+        // (e) 실제 DB 반영 -------------------------------------------------------------
         Integer applicationId;
-        try {
-            applicationId = applicationRepository.insertApplication(
-                    programId, studentId, status.name(), waitlistOrder, now);
-        } catch (DataIntegrityViolationException e) {
-            // uq_program_application_program_student 유니크 제약 위반 = 이미 신청한 프로그램.
-            throw new BusinessException(ErrorCode.ALREADY_APPLIED);
+        if (existing.isPresent()) {
+            // 취소됐던 기존 row를 새 신청으로 되살린다. WHERE 절이 여전히 CANCELLED인지 재확인하므로,
+            // 0건이면 그 사이 다른 요청이 먼저 처리한 것이니 "이미 신청됨"으로 처리한다.
+            int updatedRows = applicationRepository.reviveApplication(
+                    existing.get().getApplicationId(), status.name(), waitlistOrder, now);
+            if (updatedRows == 0) {
+                throw new BusinessException(ErrorCode.ALREADY_APPLIED);
+            }
+            applicationId = existing.get().getApplicationId();
+        } else {
+            try {
+                applicationId = applicationRepository.insertApplication(
+                        programId, studentId, status.name(), waitlistOrder, now);
+            } catch (DataIntegrityViolationException e) {
+                // uq_program_application_program_student 유니크 제약 위반 = 이미 신청한 프로그램(동시 요청 경쟁).
+                throw new BusinessException(ErrorCode.ALREADY_APPLIED);
+            }
         }
 
         return new ProgramApplyResponseDTO(
