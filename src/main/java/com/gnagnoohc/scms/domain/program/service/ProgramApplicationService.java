@@ -14,9 +14,14 @@ import com.gnagnoohc.scms.domain.program.repository.ProgramApplicationRepository
 import com.gnagnoohc.scms.domain.program.repository.ProgramAttendanceRepository;
 import com.gnagnoohc.scms.domain.program.repository.ProgramMileageTransactionRepository;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;
+import com.gnagnoohc.scms.global.common.notification.ModuleCode;
+import com.gnagnoohc.scms.global.common.notification.NotificationRequest;
+import com.gnagnoohc.scms.global.common.notification.NotificationSender;
+import com.gnagnoohc.scms.global.common.notification.NotificationType;
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -34,12 +39,14 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 @Transactional
+@Slf4j
 public class ProgramApplicationService {
 
     private final ExtracurricularProgramRepository programRepository;
     private final ProgramApplicationRepository applicationRepository;
     private final ProgramAttendanceRepository attendanceRepository;
     private final ProgramMileageTransactionRepository mileageTransactionRepository;
+    private final NotificationSender notificationSender;
 
     /**
      * 학생의 프로그램 참여 신청을 접수한다. 매개변수 2개의 의미:
@@ -212,6 +219,16 @@ public class ProgramApplicationService {
             throw new BusinessException(ErrorCode.APPLICATION_NOT_CANCELABLE);
         }
 
+        /**
+         * (f) 정원 슬롯이 실제로 비었다면 대기 1순위에게 알림 ------------------------------------
+         * WAITLISTED는 애초에 정원 외였으므로, 그 상태였던 신청이 취소된 경우는 자리 발생이 아니다.
+         * APPLIED/APPROVED만 정원을 차지하던 상태이므로 그 경우에만 대기자에게 알린다.
+         */
+        if (ApplicationStatus.APPLIED.name().equals(currentStatus)
+                || ApplicationStatus.APPROVED.name().equals(currentStatus)) {
+            notifyNextWaitlistedApplicant(programId, application.getProgram());
+        }
+
         return new ProgramApplicationCancelResponseDTO(
                 applicationId, programId, ApplicationStatus.CANCELLED.name(), ApplicationStatus.CANCELLED.getLabel(),
                 reason, now);
@@ -377,5 +394,31 @@ public class ProgramApplicationService {
         return new ProgramApplicationDecisionResponseDTO(
                 application.getApplicationId(), application.getProgram().getProgramId(),
                 decision.name(), decision.getLabel(), reason, staffId, now);
+    }
+
+    /**
+     * 취소로 정원 슬롯이 비었을 때, 대기 1순위 학생에게 "자리가 났다"는 알림을 보낸다.
+     * NotificationSender.send()는 REQUIRES_NEW라 별도 트랜잭션에서 실행되지만, 여기서 예외를
+     * 잡아주지 않으면 그 예외가 cancel()의 트랜잭션까지 롤백시켜버린다 — 알림 발송 실패가
+     * 이미 반영된 취소 처리 자체를 무효로 만들어서는 안 되므로, 실패는 로그만 남기고 무시한다.
+     */
+    private void notifyNextWaitlistedApplicant(Integer programId, ExtracurricularProgram program) {
+        applicationRepository.findFirstByProgram_ProgramIdAndApplicationStatusOrderByWaitlistOrderAsc(
+                        programId, ApplicationStatus.WAITLISTED.name())
+                .ifPresent(nextInLine -> {
+                    try {
+                        notificationSender.send(new NotificationRequest(
+                                nextInLine.getStudent().getUserId(),
+                                NotificationType.WAITLIST_SLOT_OPENED,
+                                ModuleCode.PROGRAM,
+                                "대기중인 프로그램에 자리가 났습니다",
+                                "'%s' 프로그램에 자리가 생겼습니다. 지원 확정을 원하시면 서둘러 확인해주세요."
+                                        .formatted(program.getProgramName())
+                        ));
+                    } catch (Exception e) {
+                        log.warn("대기자 자리 발생 알림 발송 실패 (applicationId={}, programId={})",
+                                nextInLine.getApplicationId(), programId, e);
+                    }
+                });
     }
 }
