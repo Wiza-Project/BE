@@ -19,6 +19,7 @@ import com.gnagnoohc.scms.domain.program.repository.ProgramSessionRepository;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;
 import com.gnagnoohc.scms.global.common.repository.CommonCodeRepository;
 import com.gnagnoohc.scms.global.error.BusinessException;
+import com.gnagnoohc.scms.global.error.DbConstraintViolationMatcher;
 import com.gnagnoohc.scms.global.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -495,29 +496,23 @@ public class ProgramService {
     /**
      * FK 제약 위반 메시지에는 PostgreSQL이 항상 위반된 컬럼명을 "Key (컬럼명)=(값) is not present..." 형식으로 담아준다.
      * 제약 조건 이름(마이그레이션에서 어떻게 명명했는지)에 기대지 않고 컬럼명 문자열만으로 어떤 참조 값이 없는지 구분한다.
+     * (DbConstraintViolationMatcher가 원인 예외 메시지에서 토큰 포함 여부를 안전하게 검사해준다.)
      */
     private BusinessException resolveForeignKeyViolation(DataIntegrityViolationException e) {
-        /**
-         * e.getMostSpecificCause()는 스프링이 감싸놓은 예외 껍데기를 벗기고, 실제로 DB 드라이버가 던진
-         * 가장 안쪽의 원인 예외를 꺼내온다. 그 예외의 메시지 안에 "어떤 컬럼이 문제였는지"가 문자열로 들어있다.
-         * (참고: 이 메시지는 로그로만 쓰이고, 서버가 실제로 클라이언트에게 응답하는 건 아래 고정된 ErrorCode 메시지뿐이다.)
-         */
-        String detail = e.getMostSpecificCause().getMessage();
-
         // 메시지 안에 "operating_unit_code_id"라는 컬럼명이 들어있다면, 존재하지 않는 운영 단위 코드를 참조한 것.
-        if (detail.contains("operating_unit_code_id")) {
+        if (DbConstraintViolationMatcher.contains(e, "operating_unit_code_id")) {
             return new BusinessException(ErrorCode.OPERATING_UNIT_NOT_FOUND);
         }
         // "program_type_code_id"가 들어있다면, 존재하지 않는 프로그램 유형(분류) 코드를 참조한 것.
-        if (detail.contains("program_type_code_id")) {
+        if (DbConstraintViolationMatcher.contains(e, "program_type_code_id")) {
             return new BusinessException(ErrorCode.PROGRAM_CATEGORY_NOT_FOUND);
         }
         // "competency_id"가 들어있다면, 존재하지 않는 핵심역량을 참조한 것.
-        if (detail.contains("competency_id")) {
+        if (DbConstraintViolationMatcher.contains(e, "competency_id")) {
             return new BusinessException(ErrorCode.COMPETENCY_NOT_FOUND);
         }
         // "mileage_policy_id"가 들어있다면, 존재하지 않는 마일리지 정책을 참조한 것.
-        if (detail.contains("mileage_policy_id")) {
+        if (DbConstraintViolationMatcher.contains(e, "mileage_policy_id")) {
             return new BusinessException(ErrorCode.MILEAGE_POLICY_NOT_FOUND);
         }
         // 위 4개 컬럼 중 어디에도 해당하지 않는 예상치 못한 FK 위반이라면, 일반적인 "입력값 오류"로 처리한다.
