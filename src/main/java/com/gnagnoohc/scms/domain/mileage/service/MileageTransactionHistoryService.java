@@ -61,6 +61,7 @@ public class MileageTransactionHistoryService {
 
         ProgramApplication programApplication = resolveProgramApplication(transaction);
         ExternalActivityClaim externalActivityClaim = resolveExternalActivityClaim(transaction);
+        MileagePolicy policy = resolveMileagePolicy(transaction);
 
         return new MileageTransactionHistoryResponse.Detail(
                 transaction.getMileageTransactionId(),
@@ -72,9 +73,18 @@ public class MileageTransactionHistoryService {
                         ? transaction.getPostedAt()
                         : transaction.getCreatedAt(),
                 resolveSourceType(programApplication, externalActivityClaim),
-                toPolicyDetail(transaction.getMileagePolicy()),
+                toPolicyDetail(policy),
                 toProgramDetail(programApplication),
                 toExternalActivityDetail(externalActivityClaim));
+    }
+
+    private MileagePolicy resolveMileagePolicy(MileageTransaction transaction) {
+        if (transaction.getMileagePolicy() != null) {
+            return transaction.getMileagePolicy();
+        }
+        return transaction.getReversalOfTransaction() == null
+                ? null
+                : transaction.getReversalOfTransaction().getMileagePolicy();
     }
 
     private ProgramApplication resolveProgramApplication(MileageTransaction transaction) {
