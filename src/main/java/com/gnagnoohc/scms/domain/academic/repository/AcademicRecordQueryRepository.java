@@ -147,11 +147,20 @@ public class AcademicRecordQueryRepository {
     /**
      * grade는 컨트롤러 단(@Min(1)/@Max(4), AdminStudentSearchConditionDTO)에서 이미 걸러지지만,
      * 이 레포지토리가 다른 경로에서 검증 없이 호출될 가능성까지 막기 위해 여기서도 한 번 더
-     * 범위를 확인한다
+     * 범위를 확인한다.
+     *
+     * <p>{@code null}(미지정)과 "범위 밖 값"을 다르게 취급한다 — null이면 조건 자체를 안 걸어
+     * 전체를 보여주는 게 맞지만, 65537처럼 범위 밖 값이 들어왔는데 조건을 그냥 빼버리면
+     * "필터링이 무시되고 전체 목록"이라는, 요청한 것과 정반대의 결과가 나간다. 그래서 범위
+     * 밖 값은 {@link Expressions#FALSE}로 항상 매칭 안 되게 만든다({@code grade}는
+     * DB CHECK 제약(1~4)이 있어 실제로 이 범위 밖 값과 일치하는 학생은 존재할 수 없다).
      */
     private BooleanExpression gradeEq(Integer grade) {
-        if (grade == null || grade < 1 || grade > 4) {
+        if (grade == null) {
             return null;
+        }
+        if (grade < 1 || grade > 4) {
+            return Expressions.FALSE;
         }
         return studentAcademicDetail.grade.eq(grade.shortValue());
     }
