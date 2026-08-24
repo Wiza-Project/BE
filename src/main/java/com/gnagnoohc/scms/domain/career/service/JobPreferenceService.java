@@ -81,9 +81,9 @@ public class JobPreferenceService {
 
         // PostgreSQL ON CONFLICT DO NOTHING을 통한 원자적 초기 row 확보 (JPA 트랜잭션 롤백 오염 방지_코드래빗 리뷰 적용)
         Instant now = Instant.now();
-        String sql = "INSERT INTO job_preference (user_id, ncs_standard_id, preferred_region_code_id, preferred_employment_type, minimum_salary, created_at, updated_at) " +
+        String sql = "INSERT INTO job_preference (student_id, ncs_code_id, preferred_region_code_id, preferred_employment_type, minimum_salary, created_at, updated_at) " +
                 "VALUES (?, ?, ?, ?, ?, ?, ?) " +
-                "ON CONFLICT (user_id) DO NOTHING";
+                "ON CONFLICT (student_id) DO NOTHING";
 
         Integer ncsCodeId = ncsCode != null ? ncsCode.getCodeId() : null;
         Integer regionCodeId = regionCode != null ? regionCode.getCodeId() : null;

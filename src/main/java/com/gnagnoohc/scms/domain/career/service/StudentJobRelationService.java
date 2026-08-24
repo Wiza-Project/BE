@@ -257,9 +257,9 @@ public class StudentJobRelationService {
      */
     private StudentJobRelation getOrCreateRelation(AppUser student, JobPosting jobPosting) {
         Instant now = Instant.now();
-        String sql = "INSERT INTO student_job_relation (user_id, job_posting_id, created_at, updated_at) " +
+        String sql = "INSERT INTO student_job_relation (student_id, job_posting_id, created_at, updated_at) " +
                 "VALUES (?, ?, ?, ?) " +
-                "ON CONFLICT (user_id, job_posting_id) DO NOTHING";
+                "ON CONFLICT (student_id, job_posting_id) DO NOTHING";
 
         jdbcUpsertHelper.executeInsertDoNothing(
                 sql,

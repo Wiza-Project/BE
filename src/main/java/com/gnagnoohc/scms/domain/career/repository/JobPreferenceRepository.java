@@ -1,7 +1,9 @@
 package com.gnagnoohc.scms.domain.career.repository;
 
 import com.gnagnoohc.scms.domain.career.entity.JobPreference;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -25,12 +27,18 @@ public interface JobPreferenceRepository extends JpaRepository<JobPreference, In
     /**
      * 학생 계정 식별자(PK)를 기준으로 등록된 취업 희망조건 단건을 페치 조인으로 조회
      *
+     * [단건 조회 및 동시성 락] 학생 PK와 채용공고 PK로 관계 엔티티 조회 (비관적 쓰기 락 적용)
+     *
+     * <p>동시에 toggleScrap과 applyJob이 호출되더라도 한 트랜잭션이 완료될 때까지
+     * 다른 트랜잭션을 대기시켜 덮어쓰기(Lost Update)를 원천 차단</p>
+     *
      * <p>단일 연관관계 객체({@code AppUser}, {@code CommonCode})만을 페치 조인 처리
      * & ncsCode와 regionCode는 CommonCode 공통코드</p>
      *
      * @param studentUserId 대상 학생 계정 식별자 (PK)
      * @return 취업 희망조건 엔티티를 포함한 {@link Optional} 객체
      */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT jp FROM JobPreference jp " +
             "JOIN FETCH jp.student s " +
             "LEFT JOIN FETCH jp.ncsCode " +
