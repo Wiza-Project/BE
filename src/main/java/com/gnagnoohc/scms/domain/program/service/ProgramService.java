@@ -163,11 +163,15 @@ public class ProgramService {
      * ── "수정(Update)" 기능 ──────────────────────────────────────────────
      *
      * 프로그램 하나를 수정하는 메서드. 매개변수 3개의 의미:
-     *   programId     : 수정할 프로그램의 PK (URL 경로에서 옴)
-     *   request       : 수정할 내용이 담긴 요청 DTO (요청 바디에서 옴)
-     *   currentUserId : 지금 로그인해서 이 요청을 보낸 사용자의 id (인증 정보에서 옴, 클라이언트가 위조 불가)
+     *   programId        : 수정할 프로그램의 PK (URL 경로에서 옴)
+     *   request          : 수정할 내용이 담긴 요청 DTO (요청 바디에서 옴)
+     *   currentUserId    : 지금 로그인해서 이 요청을 보낸 사용자의 id (인증 정보에서 옴, 클라이언트가 위조 불가)
+     *   departmentCodeId : 로그인한 사용자가 소속된 부서의 CommonCode PK (인증 정보에서 옴, 클라이언트가 위조 불가)
+     *                    → 비교과운영부서(D200) 소속인지 검증하는 데만 쓰인다. 등록 이후 다른 부서로 옮겼다면
+     *                      본인이 등록한 프로그램이라도 더 이상 수정할 수 없어야 하므로, 소유자 확인과 별개로 매번 다시 검사한다.
      */
-    public ProgramUpdateResponseDTO update(Integer programId, ProgramUpdateRequestDTO request, Integer currentUserId) {
+    public ProgramUpdateResponseDTO update(Integer programId, ProgramUpdateRequestDTO request, Integer currentUserId,
+                                            Integer departmentCodeId) {
 
         /**
          * (a) 존재 확인 ------------------------------------------------------------
@@ -177,6 +181,14 @@ public class ProgramService {
          */
         ExtracurricularProgram program = programRepository.findById(programId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PROGRAM_NOT_FOUND));
+
+        /**
+         * (a-1) 부서 권한 확인 -----------------------------------------------------------
+         * register()의 (0)단계와 동일한 이유로, 지금도 비교과운영부서(D200) 소속인지 검증한다.
+         */
+        if (!isOperatingDepartment(departmentCodeId)) {
+            throw new BusinessException(ErrorCode.DEPARTMENT_FORBIDDEN);
+        }
 
         /**
          * (b) 소유자 확인 ------------------------------------------------------------
@@ -400,14 +412,24 @@ public class ProgramService {
      * ── "삭제(Delete)" 기능 ──────────────────────────────────────────────
      *
      * 프로그램 하나를 삭제하는 메서드. 매개변수 2개의 의미:
-     *   programId     : 삭제할 프로그램의 PK (URL 경로에서 옴)
-     *   currentUserId : 지금 로그인해서 이 요청을 보낸 사용자의 id (인증 정보에서 옴, 클라이언트가 위조 불가)
+     *   programId        : 삭제할 프로그램의 PK (URL 경로에서 옴)
+     *   currentUserId    : 지금 로그인해서 이 요청을 보낸 사용자의 id (인증 정보에서 옴, 클라이언트가 위조 불가)
+     *   departmentCodeId : 로그인한 사용자가 소속된 부서의 CommonCode PK (인증 정보에서 옴, 클라이언트가 위조 불가)
+     *                    → update()와 동일한 이유로, 비교과운영부서(D200) 소속인지 매번 다시 검증한다.
      */
-    public void delete(Integer programId, Integer currentUserId) {
+    public void delete(Integer programId, Integer currentUserId, Integer departmentCodeId) {
 
         // (a) 존재 확인 ------------------------------------------------------------
         ExtracurricularProgram program = programRepository.findById(programId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PROGRAM_NOT_FOUND));
+
+        /**
+         * (a-1) 부서 권한 확인 -----------------------------------------------------------
+         * update()의 (a-1)단계와 동일한 이유로, 지금도 비교과운영부서(D200) 소속인지 검증한다.
+         */
+        if (!isOperatingDepartment(departmentCodeId)) {
+            throw new BusinessException(ErrorCode.DEPARTMENT_FORBIDDEN);
+        }
 
         /**
          * (b) 소유자 확인 ------------------------------------------------------------
