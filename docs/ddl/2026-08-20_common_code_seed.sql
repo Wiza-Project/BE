@@ -8,6 +8,14 @@
 --
 -- 주의: 이 파일은 CommonCodeSeeder.java의 SEEDS 목록과 내용이 같아야 합니다.
 -- 그룹/코드를 추가·변경하면 두 곳 다 같이 고치세요(자동 동기화 아님).
+--
+-- 예외: ACADEMIC_YEAR만 이 규칙에서 제외됩니다. CommonCodeSeeder는 매 기동 시점의
+-- 연도를 기준으로 매번 계산해서 시딩하지만(로컬 DB가 몇 년이 지나도 "올해가 목록에
+-- 없음" 문제 없이 자동 갱신되게), 이 파일은 배포 담당자가 수동으로 실행하는 정적
+-- 스냅샷이라 실행 시점마다 값이 달라지면 리뷰어가 "실제로 뭐가 들어가는지"를 파일만
+-- 보고 알 수 없게 됩니다. 그래서 이 파일의 ACADEMIC_YEAR는 계속 리터럴로 두되, 매번
+-- 다시 배포할 때마다 상한을 몇 년 더 늘려서(운영 관리 작업) 목록이 너무 빨리 stale해지지
+-- 않게 여유를 둡니다.
 
 -- PROGRAM_TYPE/DEPARTMENT를 설명형 코드(STUDY, STUDENT_COMPETENCY_CENTER 등)에서
 -- 접두어+100단위 코드(PT100, D100 ...)로 바꾸면서, 이미 옛 이름으로 시드돼있는 DB를
@@ -36,11 +44,17 @@ VALUES
     ('PROGRAM_TYPE', 'PT500', '사회봉사', 5, true, 0, now(), now()),
     ('PROGRAM_TYPE', 'PT600', '국제화',   6, true, 0, now(), now()),
 
-    -- 학년도 — 각 엔티티엔 스칼라(Integer)로 저장되지만(FK 아님), 드롭다운 선택지 기준값
+    -- 학년도 — 각 엔티티엔 스칼라(Integer)로 저장되지만(FK 아님), 드롭다운 선택지 기준값.
+    -- CommonCodeSeeder.java와 달리 이 목록은 정적 스냅샷이다(파일 헤더 "예외" 참고) —
+    -- 상한을 2030까지 여유 있게 잡아뒀다. 그 이후 배포에서도 목록이 바닥나면 여기 값을
+    -- 더 추가하는 걸 배포 체크리스트에 넣는 걸 권장.
     ('ACADEMIC_YEAR', '2024', '2024학년도', 1, true, 0, now(), now()),
     ('ACADEMIC_YEAR', '2025', '2025학년도', 2, true, 0, now(), now()),
     ('ACADEMIC_YEAR', '2026', '2026학년도', 3, true, 0, now(), now()),
     ('ACADEMIC_YEAR', '2027', '2027학년도', 4, true, 0, now(), now()),
+    ('ACADEMIC_YEAR', '2028', '2028학년도', 5, true, 0, now(), now()),
+    ('ACADEMIC_YEAR', '2029', '2029학년도', 6, true, 0, now(), now()),
+    ('ACADEMIC_YEAR', '2030', '2030학년도', 7, true, 0, now(), now()),
 
     -- 학기 — semesterCode도 스칼라(String) 저장. "ALL"(전체)은 정책류 엔티티 전용 특수값이라 제외
     ('SEMESTER', 'SPRING', '1학기',     1, true, 0, now(), now()),

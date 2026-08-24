@@ -21,9 +21,12 @@ public record ProgramAdminListItemResponseDTO(
         Instant recruitmentEndsAt,
         Instant operationStartsAt,
         Instant operationEndsAt,
-        Instant createdAt
+        Instant createdAt,
+        boolean isEditable,
+        boolean isDeletable
 ) {
-    public static ProgramAdminListItemResponseDTO from(ExtracurricularProgram program, long applicantCount) {
+    public static ProgramAdminListItemResponseDTO from(ExtracurricularProgram program, long applicantCount,
+                                                         boolean editable) {
         return new ProgramAdminListItemResponseDTO(
                 program.getProgramId(),
                 program.getProgramName(),
@@ -39,7 +42,9 @@ public record ProgramAdminListItemResponseDTO(
                 program.getRecruitmentEndsAt(),
                 program.getOperationStartsAt(),
                 program.getOperationEndsAt(),
-                program.getCreatedAt()
+                program.getCreatedAt(),
+                editable,
+                editable
         );
     }
 }

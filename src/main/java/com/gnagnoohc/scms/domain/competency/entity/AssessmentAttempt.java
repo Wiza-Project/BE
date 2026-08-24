@@ -37,4 +37,15 @@ public class AssessmentAttempt extends BaseCreatedAtEntity {
     public void touchSavedAt() {
         this.savedAt = Instant.now();
     }
+
+    // 호출 전 미응답 문항 여부/제출 여부/기간은 서비스가 검증한다(start()와 동일하게 엔티티 자신은 무조건 반영).
+    public void submit() {
+        this.submittedAt = Instant.now();
+        this.attemptStatus = "SUBMITTED";
+    }
+
+    // 같은 트랜잭션 안에서 환산점수(assessment_score) 저장까지 끝난 뒤 서비스가 호출한다.
+    public void markScored() {
+        this.attemptStatus = "SCORED";
+    }
 }
