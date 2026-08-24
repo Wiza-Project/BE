@@ -217,6 +217,17 @@ public class ProgramService {
         BigDecimal completionRate = request.completionRate() != null
                 ? request.completionRate() : DEFAULT_COMPLETION_RATE;
 
+        // 운영단위는 로그인한 담당자의 소속 부서로 고정되는 값이라 클라이언트가 바꿀 수 없다.
+        // 요청에 안 담겨오면(null) 프로그램에 이미 저장된 값을 그대로 유지한다.
+        Integer operatingUnitCodeId = request.operatingUnitCodeId() != null
+                ? request.operatingUnitCodeId() : program.getOperatingUnitCode().getCodeId();
+
+        // 첨부파일은 별도 업로드 화면에서만 바뀌므로, 수정 폼이 파일을 다시 첨부하지 않아
+        // 요청에 안 담겨오면(null) 기존에 첨부돼 있던 파일을 그대로 유지한다(지우지 않는다).
+        Integer fileGroupId = request.fileGroupId() != null
+                ? request.fileGroupId()
+                : (program.getFileGroup() != null ? program.getFileGroup().getFileGroupId() : null);
+
         /**
          * (e) 실제 DB 반영 -------------------------------------------------------------
          * updatedRows는 이번 UPDATE 문으로 실제 몇 개의 row가 바뀌었는지를 담는다(보통 0 또는 1).
@@ -225,8 +236,8 @@ public class ProgramService {
         try {
             updatedRows = programRepository.updateProgram(
                     programId,
-                    request.fileGroupId(),
-                    request.operatingUnitCodeId(),
+                    fileGroupId,
+                    operatingUnitCodeId,
                     request.programTypeCodeId(),
                     request.competencyId(),
                     request.mileagePolicyId(),

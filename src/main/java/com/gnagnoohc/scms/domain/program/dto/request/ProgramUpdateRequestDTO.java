@@ -26,8 +26,9 @@ public record ProgramUpdateRequestDTO(
         // 첨부파일 그룹 id. 파일이 없을 수도 있으므로 @NotNull을 붙이지 않았다(선택값).
         Integer fileGroupId,
 
-        // 운영 단위 코드 id. 반드시 있어야 하는 값이라 @NotNull로 "값이 비어있으면 안 된다"고 검증한다.
-        @NotNull Integer operatingUnitCodeId,
+        // 운영 단위 코드 id. 로그인한 담당자의 소속 부서로 고정되는 값이라 클라이언트가 바꿀 수 없다.
+        // 요청에 안 담겨오면(null) 서비스에서 프로그램의 기존 값을 그대로 유지한다.
+        Integer operatingUnitCodeId,
 
         // 프로그램 유형(분류) 코드 id. 마찬가지로 필수값.
         @NotNull Integer programTypeCodeId,
