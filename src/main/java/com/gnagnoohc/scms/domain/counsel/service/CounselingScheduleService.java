@@ -29,6 +29,9 @@ import java.util.List;
 @Transactional
 public class CounselingScheduleService {
 
+    // 상담사가 개별 일정을 열 수 있는 신청 경로. CENTER 유형은 센터 접수 방식이라 일정 대상이 아니다..
+    private static final String APPLICATION_ROUTE_DIRECT = "DIRECT";
+
     private final CounselUserRepository counselUserRepository;
     private final CounselingTypeRepository counselingTypeRepository;
     private final CounselingScheduleRepository counselingScheduleRepository;
@@ -74,7 +77,7 @@ public class CounselingScheduleService {
             Integer counselorId
     ) {
         validateRequest(request, Instant.now());
-        CounselingType counselingType = getActiveCounselingType(request.counselingTypeId());
+        CounselingType counselingType = getSchedulableCounselingType(request.counselingTypeId());
 
         // 같은 상담사의 빈 일정 구간을 동시에 선점하지 못하도록 사용자 행부터 잠근다.
         AppUser counselor = getActiveCounselorForUpdate(counselorId);
@@ -103,7 +106,7 @@ public class CounselingScheduleService {
             Integer counselorId
     ) {
         validateRequest(request, Instant.now());
-        CounselingType counselingType = getActiveCounselingType(request.counselingTypeId());
+        CounselingType counselingType = getSchedulableCounselingType(request.counselingTypeId());
 
         // 모든 변경 경로가 사용자 행 다음 일정 행을 잠가 잠금 순서를 통일한다.
         getActiveCounselorForUpdate(counselorId);
@@ -166,6 +169,22 @@ public class CounselingScheduleService {
         return counselingTypeRepository
                 .findByCounselingTypeIdAndActiveTrue(counselingTypeId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+    }
+
+    /**
+     * 일정 등록·수정 대상은 활성이면서 신청 경로가 DIRECT인 유형만 허용한다.
+     * CENTER 유형은 상담사가 여는 개별 일정 대상이 아니므로, 유형 ID를 직접 보낸 요청이라도 서버에서 막는다.
+     * (활성만 검사하는 {@link #getActiveCounselingType}은 학생의 예약 가능 일정 조회에서 계속 재사용한다.)
+     */
+    private CounselingType getSchedulableCounselingType(Integer counselingTypeId) {
+        CounselingType counselingType = getActiveCounselingType(counselingTypeId);
+        if (!APPLICATION_ROUTE_DIRECT.equals(counselingType.getApplicationRoute())) {
+            throw new BusinessException(
+                    ErrorCode.INVALID_INPUT,
+                    "일정은 DIRECT(일정 지정) 유형에만 등록할 수 있습니다."
+            );
+        }
+        return counselingType;
     }
 
     private CounselingSchedule getScheduleForUpdate(Integer scheduleId) {
