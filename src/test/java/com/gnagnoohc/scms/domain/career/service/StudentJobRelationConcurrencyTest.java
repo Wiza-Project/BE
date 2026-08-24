@@ -25,7 +25,11 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.concurrent.*;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -160,8 +164,12 @@ class StudentJobRelationConcurrencyTest {
                     .findByStudent_UserIdAndJobPosting_JobPostingId(testStudent.getUserId(), testPosting.getJobPostingId())
                     .orElseThrow();
 
+            // 1. 지원 완료 상태 검증
             assertThat(relation.getAppliedAt()).isNotNull();
             assertThat(relation.getApplicationStatus()).isEqualTo("APPLIED");
+
+            // 2. 스크랩 해제(null) 상태 보존 검증 (applyJob에 의해 이전 북마크 상태로 덮어씌워지지 않았는지 확인)
+            assertThat(relation.getBookmarkedAt()).isNull();
             return null;
         });
     }
