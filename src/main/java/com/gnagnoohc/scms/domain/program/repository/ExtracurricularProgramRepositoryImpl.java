@@ -28,21 +28,24 @@ public class ExtracurricularProgramRepositoryImpl implements ExtracurricularProg
     @Override
     public Page<ExtracurricularProgram> search(ProgramStatus status, String keyword, Integer competencyId,
                                                  Pageable pageable) {
-        return search(null, status, keyword, competencyId, pageable);
+        // 학생용 조회: 키워드가 프로그램명뿐 아니라 설명(description)에도 걸리도록 통합검색한다.
+        return search(null, status, keyword, competencyId, true, pageable);
     }
 
     @Override
     public Page<ExtracurricularProgram> searchByManager(Integer managerUserId, ProgramStatus status, String keyword,
                                                           Integer competencyId, Pageable pageable) {
-        return search(managerUserId, status, keyword, competencyId, pageable);
+        // 교직원용 조회: 기존과 동일하게 프로그램명만 검색한다.
+        return search(managerUserId, status, keyword, competencyId, false, pageable);
     }
 
     /**
      * search()/searchByManager()의 공통 구현. managerUserId가 null이면 전체 프로그램을,
      * 값이 있으면 해당 담당자가 등록한 프로그램만 대상으로 status/keyword/competencyId 조건을 동적으로 조합해 조회한다.
+     * matchDescription이 true면 keyword를 programName과 description 양쪽에 OR로 매칭한다(학생용 통합검색).
      */
     private Page<ExtracurricularProgram> search(Integer managerUserId, ProgramStatus status, String keyword,
-                                                  Integer competencyId, Pageable pageable) {
+                                                  Integer competencyId, boolean matchDescription, Pageable pageable) {
         QExtracurricularProgram program = extracurricularProgram;
 
         BooleanBuilder condition = new BooleanBuilder();
@@ -53,7 +56,10 @@ public class ExtracurricularProgramRepositoryImpl implements ExtracurricularProg
             condition.and(program.programStatus.eq(status));
         }
         if (StringUtils.hasText(keyword)) {
-            condition.and(program.programName.containsIgnoreCase(keyword));
+            condition.and(matchDescription
+                    ? program.programName.containsIgnoreCase(keyword)
+                            .or(program.description.containsIgnoreCase(keyword))
+                    : program.programName.containsIgnoreCase(keyword));
         }
         if (competencyId != null) {
             condition.and(program.competency.competencyId.eq(competencyId));

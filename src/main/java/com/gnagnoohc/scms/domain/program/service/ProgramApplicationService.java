@@ -22,6 +22,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -267,16 +268,27 @@ public class ProgramApplicationService {
      * 운영부서가 신청관리/이수판정 화면에서, 프로그램 하나의 전체 신청자를 조회한다(누가 신청했는지 이름/학번까지 필요하다는
      * 점이 listMyApplications와 다르다). 지금까지는 이 목록 자체를 내려주는 API가 없어서 스태프 화면에서 신청자 정보를
      * 아예 보여줄 수 없었다 — 승인/반려/일괄승인/일괄반려는 applicationId를 미리 알아야 호출할 수 있는데, 그 id 자체를
-     * 조회할 방법이 없었기 때문이다.
+     * 조회할 방법이 없었기 때문이다. keyword는 학생 이름/학번을 대상으로 부분 일치 검색한다.
      */
     @Transactional(readOnly = true)
     public PageResponse<ProgramApplicationAdminListItemResponseDTO> listByProgram(
-            Integer programId, String status, Pageable pageable) {
+            Integer programId, String status, String keyword, Pageable pageable) {
         if (!programRepository.existsById(programId)) {
             throw new BusinessException(ErrorCode.PROGRAM_NOT_FOUND);
         }
-        Page<ProgramApplication> applications = applicationRepository.findAllByProgramIdAndStatus(programId, status, pageable);
+        String normalizedKeyword = StringUtils.hasText(keyword) ? escapeLikeKeyword(keyword.trim()) : null;
+        Page<ProgramApplication> applications = applicationRepository.findAllByProgramIdAndStatus(
+                programId, status, normalizedKeyword, pageable);
         return PageResponse.from(applications.map(ProgramApplicationAdminListItemResponseDTO::from));
+    }
+
+    /**
+     * LIKE 패턴에서 특별한 의미를 갖는 문자(%, _)를 리터럴 문자로 취급되도록 이스케이프한다.
+     * 이스케이프 문자 자체(!)를 가장 먼저 이스케이프해야, 뒤이어 %/_ 앞에 붙이는 !가 원본 키워드의 !와 섞이지 않는다.
+     * findAllByProgramIdAndStatus의 JPQL LIKE 절에 걸린 ESCAPE '!'와 반드시 짝을 맞춰야 한다.
+     */
+    private static String escapeLikeKeyword(String keyword) {
+        return keyword.replace("!", "!!").replace("%", "!%").replace("_", "!_");
     }
 
     /**
