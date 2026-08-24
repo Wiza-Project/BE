@@ -144,8 +144,16 @@ public class AcademicRecordQueryRepository {
         return majorCodeId != null ? studentAcademicDetail.majorCode.codeId.eq(majorCodeId) : null;
     }
 
+    /**
+     * grade는 컨트롤러 단(@Min(1)/@Max(4), AdminStudentSearchConditionDTO)에서 이미 걸러지지만,
+     * 이 레포지토리가 다른 경로에서 검증 없이 호출될 가능성까지 막기 위해 여기서도 한 번 더
+     * 범위를 확인한다
+     */
     private BooleanExpression gradeEq(Integer grade) {
-        return grade != null ? studentAcademicDetail.grade.eq(grade.shortValue()) : null;
+        if (grade == null || grade < 1 || grade > 4) {
+            return null;
+        }
+        return studentAcademicDetail.grade.eq(grade.shortValue());
     }
 
     private BooleanExpression statusEq(String status) {
