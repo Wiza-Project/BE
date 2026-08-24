@@ -31,6 +31,12 @@ import java.util.Map;
  * ── 함께 챙겨야 하는 별도 시드 ─────────────────────────────────────
  * docs/ddl/2026-08-21_competency_seed.sql (핵심역량 competency 테이블)은 common_code가
  * 여기서 자동 실행하지 않고, 로컬/배포 시 그 SQL을 별도로 수동 실행해야 한다.
+ *
+ * ── ACADEMIC_YEAR는 여기서 시딩하지 않는다 ─────────────────────────
+ * "현재연도 ± N"이라는 결정론적 값이고 기존 값을 절대 안 건드리는(추가만 하는) 안전한
+ * 연산이라, local 전용인 이 클래스 대신 {@link AcademicYearCodeExtender}(local·prod
+ * 양쪽에서 매 기동마다 실행)가 전담한다 — 사람이 리뷰해야 하는 값(PROGRAM_TYPE 등)과
+ * 섞이지 않게 분리했다.
  */
 @Slf4j
 @Component
@@ -91,12 +97,8 @@ public class CommonCodeSeeder implements CommandLineRunner {
             new Seed("PROGRAM_TYPE", "PT500", "사회봉사", 5),
             new Seed("PROGRAM_TYPE", "PT600", "국제화", 6),
 
-            // 학년도 — academicYear는 각 엔티티에 스칼라(Integer)로 저장되지만(FK 아님),
-            // 프론트 드롭다운이 쓸 선택 가능 연도 목록의 기준점으로 최소 범위만 제공
-            new Seed("ACADEMIC_YEAR", "2024", "2024학년도", 1),
-            new Seed("ACADEMIC_YEAR", "2025", "2025학년도", 2),
-            new Seed("ACADEMIC_YEAR", "2026", "2026학년도", 3),
-            new Seed("ACADEMIC_YEAR", "2027", "2027학년도", 4),
+            // 학년도(ACADEMIC_YEAR)는 여기서 시딩 삭제
+            // AcademicYearCodeExtender가 전담한다.
 
             // 학기 — semesterCode도 스칼라(String) 저장. 기본값 "ALL"(전체)은 정책류
             // 엔티티(MileagePolicy 등)에서만 쓰이는 특수값이라 이 목록엔 포함하지 않음
