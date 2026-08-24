@@ -12,7 +12,6 @@ import com.gnagnoohc.scms.domain.competency.entity.AssessmentRound;
 import com.gnagnoohc.scms.domain.competency.entity.AssessmentRoundQuestion;
 import com.gnagnoohc.scms.domain.competency.entity.AssessmentRoundQuestionId;
 import com.gnagnoohc.scms.domain.competency.entity.Competency;
-import com.gnagnoohc.scms.domain.competency.repository.AssessmentAttemptRepository;
 import com.gnagnoohc.scms.domain.competency.repository.AssessmentQuestionRepository;
 import com.gnagnoohc.scms.domain.competency.repository.AssessmentResponseRepository;
 import com.gnagnoohc.scms.domain.competency.repository.AssessmentRoundQuestionRepository;
@@ -37,6 +36,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -50,7 +50,7 @@ class AssessmentResponseServiceTest {
     private static final Integer QUESTION_ID = 30;
 
     @Mock
-    AssessmentAttemptRepository assessmentAttemptRepository;
+    AssessmentAttemptAccessGuard assessmentAttemptAccessGuard;
 
     @Mock
     AssessmentResponseRepository assessmentResponseRepository;
@@ -133,7 +133,7 @@ class AssessmentResponseServiceTest {
         AssessmentAttempt attempt = buildAttempt(round, buildStudent(STUDENT_ID));
         AssessmentQuestion question = buildQuestion(buildCompetency());
 
-        when(assessmentAttemptRepository.findById(ATTEMPT_ID)).thenReturn(Optional.of(attempt));
+        when(assessmentAttemptAccessGuard.getOwnAttempt(ATTEMPT_ID, STUDENT_ID)).thenReturn(attempt);
         when(assessmentRoundQuestionRepository.existsByAssessmentRound_AssessmentRoundIdAndQuestion_QuestionId(ROUND_ID, QUESTION_ID))
                 .thenReturn(true);
         when(assessmentQuestionRepository.findById(QUESTION_ID)).thenReturn(Optional.of(question));
@@ -169,7 +169,7 @@ class AssessmentResponseServiceTest {
         AssessmentAttempt attempt = buildAttempt(round, buildStudent(STUDENT_ID));
         AssessmentQuestion question = buildQuestion(buildCompetency());
 
-        when(assessmentAttemptRepository.findById(ATTEMPT_ID)).thenReturn(Optional.of(attempt));
+        when(assessmentAttemptAccessGuard.getOwnAttempt(ATTEMPT_ID, STUDENT_ID)).thenReturn(attempt);
         when(assessmentRoundQuestionRepository.existsByAssessmentRound_AssessmentRoundIdAndQuestion_QuestionId(ROUND_ID, QUESTION_ID))
                 .thenReturn(true);
         when(assessmentQuestionRepository.findById(QUESTION_ID)).thenReturn(Optional.of(question));
@@ -197,7 +197,7 @@ class AssessmentResponseServiceTest {
         AssessmentQuestion question = buildQuestion(buildCompetency());
         AssessmentResponse existing = AssessmentResponse.create(attempt, question, BigDecimal.valueOf(2), STUDENT_ID);
 
-        when(assessmentAttemptRepository.findById(ATTEMPT_ID)).thenReturn(Optional.of(attempt));
+        when(assessmentAttemptAccessGuard.getOwnAttempt(ATTEMPT_ID, STUDENT_ID)).thenReturn(attempt);
         when(assessmentRoundQuestionRepository.existsByAssessmentRound_AssessmentRoundIdAndQuestion_QuestionId(ROUND_ID, QUESTION_ID))
                 .thenReturn(true);
         when(assessmentQuestionRepository.findById(QUESTION_ID)).thenReturn(Optional.of(question));
@@ -221,7 +221,7 @@ class AssessmentResponseServiceTest {
         AssessmentRound round = buildRound(now.minus(1, ChronoUnit.DAYS), now.plus(6, ChronoUnit.DAYS));
         AssessmentAttempt attempt = buildAttempt(round, buildStudent(STUDENT_ID));
 
-        when(assessmentAttemptRepository.findById(ATTEMPT_ID)).thenReturn(Optional.of(attempt));
+        when(assessmentAttemptAccessGuard.getOwnAttempt(ATTEMPT_ID, STUDENT_ID)).thenReturn(attempt);
         when(assessmentRoundQuestionRepository.existsByAssessmentRound_AssessmentRoundIdAndQuestion_QuestionId(ROUND_ID, QUESTION_ID))
                 .thenReturn(false);
 
@@ -238,7 +238,7 @@ class AssessmentResponseServiceTest {
         AssessmentAttempt attempt = buildAttempt(round, buildStudent(STUDENT_ID));
         AssessmentQuestion question = buildQuestion(buildCompetency());
 
-        when(assessmentAttemptRepository.findById(ATTEMPT_ID)).thenReturn(Optional.of(attempt));
+        when(assessmentAttemptAccessGuard.getOwnAttempt(ATTEMPT_ID, STUDENT_ID)).thenReturn(attempt);
         when(assessmentRoundQuestionRepository.existsByAssessmentRound_AssessmentRoundIdAndQuestion_QuestionId(ROUND_ID, QUESTION_ID))
                 .thenReturn(true);
         when(assessmentQuestionRepository.findById(QUESTION_ID)).thenReturn(Optional.of(question));
@@ -249,13 +249,18 @@ class AssessmentResponseServiceTest {
                 .isEqualTo(ErrorCode.INVALID_RESPONSE_VALUE);
     }
 
+    // 소유권·제출완료·기간 검증 자체(각 조건에서 어떤 에러코드가 나오는지)는
+    // AssessmentAttemptAccessGuardTest에서 직접 검증한다. 여기서는 saveResponse가 guard 결과를
+    // 그대로 전파하는지만 확인한다.
     @Test
     void saveResponse_whenPeriodClosed_throwsDiagnosisPeriodClosed() throws Exception {
         Instant now = Instant.now();
-        AssessmentRound round = buildRound(now.minus(10, ChronoUnit.DAYS), now.minus(1, ChronoUnit.DAYS));
+        AssessmentRound round = buildRound(now.minus(1, ChronoUnit.DAYS), now.plus(6, ChronoUnit.DAYS));
         AssessmentAttempt attempt = buildAttempt(round, buildStudent(STUDENT_ID));
 
-        when(assessmentAttemptRepository.findById(ATTEMPT_ID)).thenReturn(Optional.of(attempt));
+        when(assessmentAttemptAccessGuard.getOwnAttempt(ATTEMPT_ID, STUDENT_ID)).thenReturn(attempt);
+        doThrow(new BusinessException(ErrorCode.DIAGNOSIS_PERIOD_CLOSED))
+                .when(assessmentAttemptAccessGuard).assertPeriodOpen(attempt);
 
         assertThatThrownBy(() -> assessmentResponseService.saveResponse(ATTEMPT_ID, QUESTION_ID, BigDecimal.valueOf(3), STUDENT_ID))
                 .isInstanceOf(BusinessException.class)
@@ -268,9 +273,10 @@ class AssessmentResponseServiceTest {
         Instant now = Instant.now();
         AssessmentRound round = buildRound(now.minus(1, ChronoUnit.DAYS), now.plus(6, ChronoUnit.DAYS));
         AssessmentAttempt attempt = buildAttempt(round, buildStudent(STUDENT_ID));
-        ReflectionTestUtils.setField(attempt, "submittedAt", now.minus(1, ChronoUnit.HOURS));
 
-        when(assessmentAttemptRepository.findById(ATTEMPT_ID)).thenReturn(Optional.of(attempt));
+        when(assessmentAttemptAccessGuard.getOwnAttempt(ATTEMPT_ID, STUDENT_ID)).thenReturn(attempt);
+        doThrow(new BusinessException(ErrorCode.DIAGNOSIS_ALREADY_SUBMITTED))
+                .when(assessmentAttemptAccessGuard).assertNotSubmitted(attempt);
 
         assertThatThrownBy(() -> assessmentResponseService.saveResponse(ATTEMPT_ID, QUESTION_ID, BigDecimal.valueOf(3), STUDENT_ID))
                 .isInstanceOf(BusinessException.class)
@@ -279,12 +285,9 @@ class AssessmentResponseServiceTest {
     }
 
     @Test
-    void saveResponse_whenAttemptNotOwnedByStudent_throwsAssessmentAttemptNotFound() throws Exception {
-        Instant now = Instant.now();
-        AssessmentRound round = buildRound(now.minus(1, ChronoUnit.DAYS), now.plus(6, ChronoUnit.DAYS));
-        AssessmentAttempt attempt = buildAttempt(round, buildStudent(999));
-
-        when(assessmentAttemptRepository.findById(ATTEMPT_ID)).thenReturn(Optional.of(attempt));
+    void saveResponse_whenAttemptNotOwnedByStudent_throwsAssessmentAttemptNotFound() {
+        when(assessmentAttemptAccessGuard.getOwnAttempt(ATTEMPT_ID, STUDENT_ID))
+                .thenThrow(new BusinessException(ErrorCode.ASSESSMENT_ATTEMPT_NOT_FOUND));
 
         assertThatThrownBy(() -> assessmentResponseService.saveResponse(ATTEMPT_ID, QUESTION_ID, BigDecimal.valueOf(3), STUDENT_ID))
                 .isInstanceOf(BusinessException.class)
@@ -294,7 +297,8 @@ class AssessmentResponseServiceTest {
 
     @Test
     void saveResponse_whenAttemptNotFound_throwsAssessmentAttemptNotFound() {
-        when(assessmentAttemptRepository.findById(ATTEMPT_ID)).thenReturn(Optional.empty());
+        when(assessmentAttemptAccessGuard.getOwnAttempt(ATTEMPT_ID, STUDENT_ID))
+                .thenThrow(new BusinessException(ErrorCode.ASSESSMENT_ATTEMPT_NOT_FOUND));
 
         assertThatThrownBy(() -> assessmentResponseService.saveResponse(ATTEMPT_ID, QUESTION_ID, BigDecimal.valueOf(3), STUDENT_ID))
                 .isInstanceOf(BusinessException.class)
@@ -317,7 +321,7 @@ class AssessmentResponseServiceTest {
 
         AssessmentResponse answeredResponse = AssessmentResponse.create(attempt, question1, BigDecimal.valueOf(3), STUDENT_ID);
 
-        when(assessmentAttemptRepository.findById(ATTEMPT_ID)).thenReturn(Optional.of(attempt));
+        when(assessmentAttemptAccessGuard.getOwnAttempt(ATTEMPT_ID, STUDENT_ID)).thenReturn(attempt);
         when(assessmentRoundQuestionRepository.findByAssessmentRound_AssessmentRoundIdOrderByDisplayOrderAsc(ROUND_ID))
                 .thenReturn(List.of(rq1, rq2));
         when(assessmentResponseRepository.findByAttempt_AttemptId(ATTEMPT_ID))
@@ -337,9 +341,10 @@ class AssessmentResponseServiceTest {
         Instant now = Instant.now();
         AssessmentRound round = buildRound(now.minus(1, ChronoUnit.DAYS), now.plus(6, ChronoUnit.DAYS));
         AssessmentAttempt attempt = buildAttempt(round, buildStudent(STUDENT_ID));
-        ReflectionTestUtils.setField(attempt, "submittedAt", now.minus(1, ChronoUnit.HOURS));
 
-        when(assessmentAttemptRepository.findById(ATTEMPT_ID)).thenReturn(Optional.of(attempt));
+        when(assessmentAttemptAccessGuard.getOwnAttempt(ATTEMPT_ID, STUDENT_ID)).thenReturn(attempt);
+        doThrow(new BusinessException(ErrorCode.DIAGNOSIS_ALREADY_SUBMITTED))
+                .when(assessmentAttemptAccessGuard).assertNotSubmitted(attempt);
 
         assertThatThrownBy(() -> assessmentResponseService.resume(ATTEMPT_ID, STUDENT_ID))
                 .isInstanceOf(BusinessException.class)

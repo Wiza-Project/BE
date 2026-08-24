@@ -11,7 +11,6 @@ import com.gnagnoohc.scms.domain.competency.entity.AssessmentRound;
 import com.gnagnoohc.scms.domain.competency.entity.AssessmentRoundQuestion;
 import com.gnagnoohc.scms.domain.competency.entity.AssessmentRoundQuestionId;
 import com.gnagnoohc.scms.domain.competency.entity.Competency;
-import com.gnagnoohc.scms.domain.competency.repository.AssessmentAttemptRepository;
 import com.gnagnoohc.scms.domain.competency.repository.AssessmentResponseRepository;
 import com.gnagnoohc.scms.domain.competency.repository.AssessmentRoundQuestionRepository;
 import com.gnagnoohc.scms.domain.competency.repository.AssessmentScoreRepository;
@@ -31,11 +30,11 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -47,7 +46,7 @@ class AssessmentSubmissionServiceTest {
     private static final Integer QUESTION_ID = 30;
 
     @Mock
-    AssessmentAttemptRepository assessmentAttemptRepository;
+    AssessmentAttemptAccessGuard assessmentAttemptAccessGuard;
 
     @Mock
     AssessmentResponseRepository assessmentResponseRepository;
@@ -65,7 +64,7 @@ class AssessmentSubmissionServiceTest {
     @BeforeEach
     void setUp() {
         assessmentSubmissionService = new AssessmentSubmissionService(
-                assessmentAttemptRepository, assessmentResponseRepository,
+                assessmentAttemptAccessGuard, assessmentResponseRepository,
                 assessmentRoundQuestionRepository, assessmentScoreRepository,
                 new AssessmentScoreCalculator());
     }
@@ -155,7 +154,7 @@ class AssessmentSubmissionServiceTest {
         AssessmentResponse response1 = AssessmentResponse.create(attempt, question1, BigDecimal.valueOf(4), STUDENT_ID);
         AssessmentResponse response2 = AssessmentResponse.create(attempt, question2, BigDecimal.valueOf(2), STUDENT_ID);
 
-        when(assessmentAttemptRepository.findById(ATTEMPT_ID)).thenReturn(Optional.of(attempt));
+        when(assessmentAttemptAccessGuard.getOwnAttempt(ATTEMPT_ID, STUDENT_ID)).thenReturn(attempt);
         when(assessmentRoundQuestionRepository.findByAssessmentRound_AssessmentRoundIdOrderByDisplayOrderAsc(ROUND_ID))
                 .thenReturn(List.of(rq1, rq2));
         when(assessmentResponseRepository.findByAttempt_AttemptId(ATTEMPT_ID))
@@ -197,7 +196,7 @@ class AssessmentSubmissionServiceTest {
         AssessmentResponse response2 = AssessmentResponse.create(attempt, q2, BigDecimal.valueOf(2), STUDENT_ID);
         AssessmentResponse response3 = AssessmentResponse.create(attempt, q3, BigDecimal.valueOf(2), STUDENT_ID); // 6-2=4로 역산되어야 함
 
-        when(assessmentAttemptRepository.findById(ATTEMPT_ID)).thenReturn(Optional.of(attempt));
+        when(assessmentAttemptAccessGuard.getOwnAttempt(ATTEMPT_ID, STUDENT_ID)).thenReturn(attempt);
         when(assessmentRoundQuestionRepository.findByAssessmentRound_AssessmentRoundIdOrderByDisplayOrderAsc(ROUND_ID))
                 .thenReturn(List.of(rq1, rq2, rq3));
         when(assessmentResponseRepository.findByAttempt_AttemptId(ATTEMPT_ID))
@@ -233,7 +232,7 @@ class AssessmentSubmissionServiceTest {
 
         AssessmentResponse response1 = AssessmentResponse.create(attempt, question1, BigDecimal.valueOf(4), STUDENT_ID);
 
-        when(assessmentAttemptRepository.findById(ATTEMPT_ID)).thenReturn(Optional.of(attempt));
+        when(assessmentAttemptAccessGuard.getOwnAttempt(ATTEMPT_ID, STUDENT_ID)).thenReturn(attempt);
         when(assessmentRoundQuestionRepository.findByAssessmentRound_AssessmentRoundIdOrderByDisplayOrderAsc(ROUND_ID))
                 .thenReturn(List.of(rq1, rq2));
         when(assessmentResponseRepository.findByAttempt_AttemptId(ATTEMPT_ID))
@@ -252,14 +251,18 @@ class AssessmentSubmissionServiceTest {
         assertThat(attempt.getAttemptStatus()).isEqualTo("NOT_STARTED");
     }
 
+    // 소유권·제출완료·기간 검증 자체(각 조건에서 어떤 에러코드가 나오는지)는
+    // AssessmentAttemptAccessGuardTest에서 직접 검증한다. 여기서는 submit이 guard 결과를
+    // 그대로 전파하는지만 확인한다.
     @Test
     void submit_whenAlreadySubmitted_throwsDiagnosisAlreadySubmitted() throws Exception {
         Instant now = Instant.now();
         AssessmentRound round = buildRound(now.minus(1, ChronoUnit.DAYS), now.plus(6, ChronoUnit.DAYS));
         AssessmentAttempt attempt = buildAttempt(round, buildStudent(STUDENT_ID));
-        ReflectionTestUtils.setField(attempt, "submittedAt", now.minus(1, ChronoUnit.HOURS));
 
-        when(assessmentAttemptRepository.findById(ATTEMPT_ID)).thenReturn(Optional.of(attempt));
+        when(assessmentAttemptAccessGuard.getOwnAttempt(ATTEMPT_ID, STUDENT_ID)).thenReturn(attempt);
+        doThrow(new BusinessException(ErrorCode.DIAGNOSIS_ALREADY_SUBMITTED))
+                .when(assessmentAttemptAccessGuard).assertNotSubmitted(attempt);
 
         assertThatThrownBy(() -> assessmentSubmissionService.submit(ATTEMPT_ID, STUDENT_ID))
                 .isInstanceOf(BusinessException.class)
@@ -273,7 +276,9 @@ class AssessmentSubmissionServiceTest {
         AssessmentRound round = buildRound(now.minus(10, ChronoUnit.DAYS), now.minus(1, ChronoUnit.DAYS));
         AssessmentAttempt attempt = buildAttempt(round, buildStudent(STUDENT_ID));
 
-        when(assessmentAttemptRepository.findById(ATTEMPT_ID)).thenReturn(Optional.of(attempt));
+        when(assessmentAttemptAccessGuard.getOwnAttempt(ATTEMPT_ID, STUDENT_ID)).thenReturn(attempt);
+        doThrow(new BusinessException(ErrorCode.DIAGNOSIS_PERIOD_CLOSED))
+                .when(assessmentAttemptAccessGuard).assertPeriodOpen(attempt);
 
         assertThatThrownBy(() -> assessmentSubmissionService.submit(ATTEMPT_ID, STUDENT_ID))
                 .isInstanceOf(BusinessException.class)
@@ -282,12 +287,9 @@ class AssessmentSubmissionServiceTest {
     }
 
     @Test
-    void submit_whenAttemptNotOwnedByStudent_throwsAssessmentAttemptNotFound() throws Exception {
-        Instant now = Instant.now();
-        AssessmentRound round = buildRound(now.minus(1, ChronoUnit.DAYS), now.plus(6, ChronoUnit.DAYS));
-        AssessmentAttempt attempt = buildAttempt(round, buildStudent(999));
-
-        when(assessmentAttemptRepository.findById(ATTEMPT_ID)).thenReturn(Optional.of(attempt));
+    void submit_whenAttemptNotOwnedByStudent_throwsAssessmentAttemptNotFound() {
+        when(assessmentAttemptAccessGuard.getOwnAttempt(ATTEMPT_ID, STUDENT_ID))
+                .thenThrow(new BusinessException(ErrorCode.ASSESSMENT_ATTEMPT_NOT_FOUND));
 
         assertThatThrownBy(() -> assessmentSubmissionService.submit(ATTEMPT_ID, STUDENT_ID))
                 .isInstanceOf(BusinessException.class)
@@ -297,7 +299,8 @@ class AssessmentSubmissionServiceTest {
 
     @Test
     void submit_whenAttemptNotFound_throwsAssessmentAttemptNotFound() {
-        when(assessmentAttemptRepository.findById(ATTEMPT_ID)).thenReturn(Optional.empty());
+        when(assessmentAttemptAccessGuard.getOwnAttempt(ATTEMPT_ID, STUDENT_ID))
+                .thenThrow(new BusinessException(ErrorCode.ASSESSMENT_ATTEMPT_NOT_FOUND));
 
         assertThatThrownBy(() -> assessmentSubmissionService.submit(ATTEMPT_ID, STUDENT_ID))
                 .isInstanceOf(BusinessException.class)
@@ -317,7 +320,7 @@ class AssessmentSubmissionServiceTest {
         AssessmentRoundQuestion rq = buildRoundQuestion(round, question, 1);
         AssessmentResponse response = AssessmentResponse.create(attempt, question, BigDecimal.valueOf(4), STUDENT_ID);
 
-        when(assessmentAttemptRepository.findById(ATTEMPT_ID)).thenReturn(Optional.of(attempt));
+        when(assessmentAttemptAccessGuard.getOwnAttempt(ATTEMPT_ID, STUDENT_ID)).thenReturn(attempt);
         when(assessmentRoundQuestionRepository.findByAssessmentRound_AssessmentRoundIdOrderByDisplayOrderAsc(ROUND_ID))
                 .thenReturn(List.of(rq));
         when(assessmentResponseRepository.findByAttempt_AttemptId(ATTEMPT_ID)).thenReturn(List.of(response));
