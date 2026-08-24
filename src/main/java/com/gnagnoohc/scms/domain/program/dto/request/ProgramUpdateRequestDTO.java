@@ -20,8 +20,8 @@ import java.time.Instant;
  * 아래 필드에는 일부러 넣지 않은 값들이 있다.
  *   - programId(수정 대상 PK)      : 요청 바디가 아니라 URL 경로(/programs/{programId})로 받는다.
  *   - managerUserId(등록자)        : 이 API로 등록자(소유권)를 바꿀 수 없게 하기 위해 아예 요청 항목에서 뺐다.
- *   - operatingUnitCodeId(운영단위) : 로그인한 담당자의 소속 부서로 고정되는 값이라 클라이언트가 바꿀 수 없게
- *                                    아예 요청 항목에서 뺐다. 서비스는 항상 프로그램에 이미 저장된 값을 그대로 유지한다.
+ *   - operatingUnitCodeId(운영단위) : 이 API로는 운영단위를 바꿀 수 없게 하기 위해 아예 요청 항목에서 뺐다.
+ *                                    서비스는 항상 프로그램에 이미 저장된 값을 그대로 유지한다.
  *   - programStatus                : 상태값은 별도의 "상태 변경" 기능에서 다루도록 하고, 이 수정 API에서는 손대지 않는다.
  */
 public record ProgramUpdateRequestDTO(

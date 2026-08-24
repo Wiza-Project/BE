@@ -230,7 +230,7 @@ public class ProgramService {
         BigDecimal completionRate = request.completionRate() != null
                 ? request.completionRate() : DEFAULT_COMPLETION_RATE;
 
-        // 운영단위는 로그인한 담당자의 소속 부서로 고정되는 값이라 클라이언트가 바꿀 수 없다.
+        // 운영단위는 이 API로 변경할 수 없는 값이다.
         // 요청 DTO에는 이 값을 받는 필드 자체가 없으므로, 항상 프로그램에 이미 저장된 값을 그대로 유지한다.
         Integer operatingUnitCodeId = program.getOperatingUnitCode().getCodeId();
 
