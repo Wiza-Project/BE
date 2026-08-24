@@ -4,6 +4,8 @@ import com.gnagnoohc.scms.domain.competency.entity.AssessmentRound;
 import com.gnagnoohc.scms.domain.competency.entity.AssessmentScore;
 import com.gnagnoohc.scms.domain.competency.repository.AssessmentRoundRepository;
 import com.gnagnoohc.scms.domain.competency.repository.AssessmentScoreRepository;
+import com.gnagnoohc.scms.global.error.BusinessException;
+import com.gnagnoohc.scms.global.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,7 +44,17 @@ public class AssessmentPercentileBatchService {
         List<AssessmentRound> targetRounds =
                 assessmentRoundRepository.findByEndsAtBeforeAndRoundStatusNot(completionCutoff, ROUND_STATUS_COMPLETED);
 
-        for (AssessmentRound round : targetRounds) {
+        int processedCount = 0;
+        for (AssessmentRound candidate : targetRounds) {
+            // AssessmentSubmissionService.submit()도 같은 회차 행에 PESSIMISTIC_WRITE 잠금을 걸고 완료
+            // 여부를 재검증하므로, 목록 조회 결과(candidate)를 그대로 쓰지 않고 잠금을 걸어 다시 조회한다.
+            AssessmentRound round = assessmentRoundRepository.findByIdForUpdate(candidate.getAssessmentRoundId())
+                    .orElseThrow(() -> new BusinessException(ErrorCode.ASSESSMENT_ROUND_NOT_FOUND));
+
+            if (round.isPercentileCalculationCompleted()) {
+                continue; // 잠금 대기 중 이미 다른 실행에서 완료 처리했다면 다시 계산하지 않는다.
+            }
+
             List<AssessmentScore> scores =
                     assessmentScoreRepository.findByRoundIdFetchCompetency(round.getAssessmentRoundId());
 
@@ -54,8 +66,9 @@ public class AssessmentPercentileBatchService {
             }
 
             round.completePercentileCalculation();
+            processedCount++;
         }
 
-        return targetRounds.size();
+        return processedCount;
     }
 }

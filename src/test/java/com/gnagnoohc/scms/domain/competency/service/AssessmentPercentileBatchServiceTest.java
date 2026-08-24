@@ -9,17 +9,17 @@ import com.gnagnoohc.scms.domain.competency.repository.AssessmentScoreRepository
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
-
-import org.mockito.ArgumentCaptor;
 
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -79,6 +79,7 @@ class AssessmentPercentileBatchServiceTest {
 
         when(assessmentRoundRepository.findByEndsAtBeforeAndRoundStatusNot(any(), anyString()))
                 .thenReturn(List.of(round));
+        when(assessmentRoundRepository.findByIdForUpdate(ROUND_ID)).thenReturn(Optional.of(round));
         when(assessmentScoreRepository.findByRoundIdFetchCompetency(ROUND_ID))
                 .thenReturn(List.of(low, high));
 
@@ -98,6 +99,7 @@ class AssessmentPercentileBatchServiceTest {
 
         when(assessmentRoundRepository.findByEndsAtBeforeAndRoundStatusNot(any(), anyString()))
                 .thenReturn(List.of(round));
+        when(assessmentRoundRepository.findByIdForUpdate(ROUND_ID)).thenReturn(Optional.of(round));
         when(assessmentScoreRepository.findByRoundIdFetchCompetency(ROUND_ID))
                 .thenReturn(List.of());
 
@@ -111,6 +113,23 @@ class AssessmentPercentileBatchServiceTest {
     void calculatePercentilesForEndedRounds_noTargetRounds_doesNothing() {
         when(assessmentRoundRepository.findByEndsAtBeforeAndRoundStatusNot(any(), anyString()))
                 .thenReturn(List.of());
+
+        int processedCount = assessmentPercentileBatchService.calculatePercentilesForEndedRounds();
+
+        assertThat(processedCount).isEqualTo(0);
+        verify(assessmentScoreRepository, never()).findByRoundIdFetchCompetency(any());
+    }
+
+    // AssessmentSubmissionService.submit()이 먼저 이 회차의 잠금을 잡고 있다가 풀리는 사이, 이미 다른
+    // 실행(또는 이전 사이클)이 완료 처리해버린 경우를 재현한다. 잠금 획득 후 재확인해서 다시 계산하면 안 된다.
+    @Test
+    void calculatePercentilesForEndedRounds_roundAlreadyCompletedAfterLockAcquired_skipsRecalculation() {
+        AssessmentRound round = buildRound(Instant.now().minus(1, ChronoUnit.DAYS));
+        round.completePercentileCalculation();
+
+        when(assessmentRoundRepository.findByEndsAtBeforeAndRoundStatusNot(any(), anyString()))
+                .thenReturn(List.of(round));
+        when(assessmentRoundRepository.findByIdForUpdate(ROUND_ID)).thenReturn(Optional.of(round));
 
         int processedCount = assessmentPercentileBatchService.calculatePercentilesForEndedRounds();
 
