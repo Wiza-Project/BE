@@ -56,14 +56,16 @@ public class ProgramApplicationAdminController {
                 programId, applicationId, request.reason(), authUser.getId()));
     }
 
-    @Operation(summary = "참여 신청 목록 조회", description = "프로그램 하나의 전체 신청자를 상태 필터와 함께 페이지 단위로 조회합니다.")
+    @Operation(summary = "참여 신청 목록 조회", description = "프로그램 하나의 전체 신청자를 상태 필터·이름/학번 키워드 검색과 함께 페이지 단위로 조회합니다.")
     @GetMapping
     public ApiResponse<PageResponse<ProgramApplicationAdminListItemResponseDTO>> list(
             @PathVariable Integer programId,
             // 신청 상태(APPLIED/WAITLISTED/APPROVED/REJECTED/CANCELLED)로 필터링. 생략하면 전체 상태를 조회한다.
             @RequestParam(required = false) String status,
+            // 학생 이름/학번 부분 일치 검색. 생략하면 검색 없이 전체 신청자를 조회한다.
+            @RequestParam(required = false) String keyword,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
-        return ApiResponse.ok(programApplicationService.listByProgram(programId, status, pageable));
+        return ApiResponse.ok(programApplicationService.listByProgram(programId, status, keyword, pageable));
     }
 
     @Operation(summary = "참여 신청 일괄 승인", description = "선택한 여러 신청 건을 한 번에 승인합니다. 정원 초과 등으로 일부만 실패할 수 있습니다.")
