@@ -90,6 +90,15 @@ public enum ErrorCode {
     ASSESSMENT_ROUND_NOT_EDITABLE(HttpStatus.BAD_REQUEST, "Q012", "이미 응시가 시작된 회차는 수정할 수 없습니다."),
     // 진단 동의 화면에서 사용할 유효한 ConsentPolicy(module_code=ASSESSMENT)가 시딩되지 않았을 때 사용하는 에러코드.
     CONSENT_POLICY_NOT_FOUND(HttpStatus.INTERNAL_SERVER_ERROR, "Q013", "진단 동의 정책을 찾을 수 없습니다."),
+    // 존재하지 않거나 본인(로그인한 학생) 소유가 아닌 attempt에 접근하려고 할 때 사용하는 에러코드(소유권 비노출을 위해 둘을 구분하지 않음).
+    ASSESSMENT_ATTEMPT_NOT_FOUND(HttpStatus.NOT_FOUND, "Q014", "응시 정보를 찾을 수 없습니다."),
+    // 해당 회차의 문항 구성에 포함되지 않은 questionId로 응답을 저장하려고 할 때 사용하는 에러코드.
+    QUESTION_NOT_IN_ROUND(HttpStatus.BAD_REQUEST, "Q015", "해당 회차에 속하지 않은 문항입니다."),
+    // 문항의 response_options에 정의되지 않은 값으로 응답을 저장하려고 할 때 사용하는 에러코드.
+    INVALID_RESPONSE_VALUE(HttpStatus.BAD_REQUEST, "Q016", "허용되지 않은 응답값입니다."),
+    // 같은 문항에 대한 최초 응답 저장이 동시에 들어와 유니크 제약(uq_assessment_response_attempt_question)에
+    // 걸렸을 때 사용하는 에러코드. 먼저 간 요청은 이미 저장 성공했으므로 클라이언트는 같은 요청을 재시도하면 된다.
+    RESPONSE_SAVE_CONFLICT(HttpStatus.CONFLICT, "Q017", "저장이 동시에 처리되어 실패했습니다. 다시 시도해주세요."),
     // ── 상담 ──────────────────────────────────────────────────────
     COUNSELOR_NOT_FOUND(HttpStatus.NOT_FOUND, "S001", "상담사를 찾을 수 없습니다."),
     SCHEDULE_NOT_AVAILABLE(HttpStatus.CONFLICT, "S002", "이미 예약된 시간입니다."),
