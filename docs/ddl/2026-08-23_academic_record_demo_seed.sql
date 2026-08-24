@@ -11,6 +11,13 @@
 -- (이 레포엔 회원가입 엔드포인트가 없어 계정 자체는 이 스크립트 밖에서 생성된다).
 --
 -- 멱등: student_academic_detail 행이 이미 있는 학생은 건너뛴다 — 재실행해도 안전.
+--
+-- 트랜잭션: 스크립트 전체를 하나의 트랜잭션으로 묶는다. 문 단위로 개별 커밋되면 중간에
+-- 실패했을 때 student_academic_detail만 반쯤 채워진 채로 남고, 재실행해도 위 멱등 조건
+-- (행이 이미 있으면 건너뜀) 때문에 그 학생의 변동이력·academic_status는 영영 채워지지
+-- 않는다 — 전부 성공하거나 전부 안 남아야 재실행으로 복구 가능하다.
+
+BEGIN;
 
 -- 1. 대상 학생 목록 + 데모용 순번. 세션 스코프 임시 테이블이라 이 스크립트를 한 번에
 --    실행하는 psql 세션 안에서만 유효하고, 세션이 끝나면 자동으로 사라진다.
@@ -22,25 +29,36 @@ WHERE u.user_type = 'STUDENT'
   AND NOT EXISTS (SELECT 1 FROM student_academic_detail d WHERE d.user_id = u.user_id);
 
 -- 2. student_academic_detail — 시드 대상 MAJOR 8개를 순번으로 돌려가며 배정하고,
---    학년은 1~4를 순번으로 배정한다. 졸업 케이스(rn % 6 = 3, 3번 참고)는 8학기 이수로
---    맞춘다. 생년월일은 20살 전후로 흩어지도록 rn만큼 날짜를 밀어서 생성한다.
+--    학년은 1~4를 순번으로 배정하되 졸업 케이스(rn % 6 = 3, 3번 참고)는 4학년으로
+--    강제한다(원래 rn%4만으로 학년을 정하면 1학년 졸업생 같은 모순 데이터가 생김).
+--    completed_semesters는 항상 이 grade에서 파생시켜(grade*2-1), 졸업 케이스만 8학기로
+--    덮어써 grade=4/8학기 조합이 어긋나지 않게 한다. 생년월일은 20살 전후로 흩어지도록
+--    rn만큼 날짜를 밀어서 생성한다.
 INSERT INTO student_academic_detail
     (user_id, major_code_id, grade, gender, birth_date, completed_semesters, created_at, updated_at)
 SELECT
-    t.user_id,
+    g.user_id,
     m.code_id,
-    CASE (t.rn % 4) WHEN 1 THEN 1 WHEN 2 THEN 2 WHEN 3 THEN 3 ELSE 4 END,
-    CASE WHEN t.rn % 2 = 0 THEN 'M' ELSE 'F' END,
-    (DATE '2004-03-02' - ((t.rn % 4) * 365 || ' days')::interval - ((t.rn % 30) || ' days')::interval)::date,
-    CASE WHEN t.rn % 6 = 3 THEN 8 ELSE ((t.rn % 4) * 2) + 1 END,
+    g.grade,
+    CASE WHEN g.rn % 2 = 0 THEN 'M' ELSE 'F' END,
+    (DATE '2004-03-02' - ((g.rn % 4) * 365 || ' days')::interval - ((g.rn % 30) || ' days')::interval)::date,
+    CASE WHEN g.rn % 6 = 3 THEN 8 ELSE (g.grade * 2) - 1 END,
     now(), now()
-FROM _academic_seed_target t
+FROM (
+    SELECT
+        t.user_id,
+        t.rn,
+        CASE WHEN t.rn % 6 = 3 THEN 4
+             ELSE CASE (t.rn % 4) WHEN 1 THEN 1 WHEN 2 THEN 2 WHEN 3 THEN 3 ELSE 4 END
+        END AS grade
+    FROM _academic_seed_target t
+) g
 JOIN LATERAL (
     SELECT code_id
     FROM common_code
     WHERE code_group = 'MAJOR'
     ORDER BY sort_order
-    OFFSET (t.rn - 1) % (SELECT count(*) FROM common_code WHERE code_group = 'MAJOR')
+    OFFSET (g.rn - 1) % (SELECT count(*) FROM common_code WHERE code_group = 'MAJOR')
     LIMIT 1
 ) m ON true;
 
@@ -138,3 +156,5 @@ UPDATE app_user SET academic_status = '재학'
 WHERE user_id IN (SELECT user_id FROM _academic_seed_target WHERE rn % 6 = 0);
 
 DROP TABLE _academic_seed_target;
+
+COMMIT;

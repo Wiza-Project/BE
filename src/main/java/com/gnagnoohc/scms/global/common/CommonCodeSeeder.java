@@ -44,13 +44,16 @@ public class CommonCodeSeeder implements CommandLineRunner {
     private final JdbcTemplate jdbcTemplate;
 
     /**
-     * parentCode는 부모 행의 {@code code} 값(그룹 무관, 이 프로젝트 관례상 접두어로 전역
-     * 유일함)을 가리킨다 — {@code run()}에서 실제 삽입 시점에 code_id로 조회해 채운다.
-     * 기존 4-arg 시드 60여 줄이 그대로 컴파일되도록 4-arg 생성자를 남겨둔다(parentCode=null).
+     * parentGroup/parentCode는 부모 행의 {@code (code_group, code)} 복합키를 가리킨다 —
+     * {@code run()}에서 실제 삽입 시점에 code_id로 조회해 채운다. {@code common_code}의
+     * 실제 유니크 제약이 {@code (code_group, code)}라서(uq_common_code_group_code), code만
+     * 보고 조회하면 다른 그룹이 같은 code 문자열을 쓰는 순간 다중 행이 잡혀 조회가 깨진다
+     * — 그래서 조회 조건에 항상 parentGroup을 같이 건다.
+     * 기존 4-arg 시드 60여 줄이 그대로 컴파일되도록 4-arg 생성자를 남겨둔다(parent 없음).
      */
-    private record Seed(String group, String code, String name, int sortOrder, String parentCode) {
+    private record Seed(String group, String code, String name, int sortOrder, String parentGroup, String parentCode) {
         Seed(String group, String code, String name, int sortOrder) {
-            this(group, code, name, sortOrder, null);
+            this(group, code, name, sortOrder, null, null);
         }
     }
 
@@ -168,15 +171,15 @@ public class CommonCodeSeeder implements CommandLineRunner {
             // 학적변동사유(ACADEMIC_CHANGE_REASON) — student_academic_change.change_reason_code_id 가 참조.
             // parent_code_id로 위 ACADEMIC_CHANGE_TYPE에 종속된다(예: AC200 휴학을 고르면
             // 사유가 AR200/AR300/AR400으로 좁혀짐). 접두어(AR)+100단위.
-            new Seed("ACADEMIC_CHANGE_REASON", "AR100", "신입학", 1, "AC100"),
-            new Seed("ACADEMIC_CHANGE_REASON", "AR200", "일반휴학", 2, "AC200"),
-            new Seed("ACADEMIC_CHANGE_REASON", "AR300", "군휴학", 3, "AC200"),
-            new Seed("ACADEMIC_CHANGE_REASON", "AR400", "질병휴학", 4, "AC200"),
-            new Seed("ACADEMIC_CHANGE_REASON", "AR500", "일반복학", 5, "AC300"),
-            new Seed("ACADEMIC_CHANGE_REASON", "AR600", "군복학", 6, "AC300"),
-            new Seed("ACADEMIC_CHANGE_REASON", "AR700", "졸업", 7, "AC400"),
-            new Seed("ACADEMIC_CHANGE_REASON", "AR800", "미등록제적", 8, "AC500"),
-            new Seed("ACADEMIC_CHANGE_REASON", "AR900", "자퇴", 9, "AC600")
+            new Seed("ACADEMIC_CHANGE_REASON", "AR100", "신입학", 1, "ACADEMIC_CHANGE_TYPE", "AC100"),
+            new Seed("ACADEMIC_CHANGE_REASON", "AR200", "일반휴학", 2, "ACADEMIC_CHANGE_TYPE", "AC200"),
+            new Seed("ACADEMIC_CHANGE_REASON", "AR300", "군휴학", 3, "ACADEMIC_CHANGE_TYPE", "AC200"),
+            new Seed("ACADEMIC_CHANGE_REASON", "AR400", "질병휴학", 4, "ACADEMIC_CHANGE_TYPE", "AC200"),
+            new Seed("ACADEMIC_CHANGE_REASON", "AR500", "일반복학", 5, "ACADEMIC_CHANGE_TYPE", "AC300"),
+            new Seed("ACADEMIC_CHANGE_REASON", "AR600", "군복학", 6, "ACADEMIC_CHANGE_TYPE", "AC300"),
+            new Seed("ACADEMIC_CHANGE_REASON", "AR700", "졸업", 7, "ACADEMIC_CHANGE_TYPE", "AC400"),
+            new Seed("ACADEMIC_CHANGE_REASON", "AR800", "미등록제적", 8, "ACADEMIC_CHANGE_TYPE", "AC500"),
+            new Seed("ACADEMIC_CHANGE_REASON", "AR900", "자퇴", 9, "ACADEMIC_CHANGE_TYPE", "AC600")
     );
 
     @Override
@@ -192,7 +195,8 @@ public class CommonCodeSeeder implements CommandLineRunner {
             // 이 시점에 이미 삽입돼 조회된다 — 순서를 바꾸지 말 것.
             Integer parentCodeId = seed.parentCode() == null ? null
                     : jdbcTemplate.queryForObject(
-                            "SELECT code_id FROM common_code WHERE code = ?", Integer.class, seed.parentCode());
+                            "SELECT code_id FROM common_code WHERE code_group = ? AND code = ?",
+                            Integer.class, seed.parentGroup(), seed.parentCode());
 
             inserted += jdbcTemplate.update("""
                     INSERT INTO common_code
