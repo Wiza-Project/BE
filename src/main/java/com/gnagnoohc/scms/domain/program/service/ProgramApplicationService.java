@@ -28,6 +28,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -409,9 +410,12 @@ public class ProgramApplicationService {
      * 먼저 커밋해버려 이후 cancel() 트랜잭션이 실패했을 때 "취소는 안 됐는데 알림만 나간" 상태가
      * 남을 수 있다. 클래스 레벨 @Transactional의 프록시가 가로챌 수 있도록 public이어야 한다.
      * 알림 발송 실패는 이미 커밋된 취소 처리에 영향을 줄 수 없지만, 예외가 이벤트 리스너 밖으로
-     * 전파되지 않도록 여기서 로그만 남기고 무시한다.
+     * 전파되지 않도록 여기서 로그만 남기고 무시한다. AFTER_COMMIT 시점엔 원본 트랜잭션이 이미
+     * 끝났으므로 대기자 조회를 위해 REQUIRES_NEW로 새 트랜잭션을 연다(클래스 레벨 REQUIRED로는
+     * @TransactionalEventListener와 함께 쓸 수 없어 부팅 시 예외가 난다).
      */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void notifyNextWaitlistedApplicant(WaitlistSlotOpenedEvent event) {
         applicationRepository.findFirstByProgram_ProgramIdAndApplicationStatusOrderByWaitlistOrderAsc(
                         event.programId(), ApplicationStatus.WAITLISTED.name())
