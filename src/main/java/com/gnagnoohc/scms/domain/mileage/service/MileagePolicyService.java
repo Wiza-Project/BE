@@ -45,7 +45,7 @@ public class MileagePolicyService {
      * version_no는 클라이언트가 정하지 않는다 — 같은 활동유형+학년도+학기 조합 내에서 서버가 자동으로 다음 버전을 채번한다.
      */
     public MileagePolicyResponseDTO register(MileagePolicyRegisterRequestDTO request, Integer staffId) {
-        MileageActivityType activityType = activityTypeRepository.findById(request.activityTypeId())
+        MileageActivityType activityType = activityTypeRepository.findByIdForUpdate(request.activityTypeId())
                 .filter(MileageActivityType::isActive)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MILEAGE_ACTIVITY_TYPE_NOT_FOUND));
 
@@ -73,7 +73,7 @@ public class MileagePolicyService {
                     now
             );
         } catch (DataIntegrityViolationException e) {
-            // 자동 채번된 버전이라도 동시 등록 시 uq_mileage_policy_activity_period_version 위반이 날 수 있다.
+            // findByIdForUpdate 락으로 동시 등록 채번 레이스는 막았지만, 방어적으로 유니크 제약 위반도 처리한다.
             if (DbConstraintViolationMatcher.contains(e, "uq_mileage_policy_activity_period_version")) {
                 throw new BusinessException(ErrorCode.MILEAGE_POLICY_DUPLICATE);
             }
@@ -106,13 +106,18 @@ public class MileagePolicyService {
      * 요청 필드가 null이면 기존 값을 그대로 유지한다.
      */
     public MileagePolicyResponseDTO update(Integer mileagePolicyId, MileagePolicyUpdateRequestDTO request) {
-        MileagePolicy policy = policyRepository.findById(mileagePolicyId)
+        if (request.clearValidTo() && request.validTo() != null) {
+            throw new BusinessException(ErrorCode.MILEAGE_POLICY_VALID_TO_CONFLICT);
+        }
+
+        MileagePolicy policy = policyRepository.findByIdForUpdate(mileagePolicyId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MILEAGE_POLICY_NOT_FOUND));
 
         BigDecimal points = request.points() != null ? request.points() : policy.getPoints();
         BigDecimal maximumPoints = request.maximumPoints() != null ? request.maximumPoints() : policy.getMaximumPoints();
         LocalDate validFrom = request.validFrom() != null ? request.validFrom() : policy.getValidFrom();
-        LocalDate validTo = request.validTo() != null ? request.validTo() : policy.getValidTo();
+        LocalDate validTo = request.clearValidTo() ? null
+                : request.validTo() != null ? request.validTo() : policy.getValidTo();
         JsonNode duplicateRule = request.duplicateRule() != null ? request.duplicateRule() : policy.getDuplicateRule();
         String policyStatus = request.policyStatus() != null ? request.policyStatus() : policy.getPolicyStatus();
 

@@ -45,7 +45,7 @@ class MileagePolicyServiceTest {
         MileageActivityType activityType = mock(MileageActivityType.class);
         when(activityType.isActive()).thenReturn(true);
         when(activityType.getActivityTypeId()).thenReturn(5);
-        when(activityTypeRepository.findById(5)).thenReturn(Optional.of(activityType));
+        when(activityTypeRepository.findByIdForUpdate(5)).thenReturn(Optional.of(activityType));
         when(policyRepository.findNextVersionNo(5, 2026, "ALL")).thenReturn(2);
         when(policyRepository.insertPolicy(eq(5), eq(2026), eq("ALL"), eq(2), any(), any(), any(), any(), any(), eq("ACTIVE"), eq(100), any()))
                 .thenReturn(99);
@@ -68,7 +68,7 @@ class MileagePolicyServiceTest {
     void register_throwsWhenActivityTypeInactive() {
         MileageActivityType activityType = mock(MileageActivityType.class);
         when(activityType.isActive()).thenReturn(false);
-        when(activityTypeRepository.findById(5)).thenReturn(Optional.of(activityType));
+        when(activityTypeRepository.findByIdForUpdate(5)).thenReturn(Optional.of(activityType));
 
         MileagePolicyRegisterRequestDTO request = new MileagePolicyRegisterRequestDTO(
                 5, 2026, null, new BigDecimal("10"), null, LocalDate.of(2026, 3, 1), null, null);
@@ -83,7 +83,7 @@ class MileagePolicyServiceTest {
     void register_throwsWhenValidFromNotBeforeValidTo() {
         MileageActivityType activityType = mock(MileageActivityType.class);
         when(activityType.isActive()).thenReturn(true);
-        when(activityTypeRepository.findById(5)).thenReturn(Optional.of(activityType));
+        when(activityTypeRepository.findByIdForUpdate(5)).thenReturn(Optional.of(activityType));
 
         MileagePolicyRegisterRequestDTO request = new MileagePolicyRegisterRequestDTO(
                 5, 2026, null, new BigDecimal("10"), null,
@@ -99,7 +99,7 @@ class MileagePolicyServiceTest {
         MileageActivityType activityType = mock(MileageActivityType.class);
         when(activityType.isActive()).thenReturn(true);
         when(activityType.getActivityTypeId()).thenReturn(5);
-        when(activityTypeRepository.findById(5)).thenReturn(Optional.of(activityType));
+        when(activityTypeRepository.findByIdForUpdate(5)).thenReturn(Optional.of(activityType));
         when(policyRepository.findNextVersionNo(5, 2026, "ALL")).thenReturn(1);
         when(policyRepository.insertPolicy(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenThrow(new DataIntegrityViolationException(
@@ -124,13 +124,14 @@ class MileagePolicyServiceTest {
         when(existing.getValidTo()).thenReturn(null);
         when(existing.getDuplicateRule()).thenReturn(null);
         when(existing.getPolicyStatus()).thenReturn("ACTIVE");
+        when(policyRepository.findByIdForUpdate(99)).thenReturn(Optional.of(existing));
         when(policyRepository.findById(99)).thenReturn(Optional.of(existing));
         when(policyRepository.updatePolicy(eq(99), eq(new BigDecimal("10")), eq(null),
                 eq(LocalDate.of(2026, 3, 1)), eq(null), eq(null), eq("INACTIVE")))
                 .thenReturn(1);
 
         MileagePolicyUpdateRequestDTO request = new MileagePolicyUpdateRequestDTO(
-                null, null, null, null, null, "INACTIVE");
+                null, null, null, null, false, null, "INACTIVE");
 
         mileagePolicyService.update(99, request);
 
@@ -145,14 +146,47 @@ class MileagePolicyServiceTest {
         when(existing.getPoints()).thenReturn(new BigDecimal("10"));
         when(existing.getValidFrom()).thenReturn(LocalDate.of(2026, 3, 1));
         when(existing.getPolicyStatus()).thenReturn("ACTIVE");
-        when(policyRepository.findById(99)).thenReturn(Optional.of(existing));
+        when(policyRepository.findByIdForUpdate(99)).thenReturn(Optional.of(existing));
         when(policyRepository.updatePolicy(any(), any(), any(), any(), any(), any(), any())).thenReturn(0);
 
         MileagePolicyUpdateRequestDTO request = new MileagePolicyUpdateRequestDTO(
-                null, null, null, null, null, null);
+                null, null, null, null, false, null, null);
 
         assertThatThrownBy(() -> mileagePolicyService.update(99, request))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.MILEAGE_POLICY_NOT_FOUND);
+    }
+
+    @Test
+    void update_whenClearValidToTrue_setsValidToNull() {
+        MileagePolicy existing = mock(MileagePolicy.class);
+        when(existing.getActivityType()).thenReturn(mock(MileageActivityType.class));
+        when(existing.getPoints()).thenReturn(new BigDecimal("10"));
+        when(existing.getMaximumPoints()).thenReturn(null);
+        when(existing.getValidFrom()).thenReturn(LocalDate.of(2026, 3, 1));
+        when(existing.getDuplicateRule()).thenReturn(null);
+        when(existing.getPolicyStatus()).thenReturn("ACTIVE");
+        when(policyRepository.findByIdForUpdate(99)).thenReturn(Optional.of(existing));
+        when(policyRepository.findById(99)).thenReturn(Optional.of(existing));
+        when(policyRepository.updatePolicy(eq(99), any(), any(), any(), eq(null), any(), any()))
+                .thenReturn(1);
+
+        MileagePolicyUpdateRequestDTO request = new MileagePolicyUpdateRequestDTO(
+                null, null, null, null, true, null, null);
+
+        mileagePolicyService.update(99, request);
+
+        verify(policyRepository).updatePolicy(eq(99), any(), any(), any(), eq(null), any(), any());
+    }
+
+    @Test
+    void update_whenValidToAndClearValidToBothSet_throwsConflict() {
+        MileagePolicyUpdateRequestDTO request = new MileagePolicyUpdateRequestDTO(
+                null, null, null, LocalDate.of(2026, 8, 31), true, null, null);
+
+        assertThatThrownBy(() -> mileagePolicyService.update(99, request))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.MILEAGE_POLICY_VALID_TO_CONFLICT);
+        verify(policyRepository, never()).findByIdForUpdate(any());
     }
 }

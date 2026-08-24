@@ -1,12 +1,14 @@
 package com.gnagnoohc.scms.domain.mileage.repository;
 
 import com.gnagnoohc.scms.domain.mileage.entity.MileagePolicy;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -14,6 +16,7 @@ import org.springframework.data.repository.query.Param;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Optional;
 
 public interface MileagePolicyRepository extends JpaRepository<MileagePolicy, Integer>,
         JpaSpecificationExecutor<MileagePolicy> {
@@ -61,6 +64,15 @@ public interface MileagePolicyRepository extends JpaRepository<MileagePolicy, In
     Integer findNextVersionNo(@Param("activityTypeId") Integer activityTypeId,
                                @Param("academicYear") Integer academicYear,
                                @Param("semesterCode") String semesterCode);
+
+    /**
+     * 정책 row에 비관적 락을 걸어 조회한다(ExtracurricularProgramRepository.findByIdForUpdate와 동일 패턴).
+     * update()의 조회→null-병합→UPDATE 전체를 이 락 아래에서 수행해야, 두 관리자가 같은 정책을
+     * 동시에 부분 수정할 때 나중 커밋이 먼저 커밋된 필드를 옛 값으로 덮어쓰는 lost update를 막을 수 있다.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT p FROM MileagePolicy p WHERE p.mileagePolicyId = :mileagePolicyId")
+    Optional<MileagePolicy> findByIdForUpdate(@Param("mileagePolicyId") Integer mileagePolicyId);
 
     /**
      * 식별 필드(activity_type_id/academic_year/semester_code/version_no)를 제외한 가변 필드만
