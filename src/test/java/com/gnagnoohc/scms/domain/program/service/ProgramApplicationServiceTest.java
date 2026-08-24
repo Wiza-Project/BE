@@ -573,11 +573,11 @@ class ProgramApplicationServiceTest {
 
         Pageable pageable = PageRequest.of(0, 20);
         when(programRepository.existsById(1)).thenReturn(true);
-        when(applicationRepository.findAllByProgramIdAndStatus(1, null, pageable))
+        when(applicationRepository.findAllByProgramIdAndStatus(1, null, null, pageable))
                 .thenReturn(new PageImpl<>(List.of(application), pageable, 1));
 
         PageResponse<ProgramApplicationAdminListItemResponseDTO> response =
-                programApplicationService.listByProgram(1, null, pageable);
+                programApplicationService.listByProgram(1, null, null, pageable);
 
         assertThat(response.content()).hasSize(1);
         assertThat(response.content().get(0).studentName()).isEqualTo("홍길동");
@@ -585,10 +585,42 @@ class ProgramApplicationServiceTest {
     }
 
     @Test
+    void listByProgram_whenKeywordBlank_searchesWithoutKeyword() throws Exception {
+        ExtracurricularProgram program = buildProgramFixture(1, Instant.now(), Instant.now(), 10);
+        ProgramApplication application = buildApplicationFixture(5, program, "APPLIED", 100);
+        ReflectionTestUtils.setField(application.getStudent(), "userName", "홍길동");
+        ReflectionTestUtils.setField(application.getStudent(), "universityNo", "2021000123");
+
+        Pageable pageable = PageRequest.of(0, 20);
+        when(programRepository.existsById(1)).thenReturn(true);
+        when(applicationRepository.findAllByProgramIdAndStatus(1, null, null, pageable))
+                .thenReturn(new PageImpl<>(List.of(application), pageable, 1));
+
+        PageResponse<ProgramApplicationAdminListItemResponseDTO> response =
+                programApplicationService.listByProgram(1, null, "  ", pageable);
+
+        assertThat(response.content()).hasSize(1);
+    }
+
+    @Test
+    void listByProgram_whenKeywordGiven_passesTrimmedKeywordToRepository() throws Exception {
+        Pageable pageable = PageRequest.of(0, 20);
+        when(programRepository.existsById(1)).thenReturn(true);
+        when(applicationRepository.findAllByProgramIdAndStatus(1, null, "홍길동", pageable))
+                .thenReturn(new PageImpl<>(List.of(), pageable, 0));
+
+        PageResponse<ProgramApplicationAdminListItemResponseDTO> response =
+                programApplicationService.listByProgram(1, null, "  홍길동  ", pageable);
+
+        assertThat(response.content()).isEmpty();
+        verify(applicationRepository).findAllByProgramIdAndStatus(1, null, "홍길동", pageable);
+    }
+
+    @Test
     void listByProgram_whenProgramNotFound_throwsProgramNotFound() {
         when(programRepository.existsById(1)).thenReturn(false);
 
-        assertThatThrownBy(() -> programApplicationService.listByProgram(1, null, PageRequest.of(0, 20)))
+        assertThatThrownBy(() -> programApplicationService.listByProgram(1, null, null, PageRequest.of(0, 20)))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.PROGRAM_NOT_FOUND);

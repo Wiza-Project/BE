@@ -223,21 +223,28 @@ public interface ProgramApplicationRepository extends JpaRepository<ProgramAppli
      *
      * 스태프가 신청관리/이수판정 화면에서 프로그램 하나의 전체 신청자를 조회한다. student는 지연 로딩(LAZY)이고
      * 응답에 학생 이름/학번이 필요하므로 JOIN FETCH로 N+1을 방지한다(listMyApplications와 같은 이유).
-     * status가 null이면 상태 필터 없이 전체 신청자를 조회한다.
+     * status가 null이면 상태 필터 없이 전체 신청자를 조회하고, keyword가 null이면 이름/학번 검색 없이 전체 신청자를 조회한다.
      */
     @Query(value = """
         SELECT a FROM ProgramApplication a
         JOIN FETCH a.student
         WHERE a.program.programId = :programId
           AND (:status IS NULL OR a.applicationStatus = :status)
+          AND (:keyword IS NULL
+               OR LOWER(a.student.userName) LIKE LOWER(CONCAT('%', :keyword, '%'))
+               OR LOWER(a.student.universityNo) LIKE LOWER(CONCAT('%', :keyword, '%')))
         """,
         countQuery = """
         SELECT COUNT(a) FROM ProgramApplication a
         WHERE a.program.programId = :programId
           AND (:status IS NULL OR a.applicationStatus = :status)
+          AND (:keyword IS NULL
+               OR LOWER(a.student.userName) LIKE LOWER(CONCAT('%', :keyword, '%'))
+               OR LOWER(a.student.universityNo) LIKE LOWER(CONCAT('%', :keyword, '%')))
         """)
     Page<ProgramApplication> findAllByProgramIdAndStatus(@Param("programId") Integer programId,
-                                                           @Param("status") String status, Pageable pageable);
+                                                           @Param("status") String status,
+                                                           @Param("keyword") String keyword, Pageable pageable);
 
     /**
      * ── 여기부터 "만족도 설문 완료 처리(Update)" 기능 ──────────────────────────────
