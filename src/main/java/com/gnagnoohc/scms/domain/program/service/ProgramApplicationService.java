@@ -142,14 +142,16 @@ public class ProgramApplicationService {
      * 신청 시점에 대기(WAITLISTED)로 분류됐던 건이라도, 다른 신청이 반려되어 자리가 나면 승인할 수 있다.
      */
     public ProgramApplicationDecisionResponseDTO approve(Integer programId, Integer applicationId, Integer staffId) {
-        ProgramApplication application = findApplicationForUpdate(programId, applicationId);
-
         /**
          * 프로그램 row에 락을 걸어, "현재 승인 건수 확인"과 "실제 승인 반영" 사이에
          * 다른 승인 요청이 끼어들어 정원을 초과하는 경쟁 조건을 막는다 (apply()와 동일한 이유).
+         * apply()가 프로그램 행 → 신청 행 순서로 잠그는 것과 반드시 같은 순서로 잠가야 한다 —
+         * 순서가 반대이면 동시에 실행되는 apply()와 approve()가 서로의 락을 기다리며 DB 데드락이 날 수 있다.
          */
         ExtracurricularProgram program = programRepository.findByIdForUpdate(programId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PROGRAM_NOT_FOUND));
+
+        ProgramApplication application = findApplicationForUpdate(programId, applicationId);
 
         long approvedCount = applicationRepository.countByProgram_ProgramIdAndApplicationStatus(
                 programId, ApplicationStatus.APPROVED.name());
@@ -430,35 +432,57 @@ public class ProgramApplicationService {
     }
 
     /**
-     * 취소로 정원 슬롯이 비었을 때, cancel()의 트랜잭션이 커밋된 이후에(AFTER_COMMIT) 대기 1순위
-     * 학생을 조회해 "자리가 났다"는 알림을 보낸다. 커밋 전에 조회/발송하면 (1) 조회 실패가 아직
-     * 반영되지 않은 취소 처리까지 롤백시키거나, (2) NotificationSender.send()가 REQUIRES_NEW로
-     * 먼저 커밋해버려 이후 cancel() 트랜잭션이 실패했을 때 "취소는 안 됐는데 알림만 나간" 상태가
-     * 남을 수 있다. 클래스 레벨 @Transactional의 프록시가 가로챌 수 있도록 public이어야 한다.
-     * 알림 발송 실패는 이미 커밋된 취소 처리에 영향을 줄 수 없지만, 예외가 이벤트 리스너 밖으로
+     * 취소로 정원 슬롯이 비었을 때, cancel()의 트랜잭션이 커밋된 이후에(AFTER_COMMIT) 대기자
+     * 전원에게 "지금 몇 자리가 났는지"를 안내하는 알림을 보낸다. 커밋 전에 조회/발송하면 (1) 조회
+     * 실패가 아직 반영되지 않은 취소 처리까지 롤백시키거나, (2) NotificationSender.send()가
+     * REQUIRES_NEW로 먼저 커밋해버려 이후 cancel() 트랜잭션이 실패했을 때 "취소는 안 됐는데 알림만
+     * 나간" 상태가 남을 수 있다. 클래스 레벨 @Transactional의 프록시가 가로챌 수 있도록 public이어야
+     * 한다. 알림 발송 실패는 이미 커밋된 취소 처리에 영향을 줄 수 없지만, 예외가 이벤트 리스너 밖으로
      * 전파되지 않도록 여기서 로그만 남기고 무시한다. AFTER_COMMIT 시점엔 원본 트랜잭션이 이미
      * 끝났으므로 대기자 조회를 위해 REQUIRES_NEW로 새 트랜잭션을 연다(클래스 레벨 REQUIRED로는
      * @TransactionalEventListener와 함께 쓸 수 없어 부팅 시 예외가 난다).
+     *
+     * 대기 1순위 한 명만 골라 알림을 보내던 이전 방식은, 취소 두 건이 거의 동시에 발생하면 두
+     * 리스너 실행이 동시에 같은 1순위를 읽어 중복 알림을 보내고 실제 2번째로 열린 자리는 아무에게도
+     * 안내되지 않는 경쟁 조건이 있었다. 그래서 "특정 한 명을 예약"하는 대신, 매번 그 시점의 열린
+     * 자리 수(capacity - 정원을 차지하는 APPLIED/APPROVED 건수)를 다시 계산해 대기자 전원에게
+     * 그 개수를 그대로 안내하는 방식으로 바꿨다 — 누구를 고를지 정하지 않으므로 동시 실행 자체가
+     * 문제가 되지 않는다. 이 개수는 안내용 스냅샷일 뿐이며, 실제 정원 검증은 approve()가 프로그램
+     * 행 락 + 승인 건수 확인으로 별도 보장한다.
      */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void notifyNextWaitlistedApplicant(WaitlistSlotOpenedEvent event) {
-        applicationRepository.findFirstByProgram_ProgramIdAndApplicationStatusOrderByWaitlistOrderAsc(
-                        event.programId(), ApplicationStatus.WAITLISTED.name())
-                .ifPresent(nextInLine -> {
-                    try {
-                        notificationSender.send(new NotificationRequest(
-                                nextInLine.getStudent().getUserId(),
-                                NotificationType.WAITLIST_SLOT_OPENED,
-                                ModuleCode.PROGRAM,
-                                "대기중인 프로그램에 자리가 났습니다",
-                                "'%s' 프로그램에 자리가 생겼습니다. 지원 확정을 원하시면 서둘러 확인해주세요."
-                                        .formatted(event.programName())
-                        ));
-                    } catch (Exception e) {
-                        log.warn("대기자 자리 발생 알림 발송 실패 (applicationId={}, programId={})",
-                                nextInLine.getApplicationId(), event.programId(), e);
-                    }
-                });
+        Optional<ExtracurricularProgram> program = programRepository.findById(event.programId());
+        if (program.isEmpty()) {
+            return;
+        }
+
+        long occupiedCount = applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(
+                event.programId(), List.of(ApplicationStatus.APPLIED.name(), ApplicationStatus.APPROVED.name()));
+        long availableSlots = program.get().getCapacity() - occupiedCount;
+        if (availableSlots <= 0) {
+            return;
+        }
+
+        List<ProgramApplication> waitlisted = applicationRepository
+                .findAllByProgram_ProgramIdAndApplicationStatusOrderByWaitlistOrderAsc(
+                        event.programId(), ApplicationStatus.WAITLISTED.name());
+
+        for (ProgramApplication applicant : waitlisted) {
+            try {
+                notificationSender.send(new NotificationRequest(
+                        applicant.getStudent().getUserId(),
+                        NotificationType.WAITLIST_SLOT_OPENED,
+                        ModuleCode.PROGRAM,
+                        "대기중인 프로그램에 자리가 났습니다",
+                        "'%s' 프로그램에 %d자리가 났습니다. 지원 확정을 원하시면 서둘러 확인해주세요."
+                                .formatted(event.programName(), availableSlots)
+                ));
+            } catch (Exception e) {
+                log.warn("대기자 자리 발생 알림 발송 실패 (applicationId={}, programId={})",
+                        applicant.getApplicationId(), event.programId(), e);
+            }
+        }
     }
 }

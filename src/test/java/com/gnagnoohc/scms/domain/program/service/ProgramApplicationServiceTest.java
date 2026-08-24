@@ -288,6 +288,7 @@ class ProgramApplicationServiceTest {
         ExtracurricularProgram program = buildProgramFixture(1, Instant.now(), Instant.now(), 10);
         ProgramApplication application = buildApplicationFixture(5, program, "APPROVED");
 
+        when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
         when(applicationRepository.findByIdForUpdate(5)).thenReturn(Optional.of(application));
 
         assertThatThrownBy(() -> programApplicationService.approve(1, 5, 200))
@@ -455,27 +456,54 @@ class ProgramApplicationServiceTest {
      * AFTER_COMMIT)에 실행되는 리스너라, cancel()을 거치지 않고 이벤트를 직접 넘겨 호출한다.
      */
     @Test
-    void notifyNextWaitlistedApplicant_whenWaitlistedApplicantExists_sendsNotification() throws Exception {
+    void notifyNextWaitlistedApplicant_whenSlotsOpen_sendsSlotCountToAllWaitlisted() throws Exception {
         ExtracurricularProgram program = buildProgramFixture(1, Instant.now(), Instant.now(), 10);
-        ProgramApplication nextInLine = buildApplicationFixture(7, program, "WAITLISTED", 200);
+        ProgramApplication first = buildApplicationFixture(7, program, "WAITLISTED", 200);
+        ProgramApplication second = buildApplicationFixture(8, program, "WAITLISTED", 201);
 
-        when(applicationRepository.findFirstByProgram_ProgramIdAndApplicationStatusOrderByWaitlistOrderAsc(
-                        1, "WAITLISTED"))
-                .thenReturn(Optional.of(nextInLine));
+        when(programRepository.findById(1)).thenReturn(Optional.of(program));
+        when(applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(1, List.of("APPLIED", "APPROVED")))
+                .thenReturn(8L);
+        when(applicationRepository.findAllByProgram_ProgramIdAndApplicationStatusOrderByWaitlistOrderAsc(1, "WAITLISTED"))
+                .thenReturn(List.of(first, second));
 
         programApplicationService.notifyNextWaitlistedApplicant(
                 new WaitlistSlotOpenedEvent(1, "테스트 프로그램"));
 
         verify(notificationSender).send(argThat(request ->
                 request.recipientUserId().equals(200)
-                        && request.content().contains("테스트 프로그램")));
+                        && request.content().contains("테스트 프로그램")
+                        && request.content().contains("2자리")));
+        verify(notificationSender).send(argThat(request ->
+                request.recipientUserId().equals(201)
+                        && request.content().contains("2자리")));
     }
 
     @Test
-    void notifyNextWaitlistedApplicant_whenNoWaitlistedApplicant_sendsNothing() {
-        when(applicationRepository.findFirstByProgram_ProgramIdAndApplicationStatusOrderByWaitlistOrderAsc(
-                        1, "WAITLISTED"))
-                .thenReturn(Optional.empty());
+    void notifyNextWaitlistedApplicant_whenNoSlotsAvailable_sendsNothing() throws Exception {
+        ExtracurricularProgram program = buildProgramFixture(1, Instant.now(), Instant.now(), 10);
+
+        when(programRepository.findById(1)).thenReturn(Optional.of(program));
+        when(applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(1, List.of("APPLIED", "APPROVED")))
+                .thenReturn(10L);
+
+        programApplicationService.notifyNextWaitlistedApplicant(
+                new WaitlistSlotOpenedEvent(1, "테스트 프로그램"));
+
+        verify(notificationSender, never()).send(any());
+        verify(applicationRepository, never())
+                .findAllByProgram_ProgramIdAndApplicationStatusOrderByWaitlistOrderAsc(any(), any());
+    }
+
+    @Test
+    void notifyNextWaitlistedApplicant_whenNoWaitlistedApplicant_sendsNothing() throws Exception {
+        ExtracurricularProgram program = buildProgramFixture(1, Instant.now(), Instant.now(), 10);
+
+        when(programRepository.findById(1)).thenReturn(Optional.of(program));
+        when(applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(1, List.of("APPLIED", "APPROVED")))
+                .thenReturn(8L);
+        when(applicationRepository.findAllByProgram_ProgramIdAndApplicationStatusOrderByWaitlistOrderAsc(1, "WAITLISTED"))
+                .thenReturn(List.of());
 
         programApplicationService.notifyNextWaitlistedApplicant(
                 new WaitlistSlotOpenedEvent(1, "테스트 프로그램"));
@@ -484,19 +512,24 @@ class ProgramApplicationServiceTest {
     }
 
     @Test
-    void notifyNextWaitlistedApplicant_whenSendFails_swallowsException() throws Exception {
+    void notifyNextWaitlistedApplicant_whenSendFailsForOne_swallowsExceptionAndNotifiesRest() throws Exception {
         ExtracurricularProgram program = buildProgramFixture(1, Instant.now(), Instant.now(), 10);
-        ProgramApplication nextInLine = buildApplicationFixture(7, program, "WAITLISTED", 200);
+        ProgramApplication first = buildApplicationFixture(7, program, "WAITLISTED", 200);
+        ProgramApplication second = buildApplicationFixture(8, program, "WAITLISTED", 201);
 
-        when(applicationRepository.findFirstByProgram_ProgramIdAndApplicationStatusOrderByWaitlistOrderAsc(
-                        1, "WAITLISTED"))
-                .thenReturn(Optional.of(nextInLine));
+        when(programRepository.findById(1)).thenReturn(Optional.of(program));
+        when(applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(1, List.of("APPLIED", "APPROVED")))
+                .thenReturn(9L);
+        when(applicationRepository.findAllByProgram_ProgramIdAndApplicationStatusOrderByWaitlistOrderAsc(1, "WAITLISTED"))
+                .thenReturn(List.of(first, second));
         doThrow(new RuntimeException("발송 실패"))
-                .when(notificationSender).send(any());
+                .when(notificationSender).send(argThat(request -> request.recipientUserId().equals(200)));
 
         assertThatCode(() -> programApplicationService.notifyNextWaitlistedApplicant(
                 new WaitlistSlotOpenedEvent(1, "테스트 프로그램")))
                 .doesNotThrowAnyException();
+
+        verify(notificationSender).send(argThat(request -> request.recipientUserId().equals(201)));
     }
 
     @Test
