@@ -1,6 +1,7 @@
 package com.gnagnoohc.scms.domain.mileage.repository;
 
 import com.gnagnoohc.scms.domain.mileage.entity.MileageTransaction;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -151,6 +152,66 @@ public interface MileageTransactionRepository extends JpaRepository<MileageTrans
             Pageable pageable
     );
 
+    /** 학생 본인의 확정 적립 거래 전체를 최신순 페이지로 조회한다. */
+    @Query(value = """
+            select t.mileageTransactionId as transactionId,
+                   t.transactionType as transactionType,
+                   t.points as points,
+                   t.transactionStatus as transactionStatus,
+                   coalesce(
+                       pa.program.programName,
+                       ec.activityName,
+                       reversalPa.program.programName,
+                       reversalEc.activityName,
+                       reversalActivityType.activityName,
+                       activityType.activityName,
+                       t.transactionReason,
+                       '마일리지 정정'
+                   ) as activityName,
+                   case
+                       when pa.applicationId is not null or reversalPa.applicationId is not null
+                           then 'EXTRACURRICULAR_PROGRAM'
+                       when ec.externalClaimId is not null or reversalEc.externalClaimId is not null
+                           then 'EXTERNAL_ACTIVITY'
+                       else 'OTHER'
+                   end as sourceType,
+                   coalesce(t.postedAt, t.createdAt) as occurredAt
+            from MileageTransaction t
+            left join t.mileagePolicy p
+            left join p.activityType activityType
+            left join t.sourceProgramApplication pa
+            left join t.sourceExternalClaim ec
+            left join t.reversalOfTransaction reversal
+            left join reversal.sourceProgramApplication reversalPa
+            left join reversal.sourceExternalClaim reversalEc
+            left join reversal.mileagePolicy reversalPolicy
+            left join reversalPolicy.activityType reversalActivityType
+            where t.student.userId = :studentId
+              and t.transactionType = 'EARN'
+              and t.transactionStatus = 'POSTED'
+            order by coalesce(t.postedAt, t.createdAt) desc,
+                     t.mileageTransactionId desc
+            """,
+            countQuery = """
+                    select count(t)
+                    from MileageTransaction t
+                    where t.student.userId = :studentId
+                      and t.transactionType = 'EARN'
+                      and t.transactionStatus = 'POSTED'
+                    """)
+    Page<TransactionHistoryProjection> findEarnedTransactions(
+            @Param("studentId") Integer studentId,
+            Pageable pageable
+    );
+
+    /** 학생 본인의 확정 적립 거래 상세 조회에 사용하는 소유권 조건이다. */
+    Optional<MileageTransaction> findByMileageTransactionIdAndStudent_UserIdAndTransactionTypeAndTransactionStatus(
+            Integer transactionId,
+            Integer studentId,
+            String transactionType,
+            String transactionStatus
+    );
+
     /** 카테고리별 점수 집계 쿼리의 조회 전용 결과다. */
     interface CategorySummaryProjection {
         String getCategoryCode();
@@ -178,6 +239,23 @@ public interface MileageTransactionRepository extends JpaRepository<MileageTrans
         String getTransactionStatus();
 
         String getActivityName();
+
+        Instant getOccurredAt();
+    }
+
+    /** 적립 원장 페이지 조회용 결과다. */
+    interface TransactionHistoryProjection {
+        Integer getTransactionId();
+
+        String getActivityName();
+
+        String getSourceType();
+
+        String getTransactionType();
+
+        BigDecimal getPoints();
+
+        String getTransactionStatus();
 
         Instant getOccurredAt();
     }

@@ -113,6 +113,11 @@ public enum ErrorCode {
     MILEAGE_ALREADY_CLAIMED(HttpStatus.CONFLICT, "M002", "이미 실적을 신청한 항목입니다."),
     INSUFFICIENT_MILEAGE(HttpStatus.BAD_REQUEST, "M003", "장학금 지급 기준 점수에 미달합니다."),
     MILEAGE_POLICY_NOT_FOUND(HttpStatus.NOT_FOUND, "M004", "마일리지 정책을 찾을 수 없습니다."),
+    // 같은 활동유형+학년도+학기+버전 조합으로 이미 정책이 존재할 때 사용하는 에러코드(uq_mileage_policy_activity_period_version).
+    MILEAGE_POLICY_DUPLICATE(HttpStatus.CONFLICT, "M005", "이미 동일한 조건의 마일리지 정책이 존재합니다."),
+    MILEAGE_POLICY_INVALID_PERIOD(HttpStatus.BAD_REQUEST, "M006", "적용 시작일은 종료일보다 빨라야 합니다."),
+    MILEAGE_ACTIVITY_TYPE_NOT_FOUND(HttpStatus.NOT_FOUND, "M007", "마일리지 활동 유형을 찾을 수 없습니다."),
+    MILEAGE_POLICY_VALID_TO_CONFLICT(HttpStatus.BAD_REQUEST, "M008", "validTo와 clearValidTo를 동시에 지정할 수 없습니다."),
 
     // ── 취창업 ────────────────────────────────────────────────────
     JOB_POSTING_NOT_FOUND(HttpStatus.NOT_FOUND, "J001", "구인공고를 찾을 수 없습니다."),
