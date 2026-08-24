@@ -96,15 +96,18 @@ public class ProgramApplicationService {
 
         /**
          * (d) 정원 확인 및 상태 결정 ----------------------------------------------------
-         * 정원 내 신청("APPLIED") 건수가 아직 정원(capacity)보다 적으면 정원 내 신청으로,
+         * 정원을 차지하는 상태는 APPLIED와 APPROVED 둘 다이므로(APPLIED가 승인되어도 슬롯은 그대로
+         * 점유된 채 유지됨), 둘을 합산한 건수가 아직 정원(capacity)보다 적으면 정원 내 신청으로,
          * 그렇지 않으면 대기 신청("WAITLISTED")으로 접수하고 다음 대기순번을 매긴다.
+         * APPLIED만 세면, APPLIED 전원이 APPROVED로 전환된 직후 그 자리가 빈 것처럼 보여 새 신청자를
+         * 다시 APPLIED로 받아들여 정원을 초과시키는 버그가 있었다.
          */
-        long appliedCount = applicationRepository.countByProgram_ProgramIdAndApplicationStatus(
-                programId, ApplicationStatus.APPLIED.name());
+        long occupiedCount = applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(
+                programId, List.of(ApplicationStatus.APPLIED.name(), ApplicationStatus.APPROVED.name()));
 
         ApplicationStatus status;
         Integer waitlistOrder;
-        if (appliedCount < program.getCapacity()) {
+        if (occupiedCount < program.getCapacity()) {
             status = ApplicationStatus.APPLIED;
             waitlistOrder = null;
         } else {
@@ -153,19 +156,49 @@ public class ProgramApplicationService {
 
         ProgramApplication application = findApplicationForUpdate(programId, applicationId);
 
-        long approvedCount = applicationRepository.countByProgram_ProgramIdAndApplicationStatus(
-                programId, ApplicationStatus.APPROVED.name());
-        if (approvedCount >= program.getCapacity()) {
-            throw new BusinessException(ErrorCode.PROGRAM_CAPACITY_EXCEEDED);
+        /**
+         * APPLIED → APPROVED는 이미 점유하고 있던 슬롯을 유지하는 전이일 뿐이라 정원을 새로 차지하지
+         * 않으므로 재검사하지 않는다(재검사하면 이미 정원 내로 받아둔 신청조차 승인하지 못하는 버그가
+         * 된다). WAITLISTED → APPROVED만 새 슬롯을 점유하므로 그 경우에만, APPLIED와 APPROVED를
+         * 합산한 점유 건수로 정원을 검사한다(apply()와 동일한 집계 기준).
+         */
+        if (ApplicationStatus.WAITLISTED.name().equals(application.getApplicationStatus())) {
+            long occupiedCount = applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(
+                    programId, List.of(ApplicationStatus.APPLIED.name(), ApplicationStatus.APPROVED.name()));
+            if (occupiedCount >= program.getCapacity()) {
+                throw new BusinessException(ErrorCode.PROGRAM_CAPACITY_EXCEEDED);
+            }
         }
 
         return applyDecision(application, ApplicationStatus.APPROVED, null, staffId);
     }
 
-    // 운영부서가 신청 건을 반려한다. 반려 사유(reason)는 컨트롤러 단 @NotBlank 검증으로 항상 채워져 있다.
+    /**
+     * 운영부서가 신청 건을 반려한다. 반려 사유(reason)는 컨트롤러 단 @NotBlank 검증으로 항상 채워져 있다.
+     * approve()와 동일한 이유로 프로그램 행을 신청 행보다 먼저 잠근다 — apply()가 정원을 확인하는 사이
+     * reject()가 프로그램 행 락 없이 자리를 비우면, apply()가 그 빈 자리를 보지 못하고 대기자로
+     * 잘못 접수하는 경쟁 조건이 있었다.
+     */
     public ProgramApplicationDecisionResponseDTO reject(Integer programId, Integer applicationId, String reason, Integer staffId) {
+        programRepository.findByIdForUpdate(programId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PROGRAM_NOT_FOUND));
+
         ProgramApplication application = findApplicationForUpdate(programId, applicationId);
-        return applyDecision(application, ApplicationStatus.REJECTED, reason, staffId);
+        String previousStatus = application.getApplicationStatus();
+
+        ProgramApplicationDecisionResponseDTO response =
+                applyDecision(application, ApplicationStatus.REJECTED, reason, staffId);
+
+        /**
+         * APPLIED였던 건의 반려는 정원 슬롯을 하나 비운다(cancel()의 (g)단계와 같은 기준).
+         * WAITLISTED였던 건은 애초에 정원 밖이었으므로 반려돼도 새로 열리는 자리가 없어 발행하지 않는다.
+         */
+        if (ApplicationStatus.APPLIED.name().equals(previousStatus)) {
+            eventPublisher.publishEvent(
+                    new WaitlistSlotOpenedEvent(programId, application.getProgram().getProgramName()));
+        }
+
+        return response;
     }
 
     /**
@@ -206,12 +239,22 @@ public class ProgramApplicationService {
      */
     public ProgramApplicationCancelResponseDTO cancel(Integer programId, Integer applicationId, Integer studentId, String reason) {
 
-        // (a) 존재 확인 + 락 --------------------------------------------------------
+        /**
+         * (a) 프로그램 행 락 -----------------------------------------------------------
+         * apply()/approve()/reject()와 같은 이유로, 신청 행보다 프로그램 행을 먼저 잠가서 apply()의
+         * 정원 확인과 이 취소 사이의 경쟁 조건을 막는다. 이 때문에 programId와 applicationId가
+         * 모두 잘못된 요청은 (이전처럼 APPLICATION_NOT_FOUND가 아니라) PROGRAM_NOT_FOUND가 된다 —
+         * 프로그램 행 락이 신청 행 조회보다 먼저 실행되므로 의도된 API 계약 변경이다.
+         */
+        programRepository.findByIdForUpdate(programId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PROGRAM_NOT_FOUND));
+
+        // (b) 존재 확인 + 락 --------------------------------------------------------
         ProgramApplication application = applicationRepository.findByIdForUpdate(applicationId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.APPLICATION_NOT_FOUND));
 
         /**
-         * (b) 요청 경로의 programId, 로그인한 학생 본인 소유가 맞는지 확인 -----------------------
+         * (c) 요청 경로의 programId, 로그인한 학생 본인 소유가 맞는지 확인 -----------------------
          * 존재 여부를 굳이 구분해서 노출하지 않기 위해, 승인/반려의 programId 불일치 처리와 같은 방식으로
          * 두 경우 모두 APPLICATION_NOT_FOUND를 던진다.
          */
@@ -223,7 +266,7 @@ public class ProgramApplicationService {
         }
 
         /**
-         * (c) 이미 반려/취소된 건이 아닌지 확인 --------------------------------------------
+         * (d) 이미 반려/취소된 건이 아닌지 확인 --------------------------------------------
          * 취소는 APPLIED/WAITLISTED/APPROVED 상태에서만 가능하다 (REJECTED/CANCELLED는 이미 종결된 상태).
          */
         String currentStatus = application.getApplicationStatus();
@@ -234,7 +277,7 @@ public class ProgramApplicationService {
         }
 
         /**
-         * (d) 모집 기간이 끝나지 않았는지 확인 ------------------------------------------------
+         * (e) 모집 기간이 끝나지 않았는지 확인 ------------------------------------------------
          * apply()와 같은 이유로, programStatus 컬럼을 믿지 않고 지금 시각을 모집 종료 시각과 직접 비교한다.
          */
         Instant now = Instant.now();
@@ -243,8 +286,8 @@ public class ProgramApplicationService {
         }
 
         /**
-         * (e) 실제 DB 반영 -------------------------------------------------------------
-         * updateCancellation의 WHERE 절에도 (c)/(d)와 같은 조건이 걸려있어, 이 확인과 실제 UPDATE 사이의
+         * (f) 실제 DB 반영 -------------------------------------------------------------
+         * updateCancellation의 WHERE 절에도 (d)/(e)와 같은 조건이 걸려있어, 이 확인과 실제 UPDATE 사이의
          * 경쟁 조건으로 0개의 row만 바뀌었다면 역시 "지금은 취소할 수 없는 상태였다"는 뜻이다
          * (ProgramService.delete의 deletedRows == 0 처리와 동일한 이유).
          */
@@ -254,7 +297,7 @@ public class ProgramApplicationService {
         }
 
         /**
-         * (f) 정원 슬롯이 실제로 비었다면 대기 1순위에게 알림 ------------------------------------
+         * (g) 정원 슬롯이 실제로 비었다면 대기 1순위에게 알림 ------------------------------------
          * WAITLISTED는 애초에 정원 외였으므로, 그 상태였던 신청이 취소된 경우는 자리 발생이 아니다.
          * APPLIED/APPROVED만 정원을 차지하던 상태이므로 그 경우에만 대기자에게 알린다.
          */
@@ -432,12 +475,12 @@ public class ProgramApplicationService {
     }
 
     /**
-     * 취소로 정원 슬롯이 비었을 때, cancel()의 트랜잭션이 커밋된 이후에(AFTER_COMMIT) 대기자
-     * 전원에게 "지금 몇 자리가 났는지"를 안내하는 알림을 보낸다. 커밋 전에 조회/발송하면 (1) 조회
-     * 실패가 아직 반영되지 않은 취소 처리까지 롤백시키거나, (2) NotificationSender.send()가
-     * REQUIRES_NEW로 먼저 커밋해버려 이후 cancel() 트랜잭션이 실패했을 때 "취소는 안 됐는데 알림만
-     * 나간" 상태가 남을 수 있다. 클래스 레벨 @Transactional의 프록시가 가로챌 수 있도록 public이어야
-     * 한다. 알림 발송 실패는 이미 커밋된 취소 처리에 영향을 줄 수 없지만, 예외가 이벤트 리스너 밖으로
+     * 취소 또는 반려로 정원 슬롯이 비었을 때, cancel()/reject()의 트랜잭션이 커밋된 이후에(AFTER_COMMIT)
+     * 대기자 전원에게 "지금 몇 자리가 났는지"를 안내하는 알림을 보낸다. 커밋 전에 조회/발송하면 (1) 조회
+     * 실패가 아직 반영되지 않은 취소/반려 처리까지 롤백시키거나, (2) NotificationSender.send()가
+     * REQUIRES_NEW로 먼저 커밋해버려 이후 cancel()/reject() 트랜잭션이 실패했을 때 "취소/반려는 안
+     * 됐는데 알림만 나간" 상태가 남을 수 있다. 클래스 레벨 @Transactional의 프록시가 가로챌 수 있도록
+     * public이어야 한다. 알림 발송 실패는 이미 커밋된 취소/반려 처리에 영향을 줄 수 없지만, 예외가 이벤트 리스너 밖으로
      * 전파되지 않도록 여기서 로그만 남기고 무시한다. AFTER_COMMIT 시점엔 원본 트랜잭션이 이미
      * 끝났으므로 대기자 조회를 위해 REQUIRES_NEW로 새 트랜잭션을 연다(클래스 레벨 REQUIRED로는
      * @TransactionalEventListener와 함께 쓸 수 없어 부팅 시 예외가 난다).
