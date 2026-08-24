@@ -2,8 +2,8 @@ package com.gnagnoohc.scms.global.common.service;
 
 import com.gnagnoohc.scms.global.common.entity.FileGroup;
 import com.gnagnoohc.scms.global.common.entity.StoredFile;
+import com.gnagnoohc.scms.global.common.helper.FileUploadValidator;
 import com.gnagnoohc.scms.global.common.repository.StoredFileRepository;
-import com.gnagnoohc.scms.global.common.util.FileValidator;
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
 import lombok.extern.slf4j.Slf4j;
@@ -37,15 +37,18 @@ public class LocalFileStorageService implements FileStorageService {
 
     private final StoredFileRepository storedFileRepository;
     private final MalwareScanner malwareScanner;
+    private final FileUploadValidator fileUploadValidator;
     private final Path uploadRoot;
 
     public LocalFileStorageService(
             StoredFileRepository storedFileRepository,
             MalwareScanner malwareScanner,
+            FileUploadValidator fileUploadValidator,
             @Value("${app.file.upload-dir}") String uploadDir
     ) {
         this.storedFileRepository = storedFileRepository;
         this.malwareScanner = malwareScanner;
+        this.fileUploadValidator = fileUploadValidator;
         this.uploadRoot = Path.of(uploadDir).toAbsolutePath().normalize();
     }
 
@@ -54,8 +57,8 @@ public class LocalFileStorageService implements FileStorageService {
     public StoredFile store(MultipartFile file, FileGroup fileGroup, Integer uploaderId) {
         // 크기 상한은 spring.servlet.multipart.max-file-size가 이미 요청 단계에서 강제한다
         // (여기 도달했다는 건 이미 통과했다는 뜻). 더 엄격한 제한이 필요한 도메인은
-        // FileValidator.validate(file, allowedExtensions, maxFileSize)를 직접 호출한다.
-        FileValidator.validate(file, FileValidator.SUPPORTED_EXTENSIONS);
+        // FileUploadValidator.validate(file, allowedExtensions, maxFileSize)를 직접 호출한다.
+        fileUploadValidator.validate(file, FileUploadValidator.SUPPORTED_EXTENSIONS);
         malwareScanner.scan(file);
 
         String extension = extractExtension(file.getOriginalFilename());
