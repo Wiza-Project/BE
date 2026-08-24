@@ -276,10 +276,19 @@ public class ProgramApplicationService {
         if (!programRepository.existsById(programId)) {
             throw new BusinessException(ErrorCode.PROGRAM_NOT_FOUND);
         }
-        String normalizedKeyword = StringUtils.hasText(keyword) ? keyword.trim() : null;
+        String normalizedKeyword = StringUtils.hasText(keyword) ? escapeLikeKeyword(keyword.trim()) : null;
         Page<ProgramApplication> applications = applicationRepository.findAllByProgramIdAndStatus(
                 programId, status, normalizedKeyword, pageable);
         return PageResponse.from(applications.map(ProgramApplicationAdminListItemResponseDTO::from));
+    }
+
+    /**
+     * LIKE 패턴에서 특별한 의미를 갖는 문자(%, _)를 리터럴 문자로 취급되도록 이스케이프한다.
+     * 이스케이프 문자 자체(!)를 가장 먼저 이스케이프해야, 뒤이어 %/_ 앞에 붙이는 !가 원본 키워드의 !와 섞이지 않는다.
+     * findAllByProgramIdAndStatus의 JPQL LIKE 절에 걸린 ESCAPE '!'와 반드시 짝을 맞춰야 한다.
+     */
+    private static String escapeLikeKeyword(String keyword) {
+        return keyword.replace("!", "!!").replace("%", "!%").replace("_", "!_");
     }
 
     /**

@@ -617,6 +617,20 @@ class ProgramApplicationServiceTest {
     }
 
     @Test
+    void listByProgram_whenKeywordContainsLikeWildcards_escapesBeforePassingToRepository() throws Exception {
+        Pageable pageable = PageRequest.of(0, 20);
+        when(programRepository.existsById(1)).thenReturn(true);
+        when(applicationRepository.findAllByProgramIdAndStatus(1, null, "100!%!_!!off", pageable))
+                .thenReturn(new PageImpl<>(List.of(), pageable, 0));
+
+        PageResponse<ProgramApplicationAdminListItemResponseDTO> response =
+                programApplicationService.listByProgram(1, null, "100%_!off", pageable);
+
+        assertThat(response.content()).isEmpty();
+        verify(applicationRepository).findAllByProgramIdAndStatus(1, null, "100!%!_!!off", pageable);
+    }
+
+    @Test
     void listByProgram_whenProgramNotFound_throwsProgramNotFound() {
         when(programRepository.existsById(1)).thenReturn(false);
 

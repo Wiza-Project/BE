@@ -181,6 +181,7 @@ class ProgramServiceTest {
         Instant now = Instant.now();
         ExtracurricularProgram program = buildProgramFixture(
                 1, managerUser, now.plusSeconds(3600), ProgramStatus.DRAFT);
+        ReflectionTestUtils.setField(program, "operatingUnitCode", buildCommonCodeFixture(11, "DEPARTMENT", "D200"));
 
         when(programRepository.findById(1)).thenReturn(Optional.of(program));
         when(programRepository.updateProgram(
@@ -194,7 +195,7 @@ class ProgramServiceTest {
         Instant operationEndsAt = operationStartsAt.plusSeconds(3600);
 
         ProgramUpdateRequestDTO request = new ProgramUpdateRequestDTO(
-                null, 1, 2, 3, null,
+                null, 2, 3, null,
                 "수정된 프로그램명", "설명",
                 recruitmentStartsAt, recruitmentEndsAt, operationStartsAt, operationEndsAt,
                 20, null
@@ -203,6 +204,43 @@ class ProgramServiceTest {
         ProgramUpdateResponseDTO response = programService.update(1, request, 100, 11);
 
         assertThat(response.programStatus()).isEqualTo("모집중");
+    }
+
+    @Test
+    void update_ignoresRequestOperatingUnitCodeId_alwaysKeepsProgramsExistingValue() throws Exception {
+        AppUser managerUser = mock(AppUser.class);
+        when(managerUser.getUserId()).thenReturn(100);
+
+        when(commonCodeRepository.findByCodeGroupAndActiveTrueOrderBySortOrderAsc("DEPARTMENT"))
+                .thenReturn(List.of(buildCommonCodeFixture(11, "DEPARTMENT", "D200")));
+
+        Instant now = Instant.now();
+        ExtracurricularProgram program = buildProgramFixture(
+                1, managerUser, now.plusSeconds(3600), ProgramStatus.DRAFT);
+        ReflectionTestUtils.setField(program, "operatingUnitCode", buildCommonCodeFixture(11, "DEPARTMENT", "D200"));
+
+        when(programRepository.findById(1)).thenReturn(Optional.of(program));
+        ArgumentCaptor<Integer> operatingUnitCaptor = ArgumentCaptor.forClass(Integer.class);
+        when(programRepository.updateProgram(
+                any(), any(), operatingUnitCaptor.capture(), any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), any(), any(), any(), any()
+        )).thenReturn(1);
+
+        Instant recruitmentStartsAt = now;
+        Instant recruitmentEndsAt = now.plusSeconds(1800);
+        Instant operationStartsAt = recruitmentEndsAt;
+        Instant operationEndsAt = operationStartsAt.plusSeconds(3600);
+
+        ProgramUpdateRequestDTO request = new ProgramUpdateRequestDTO(
+                null, 2, 3, null,
+                "수정된 프로그램명", "설명",
+                recruitmentStartsAt, recruitmentEndsAt, operationStartsAt, operationEndsAt,
+                20, null
+        );
+
+        programService.update(1, request, 100, 11);
+
+        assertThat(operatingUnitCaptor.getValue()).isEqualTo(11);
     }
 
     @Test
@@ -220,7 +258,7 @@ class ProgramServiceTest {
         when(programRepository.findById(1)).thenReturn(Optional.of(program));
 
         ProgramUpdateRequestDTO request = new ProgramUpdateRequestDTO(
-                null, 1, 2, 3, null,
+                null, 2, 3, null,
                 "수정된 프로그램명", "설명",
                 now.minusSeconds(7200), now.minusSeconds(3600),
                 now.minusSeconds(3600), now.minusSeconds(1800),
@@ -246,7 +284,7 @@ class ProgramServiceTest {
 
         Instant now = Instant.now();
         ProgramUpdateRequestDTO request = new ProgramUpdateRequestDTO(
-                null, 1, 2, 3, null,
+                null, 2, 3, null,
                 "수정된 프로그램명", "설명",
                 now, now.plusSeconds(1800), now.plusSeconds(1800), now.plusSeconds(3600),
                 20, null
