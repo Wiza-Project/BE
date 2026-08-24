@@ -1,7 +1,9 @@
 package com.gnagnoohc.scms.domain.career.repository;
 
 import com.gnagnoohc.scms.domain.career.entity.StudentJobRelation;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 
 import java.util.Optional;
 
@@ -31,6 +33,7 @@ public interface StudentJobRelationRepository extends JpaRepository<StudentJobRe
      * @param jobPostingId  채용공고 식별자 (job_posting.job_posting_id)
      * @return StudentJobRelation 엔티티 Optional
      */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<StudentJobRelation> findByStudent_UserIdAndJobPosting_JobPostingId(Integer studentUserId, Integer jobPostingId);
 
     /**

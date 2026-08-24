@@ -9,6 +9,7 @@ import com.gnagnoohc.scms.global.common.dto.ApiResponse;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
@@ -38,7 +39,7 @@ public class AdminStudentController {
     @Operation(summary = "학생 목록 조회", description = "필터: majorCodeId(MAJOR 공통코드 식별자), grade, status, keyword(학번/이름).")
     @GetMapping
     public ApiResponse<PageResponse<AdminStudentListItemResponse>> list(
-            @ModelAttribute AdminStudentSearchConditionDTO condition,
+            @Valid @ModelAttribute AdminStudentSearchConditionDTO condition,
             @PageableDefault(size = 20) Pageable pageable) {
         return ApiResponse.ok(academicRecordService.listStudents(condition, pageable));
     }

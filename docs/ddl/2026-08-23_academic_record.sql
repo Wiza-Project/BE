@@ -58,3 +58,105 @@ CREATE TABLE IF NOT EXISTS student_academic_change (
 
 CREATE INDEX IF NOT EXISTS idx_sac_student_date
     ON student_academic_change(student_id, change_date DESC, student_academic_change_id DESC);
+
+-- ════════════════════════════════════════════════════════════════════
+-- 3. 도메인 그룹 무결성 — common_code 참조가 "행이 존재하는가"만 보고 "올바른
+--    code_group인가"는 안 보던 문제를 막는다
+-- ════════════════════════════════════════════════════════════════════
+-- 지금까지의 REFERENCES common_code(code_id)는 대상 행이 common_code 테이블 어딘가에
+-- 존재하기만 하면 통과한다 — major_code_id에 DEPARTMENT나 PROGRAM_TYPE 코드가 실수로
+-- 들어가도 FK는 막지 못한다. Postgres CHECK 제약은 다른 테이블을 참조 못 해서(서브쿼리
+-- 불가), "code_id가 가리키는 행의 code_group이 기대한 값과 같다"를 강제하려면 복합
+-- FK가 필요하다: (code_id, code_group) 유니크 제약을 만든 뒤, 자식 테이블에 code_group을
+-- 상수로 고정한 generated 컬럼을 두고 그 두 컬럼으로 복합 FK를 건다.
+--
+-- 멱등: 컬럼은 ADD COLUMN IF NOT EXISTS, 제약/트리거는 존재 확인 후 생성(DO 블록 또는
+-- DROP IF EXISTS + CREATE)이라 여러 번 실행해도 안전하다.
+
+-- 3-1. (code_id, code_group) 복합 유니크 — code_id가 이미 PK라 유일성 자체는 당연하지만,
+--      Postgres 복합 FK는 참조 대상 컬럼 조합에 명시적 UNIQUE/PK가 있어야 한다.
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'uq_common_code_id_group'
+    ) THEN
+        ALTER TABLE common_code ADD CONSTRAINT uq_common_code_id_group UNIQUE (code_id, code_group);
+    END IF;
+END $$;
+
+-- 3-2. student_academic_detail.major_code_id → MAJOR 그룹만 허용
+ALTER TABLE student_academic_detail
+    ADD COLUMN IF NOT EXISTS major_code_group VARCHAR(50) GENERATED ALWAYS AS ('MAJOR') STORED;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'fk_sad_major_code_group'
+    ) THEN
+        ALTER TABLE student_academic_detail
+            ADD CONSTRAINT fk_sad_major_code_group
+            FOREIGN KEY (major_code_id, major_code_group)
+            REFERENCES common_code (code_id, code_group);
+    END IF;
+END $$;
+
+-- 3-3. student_academic_change.change_type_code_id → ACADEMIC_CHANGE_TYPE 그룹만 허용
+ALTER TABLE student_academic_change
+    ADD COLUMN IF NOT EXISTS change_type_code_group VARCHAR(50) GENERATED ALWAYS AS ('ACADEMIC_CHANGE_TYPE') STORED;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'fk_sac_change_type_code_group'
+    ) THEN
+        ALTER TABLE student_academic_change
+            ADD CONSTRAINT fk_sac_change_type_code_group
+            FOREIGN KEY (change_type_code_id, change_type_code_group)
+            REFERENCES common_code (code_id, code_group);
+    END IF;
+END $$;
+
+-- 3-4. student_academic_change.change_reason_code_id → ACADEMIC_CHANGE_REASON 그룹만 허용
+--      (nullable 컬럼 — MATCH SIMPLE 기본 동작상 change_reason_code_id가 NULL인 행은
+--      이 FK 검사 자체가 스킵된다. 원하는 동작 그대로다.)
+ALTER TABLE student_academic_change
+    ADD COLUMN IF NOT EXISTS change_reason_code_group VARCHAR(50) GENERATED ALWAYS AS ('ACADEMIC_CHANGE_REASON') STORED;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'fk_sac_change_reason_code_group'
+    ) THEN
+        ALTER TABLE student_academic_change
+            ADD CONSTRAINT fk_sac_change_reason_code_group
+            FOREIGN KEY (change_reason_code_id, change_reason_code_group)
+            REFERENCES common_code (code_id, code_group);
+    END IF;
+END $$;
+
+-- 3-5. change_reason_code_id가 실제로 change_type_code_id에 종속된 사유인지 확인 —
+--      예: AC200(휴학)을 선택했는데 AR700(졸업 사유)을 넣는 걸 막는다. 이것도 다른
+--      테이블(common_code.parent_code_id)을 봐야 하는 검증이라 CHECK로는 못 하고
+--      트리거가 필요하다.
+CREATE OR REPLACE FUNCTION check_academic_change_reason_matches_type()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.change_reason_code_id IS NOT NULL THEN
+        IF NOT EXISTS (
+            SELECT 1 FROM common_code
+            WHERE code_id = NEW.change_reason_code_id
+              AND parent_code_id = NEW.change_type_code_id
+        ) THEN
+            RAISE EXCEPTION '변동사유(change_reason_code_id=%)가 변동코드(change_type_code_id=%)에 속하지 않습니다',
+                NEW.change_reason_code_id, NEW.change_type_code_id;
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_sac_reason_matches_type ON student_academic_change;
+CREATE TRIGGER trg_sac_reason_matches_type
+    BEFORE INSERT OR UPDATE OF change_type_code_id, change_reason_code_id ON student_academic_change
+    FOR EACH ROW
+    EXECUTE FUNCTION check_academic_change_reason_matches_type();

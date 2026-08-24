@@ -44,13 +44,13 @@ ON CONFLICT (code_group, code) DO NOTHING;
 INSERT INTO common_code
     (code_group, code, code_name, sort_order, parent_code_id, is_active, created_by, created_at, updated_at)
 VALUES
-    ('ACADEMIC_CHANGE_REASON', 'AR100', '신입학',     1, (SELECT code_id FROM common_code WHERE code = 'AC100'), true, 0, now(), now()),
-    ('ACADEMIC_CHANGE_REASON', 'AR200', '일반휴학',   2, (SELECT code_id FROM common_code WHERE code = 'AC200'), true, 0, now(), now()),
-    ('ACADEMIC_CHANGE_REASON', 'AR300', '군휴학',     3, (SELECT code_id FROM common_code WHERE code = 'AC200'), true, 0, now(), now()),
-    ('ACADEMIC_CHANGE_REASON', 'AR400', '질병휴학',   4, (SELECT code_id FROM common_code WHERE code = 'AC200'), true, 0, now(), now()),
-    ('ACADEMIC_CHANGE_REASON', 'AR500', '일반복학',   5, (SELECT code_id FROM common_code WHERE code = 'AC300'), true, 0, now(), now()),
-    ('ACADEMIC_CHANGE_REASON', 'AR600', '군복학',     6, (SELECT code_id FROM common_code WHERE code = 'AC300'), true, 0, now(), now()),
-    ('ACADEMIC_CHANGE_REASON', 'AR700', '졸업',       7, (SELECT code_id FROM common_code WHERE code = 'AC400'), true, 0, now(), now()),
-    ('ACADEMIC_CHANGE_REASON', 'AR800', '미등록제적', 8, (SELECT code_id FROM common_code WHERE code = 'AC500'), true, 0, now(), now()),
-    ('ACADEMIC_CHANGE_REASON', 'AR900', '자퇴',       9, (SELECT code_id FROM common_code WHERE code = 'AC600'), true, 0, now(), now())
+    ('ACADEMIC_CHANGE_REASON', 'AR100', '신입학',     1, (SELECT code_id FROM common_code WHERE code_group = 'ACADEMIC_CHANGE_TYPE' AND code = 'AC100'), true, 0, now(), now()),
+    ('ACADEMIC_CHANGE_REASON', 'AR200', '일반휴학',   2, (SELECT code_id FROM common_code WHERE code_group = 'ACADEMIC_CHANGE_TYPE' AND code = 'AC200'), true, 0, now(), now()),
+    ('ACADEMIC_CHANGE_REASON', 'AR300', '군휴학',     3, (SELECT code_id FROM common_code WHERE code_group = 'ACADEMIC_CHANGE_TYPE' AND code = 'AC200'), true, 0, now(), now()),
+    ('ACADEMIC_CHANGE_REASON', 'AR400', '질병휴학',   4, (SELECT code_id FROM common_code WHERE code_group = 'ACADEMIC_CHANGE_TYPE' AND code = 'AC200'), true, 0, now(), now()),
+    ('ACADEMIC_CHANGE_REASON', 'AR500', '일반복학',   5, (SELECT code_id FROM common_code WHERE code_group = 'ACADEMIC_CHANGE_TYPE' AND code = 'AC300'), true, 0, now(), now()),
+    ('ACADEMIC_CHANGE_REASON', 'AR600', '군복학',     6, (SELECT code_id FROM common_code WHERE code_group = 'ACADEMIC_CHANGE_TYPE' AND code = 'AC300'), true, 0, now(), now()),
+    ('ACADEMIC_CHANGE_REASON', 'AR700', '졸업',       7, (SELECT code_id FROM common_code WHERE code_group = 'ACADEMIC_CHANGE_TYPE' AND code = 'AC400'), true, 0, now(), now()),
+    ('ACADEMIC_CHANGE_REASON', 'AR800', '미등록제적', 8, (SELECT code_id FROM common_code WHERE code_group = 'ACADEMIC_CHANGE_TYPE' AND code = 'AC500'), true, 0, now(), now()),
+    ('ACADEMIC_CHANGE_REASON', 'AR900', '자퇴',       9, (SELECT code_id FROM common_code WHERE code_group = 'ACADEMIC_CHANGE_TYPE' AND code = 'AC600'), true, 0, now(), now())
 ON CONFLICT (code_group, code) DO NOTHING;

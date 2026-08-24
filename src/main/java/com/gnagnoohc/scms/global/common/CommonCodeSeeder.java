@@ -31,6 +31,12 @@ import java.util.Map;
  * ── 함께 챙겨야 하는 별도 시드 ─────────────────────────────────────
  * docs/ddl/2026-08-21_competency_seed.sql (핵심역량 competency 테이블)은 common_code가
  * 여기서 자동 실행하지 않고, 로컬/배포 시 그 SQL을 별도로 수동 실행해야 한다.
+ *
+ * ── ACADEMIC_YEAR는 여기서 시딩하지 않는다 ─────────────────────────
+ * "현재연도 ± N"이라는 결정론적 값이고 기존 값을 절대 안 건드리는(추가만 하는) 안전한
+ * 연산이라, local 전용인 이 클래스 대신 {@link AcademicYearCodeExtender}(local·prod
+ * 양쪽에서 매 기동마다 실행)가 전담한다 — 사람이 리뷰해야 하는 값(PROGRAM_TYPE 등)과
+ * 섞이지 않게 분리했다.
  */
 @Slf4j
 @Component
@@ -44,13 +50,16 @@ public class CommonCodeSeeder implements CommandLineRunner {
     private final JdbcTemplate jdbcTemplate;
 
     /**
-     * parentCode는 부모 행의 {@code code} 값(그룹 무관, 이 프로젝트 관례상 접두어로 전역
-     * 유일함)을 가리킨다 — {@code run()}에서 실제 삽입 시점에 code_id로 조회해 채운다.
-     * 기존 4-arg 시드 60여 줄이 그대로 컴파일되도록 4-arg 생성자를 남겨둔다(parentCode=null).
+     * parentGroup/parentCode는 부모 행의 {@code (code_group, code)} 복합키를 가리킨다 —
+     * {@code run()}에서 실제 삽입 시점에 code_id로 조회해 채운다. {@code common_code}의
+     * 실제 유니크 제약이 {@code (code_group, code)}라서(uq_common_code_group_code), code만
+     * 보고 조회하면 다른 그룹이 같은 code 문자열을 쓰는 순간 다중 행이 잡혀 조회가 깨진다
+     * — 그래서 조회 조건에 항상 parentGroup을 같이 건다.
+     * 기존 4-arg 시드 60여 줄이 그대로 컴파일되도록 4-arg 생성자를 남겨둔다(parent 없음).
      */
-    private record Seed(String group, String code, String name, int sortOrder, String parentCode) {
+    private record Seed(String group, String code, String name, int sortOrder, String parentGroup, String parentCode) {
         Seed(String group, String code, String name, int sortOrder) {
-            this(group, code, name, sortOrder, null);
+            this(group, code, name, sortOrder, null, null);
         }
     }
 
@@ -88,12 +97,8 @@ public class CommonCodeSeeder implements CommandLineRunner {
             new Seed("PROGRAM_TYPE", "PT500", "사회봉사", 5),
             new Seed("PROGRAM_TYPE", "PT600", "국제화", 6),
 
-            // 학년도 — academicYear는 각 엔티티에 스칼라(Integer)로 저장되지만(FK 아님),
-            // 프론트 드롭다운이 쓸 선택 가능 연도 목록의 기준점으로 최소 범위만 제공
-            new Seed("ACADEMIC_YEAR", "2024", "2024학년도", 1),
-            new Seed("ACADEMIC_YEAR", "2025", "2025학년도", 2),
-            new Seed("ACADEMIC_YEAR", "2026", "2026학년도", 3),
-            new Seed("ACADEMIC_YEAR", "2027", "2027학년도", 4),
+            // 학년도(ACADEMIC_YEAR)는 여기서 시딩 삭제
+            // AcademicYearCodeExtender가 전담한다.
 
             // 학기 — semesterCode도 스칼라(String) 저장. 기본값 "ALL"(전체)은 정책류
             // 엔티티(MileagePolicy 등)에서만 쓰이는 특수값이라 이 목록엔 포함하지 않음
@@ -168,15 +173,15 @@ public class CommonCodeSeeder implements CommandLineRunner {
             // 학적변동사유(ACADEMIC_CHANGE_REASON) — student_academic_change.change_reason_code_id 가 참조.
             // parent_code_id로 위 ACADEMIC_CHANGE_TYPE에 종속된다(예: AC200 휴학을 고르면
             // 사유가 AR200/AR300/AR400으로 좁혀짐). 접두어(AR)+100단위.
-            new Seed("ACADEMIC_CHANGE_REASON", "AR100", "신입학", 1, "AC100"),
-            new Seed("ACADEMIC_CHANGE_REASON", "AR200", "일반휴학", 2, "AC200"),
-            new Seed("ACADEMIC_CHANGE_REASON", "AR300", "군휴학", 3, "AC200"),
-            new Seed("ACADEMIC_CHANGE_REASON", "AR400", "질병휴학", 4, "AC200"),
-            new Seed("ACADEMIC_CHANGE_REASON", "AR500", "일반복학", 5, "AC300"),
-            new Seed("ACADEMIC_CHANGE_REASON", "AR600", "군복학", 6, "AC300"),
-            new Seed("ACADEMIC_CHANGE_REASON", "AR700", "졸업", 7, "AC400"),
-            new Seed("ACADEMIC_CHANGE_REASON", "AR800", "미등록제적", 8, "AC500"),
-            new Seed("ACADEMIC_CHANGE_REASON", "AR900", "자퇴", 9, "AC600")
+            new Seed("ACADEMIC_CHANGE_REASON", "AR100", "신입학", 1, "ACADEMIC_CHANGE_TYPE", "AC100"),
+            new Seed("ACADEMIC_CHANGE_REASON", "AR200", "일반휴학", 2, "ACADEMIC_CHANGE_TYPE", "AC200"),
+            new Seed("ACADEMIC_CHANGE_REASON", "AR300", "군휴학", 3, "ACADEMIC_CHANGE_TYPE", "AC200"),
+            new Seed("ACADEMIC_CHANGE_REASON", "AR400", "질병휴학", 4, "ACADEMIC_CHANGE_TYPE", "AC200"),
+            new Seed("ACADEMIC_CHANGE_REASON", "AR500", "일반복학", 5, "ACADEMIC_CHANGE_TYPE", "AC300"),
+            new Seed("ACADEMIC_CHANGE_REASON", "AR600", "군복학", 6, "ACADEMIC_CHANGE_TYPE", "AC300"),
+            new Seed("ACADEMIC_CHANGE_REASON", "AR700", "졸업", 7, "ACADEMIC_CHANGE_TYPE", "AC400"),
+            new Seed("ACADEMIC_CHANGE_REASON", "AR800", "미등록제적", 8, "ACADEMIC_CHANGE_TYPE", "AC500"),
+            new Seed("ACADEMIC_CHANGE_REASON", "AR900", "자퇴", 9, "ACADEMIC_CHANGE_TYPE", "AC600")
     );
 
     @Override
@@ -192,7 +197,8 @@ public class CommonCodeSeeder implements CommandLineRunner {
             // 이 시점에 이미 삽입돼 조회된다 — 순서를 바꾸지 말 것.
             Integer parentCodeId = seed.parentCode() == null ? null
                     : jdbcTemplate.queryForObject(
-                            "SELECT code_id FROM common_code WHERE code = ?", Integer.class, seed.parentCode());
+                            "SELECT code_id FROM common_code WHERE code_group = ? AND code = ?",
+                            Integer.class, seed.parentGroup(), seed.parentCode());
 
             inserted += jdbcTemplate.update("""
                     INSERT INTO common_code
