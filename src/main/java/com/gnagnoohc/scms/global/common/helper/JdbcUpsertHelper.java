@@ -1,16 +1,12 @@
 package com.gnagnoohc.scms.global.common.helper;
 
-import com.gnagnoohc.scms.domain.career.entity.StudentJobRelation;
-import jakarta.persistence.LockModeType;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.jpa.repository.Lock;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.Arrays;
-import java.util.Optional;
 
 /**
  * PostgreSQL ON CONFLICT 기반의 안전한 멱등성 INSERT / UPDATE(업서트) 실행 헬퍼.
