@@ -50,9 +50,14 @@ public class MileageSimulationService {
                 .findByActiveTrueAndAcademicYearAndSemesterCodeInOrderByMinimumPointsAsc(
                         academicYear, semesterCodes(normalizedSemesterCode));
 
+        boolean hasAnnualTarget = benefitPolicies.stream()
+                .anyMatch(policy -> ALL_SEMESTER_CODE.equalsIgnoreCase(policy.getSemesterCode()));
+        BigDecimal academicYearPoints = hasAnnualTarget
+                ? getAcademicYearPoints(studentId, academicYear)
+                : null;
+
         List<MileageSimulationResponse.TargetOption> targets = benefitPolicies.stream()
-                .map(policy -> toTargetOption(
-                        studentId, academicYear, normalizedSemesterCode, periodPoints, policy))
+                .map(policy -> toTargetOption(periodPoints, academicYearPoints, policy))
                 .toList();
 
         List<MileageSimulationResponse.ActivityOption> activities = findAvailablePolicies(
@@ -167,15 +172,12 @@ public class MileageSimulationService {
     }
 
     private MileageSimulationResponse.TargetOption toTargetOption(
-            Integer studentId,
-            Integer academicYear,
-            String semesterCode,
             BigDecimal periodPoints,
+            BigDecimal academicYearPoints,
             MileageBenefitPolicy policy
     ) {
         BigDecimal currentPoints = ALL_SEMESTER_CODE.equalsIgnoreCase(policy.getSemesterCode())
-                ? valueOrZero(mileageTransactionRepository
-                .sumPostedPointsByStudentAndAcademicYear(studentId, academicYear))
+                ? valueOrZero(academicYearPoints)
                 : periodPoints;
         BigDecimal shortagePoints = policy.getMinimumPoints()
                 .subtract(currentPoints)
@@ -264,11 +266,14 @@ public class MileageSimulationService {
             String semesterCode
     ) {
         if (ALL_SEMESTER_CODE.equalsIgnoreCase(targetPolicy.getSemesterCode())) {
-            return valueOrZero(mileageTransactionRepository
-                    .sumPostedPointsByStudentAndAcademicYear(
-                            studentId, targetPolicy.getAcademicYear()));
+            return getAcademicYearPoints(studentId, targetPolicy.getAcademicYear());
         }
         return getPeriodPoints(studentId, targetPolicy.getAcademicYear(), semesterCode);
+    }
+
+    private BigDecimal getAcademicYearPoints(Integer studentId, Integer academicYear) {
+        return valueOrZero(mileageTransactionRepository
+                .sumPostedPointsByStudentAndAcademicYear(studentId, academicYear));
     }
 
     private BigDecimal getPeriodPoints(
