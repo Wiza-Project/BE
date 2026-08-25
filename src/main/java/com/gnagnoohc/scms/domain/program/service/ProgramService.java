@@ -23,6 +23,7 @@ import com.gnagnoohc.scms.global.common.entity.FileGroup;
 import com.gnagnoohc.scms.global.common.entity.StoredFile;
 import com.gnagnoohc.scms.global.common.helper.FileUploadValidator;
 import com.gnagnoohc.scms.global.common.repository.CommonCodeRepository;
+import com.gnagnoohc.scms.global.common.repository.FileGroupRepository;
 import com.gnagnoohc.scms.global.common.service.FileGroupService;
 import com.gnagnoohc.scms.global.common.service.FileStorageService;
 import com.gnagnoohc.scms.global.error.BusinessException;
@@ -39,6 +40,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -71,6 +73,7 @@ public class ProgramService {
     private final ProgramSessionRepository programSessionRepository;
     private final ProgramApplicationRepository applicationRepository;
     private final FileGroupService fileGroupService;
+    private final FileGroupRepository fileGroupRepository;
     private final FileStorageService fileStorageService;
     private final FileUploadValidator fileUploadValidator;
 
@@ -102,6 +105,13 @@ public class ProgramService {
          */
         validatePeriod(request.recruitmentStartsAt(), request.recruitmentEndsAt(),
                 request.operationStartsAt(), request.operationEndsAt());
+
+        /**
+         * (a-2) 첨부파일 검증 ----------------------------------------------------------
+         * 클라이언트가 보낸 fileGroupId를 검증 없이 그대로 저장하면, 업로더 본인이 아닌 그룹이나
+         * 이미 다른 프로그램에 연결된 그룹을 임의로 지정해 연결할 수 있다. 아래에서 소유권/단일PDF/재사용을 검증한다.
+         */
+        validateFileGroupForLinking(request.fileGroupId(), managerUserId, null);
 
         /**
          * (b) 기본값 보정 -------------------------------------------------------------
@@ -190,6 +200,45 @@ public class ProgramService {
     }
 
     /**
+     * register()/update()가 fileGroupId를 실제로 프로그램에 연결하기 전에 검증하는 메서드.
+     * fileGroupId를 검증 없이 그대로 저장하면, 요청자가 (1) 본인이 업로드하지 않은 그룹이나
+     * (2) 이미 다른 프로그램에 연결된 그룹을 임의로 지정해 연결할 수 있다. 아래 세 가지를 확인한다:
+     *   - 그룹이 실제로 존재하는지
+     *   - 그룹에 속한 파일이 PDF 1개뿐인지(우회 경로로 임의의 fileGroupId를 넣는 경우까지 대비한 방어)
+     *   - 그 파일을 올린 사람(StoredFile.createdBy)이 지금 요청자 본인인지
+     *   - 같은 부서 소속의 다른 담당자가 등록한 프로그램이라도, 이 그룹이 program 도메인 내 다른 프로그램에
+     *     이미 연결돼 있지 않은지 (excludeProgramId는 update()에서 "자기 자신과의 기존 연결"을 재사용으로
+     *     치지 않기 위한 예외)
+     * FileGroup은 program 외에 다른 도메인(게시글 첨부 등)도 함께 쓰는 공용 테이블이라, 그 도메인들에서의
+     * 재사용까지는 이 검증으로 막지 못한다.
+     */
+    private void validateFileGroupForLinking(Integer fileGroupId, Integer uploaderId, Integer excludeProgramId) {
+        if (fileGroupId == null) {
+            return;
+        }
+
+        FileGroup fileGroup = fileGroupRepository.findById(fileGroupId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PROGRAM_FILE_GROUP_NOT_FOUND));
+
+        List<StoredFile> files = fileGroupService.getFiles(fileGroup);
+        String originalFileName = files.size() == 1 ? files.get(0).getOriginalFileName() : null;
+        if (files.size() != 1 || originalFileName == null
+                || !originalFileName.toLowerCase(Locale.ROOT).endsWith(".pdf")) {
+            throw new BusinessException(ErrorCode.INVALID_FILE_TYPE, "운영계획서는 PDF 파일 1개만 첨부할 수 있습니다.");
+        }
+        if (!files.get(0).getCreatedBy().equals(uploaderId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+
+        boolean alreadyLinked = excludeProgramId == null
+                ? programRepository.existsByFileGroup_FileGroupId(fileGroupId)
+                : programRepository.existsByFileGroup_FileGroupIdAndProgramIdNot(fileGroupId, excludeProgramId);
+        if (alreadyLinked) {
+            throw new BusinessException(ErrorCode.PROGRAM_FILE_GROUP_ALREADY_LINKED);
+        }
+    }
+
+    /**
      * ── "수정(Update)" 기능 ──────────────────────────────────────────────
      *
      * 프로그램 하나를 수정하는 메서드. 매개변수 3개의 의미:
@@ -268,6 +317,18 @@ public class ProgramService {
         Integer fileGroupId = request.fileGroupId() != null
                 ? request.fileGroupId()
                 : (program.getFileGroup() != null ? program.getFileGroup().getFileGroupId() : null);
+
+        /**
+         * (d-1) 첨부파일 검증 ----------------------------------------------------------
+         * 요청이 실제로 새 fileGroupId를 지정한 경우(기존과 다른 값)에만 검증한다 — 기존에 이미
+         * 이 프로그램에 연결돼 있던 fileGroupId를 그대로 유지하는 경우까지 재검증할 필요는 없다.
+         */
+        boolean isNewFileGroup = request.fileGroupId() != null
+                && (program.getFileGroup() == null
+                        || !request.fileGroupId().equals(program.getFileGroup().getFileGroupId()));
+        if (isNewFileGroup) {
+            validateFileGroupForLinking(fileGroupId, currentUserId, programId);
+        }
 
         /**
          * (e) 실제 DB 반영 -------------------------------------------------------------

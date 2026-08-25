@@ -72,12 +72,12 @@ public class StudentProgramController {
                 ? loadedFile.contentType()
                 : MediaType.APPLICATION_OCTET_STREAM_VALUE;
 
-        // filename도 filename*와 동일한 퍼센트 인코딩 문자열로 채운다 — 일부 클라이언트가
-        // filename*를 안 읽고 filename만 파싱해 decodeURIComponent 하는 경우까지 대응하기 위함
-        // (한글 등 ISO-8859-1로 표현 안 되는 문자를 그냥 넣으면 클라이언트/브라우저마다 깨짐).
+        // filename*(RFC 5987)에 원본 파일명을 UTF-8 퍼센트 인코딩해 넣고, filename*를 읽지 못하는
+        // 구형 클라이언트를 위해 filename에는 ASCII 고정값을 fallback으로 넣는다
+        // (운영계획서는 PDF 1개만 허용되므로 고정 파일명을 써도 정보 손실이 없다).
         String encodedFileName = URLEncoder.encode(loadedFile.originalFileName(), StandardCharsets.UTF_8)
                 .replace("+", "%20");
-        String contentDisposition = "attachment; filename=\"" + encodedFileName + "\"; filename*=UTF-8''" + encodedFileName;
+        String contentDisposition = "attachment; filename=\"operation-plan.pdf\"; filename*=UTF-8''" + encodedFileName;
 
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(contentType))

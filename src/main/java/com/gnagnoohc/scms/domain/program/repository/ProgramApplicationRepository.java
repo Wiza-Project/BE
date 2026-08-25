@@ -382,6 +382,7 @@ public interface ProgramApplicationRepository extends JpaRepository<ProgramAppli
             certificate_issued_at = NULL,
             judged_by = NULL,
             completed_at = NULL,
+            created_at = :now,
             updated_at = :now
         WHERE application_id = :applicationId
           AND application_status = 'CANCELLED'
