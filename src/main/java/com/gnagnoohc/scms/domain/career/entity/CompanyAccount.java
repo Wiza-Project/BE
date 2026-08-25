@@ -28,10 +28,10 @@ public class CompanyAccount extends BaseTimeEntity {
     @Column(name = "business_registration_no", nullable = false, unique = true, length = 30)
     private String businessRegistrationNo;
 
-    @Column(name = "login_id", nullable = false, unique = true, length = 100)
+    @Column(name = "login_id", nullable = true, unique = true, length = 100)
     private String loginId;
 
-    @Column(name = "password_hash", nullable = false, length = 255)
+    @Column(name = "password_hash", nullable = true, length = 255)
     private String passwordHash;
 
     @Column(name = "representative_name", nullable = true, length = 100)
