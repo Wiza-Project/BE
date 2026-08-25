@@ -7,6 +7,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.Instant;
+import java.util.Objects;
 
 @Entity
 @Getter
@@ -39,10 +40,13 @@ public class UserConsent extends BaseCreatedAtEntity {
     }
 
     /**
-     * 철회 처리. 이미 철회된 행에 다시 호출하지 않도록 호출부(UserConsentService.withdraw())가
-     * withdrawnAt != null 여부를 사전에 검사한다 — 이 메서드 자체는 멱등성을 보장하지 않는다.
+     * 철회 처리. 이미 철회된 행이면 기존 withdrawnAt을 보존하기 위해 예외를 던진다.
      */
     public void withdraw(Instant withdrawnAt) {
+        Objects.requireNonNull(withdrawnAt, "withdrawnAt must not be null");
+        if (this.withdrawnAt != null) {
+            throw new IllegalStateException("already withdrawn");
+        }
         this.withdrawnAt = withdrawnAt;
     }
 }
