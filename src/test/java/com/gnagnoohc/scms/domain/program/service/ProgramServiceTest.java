@@ -8,6 +8,7 @@ import com.gnagnoohc.scms.domain.program.dto.response.ProgramRegisterResponseDTO
 import com.gnagnoohc.scms.domain.program.dto.request.ProgramUpdateRequestDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramUpdateResponseDTO;
 import com.gnagnoohc.scms.domain.program.entity.ExtracurricularProgram;
+import com.gnagnoohc.scms.domain.program.entity.ProgramApplication;
 import com.gnagnoohc.scms.domain.program.entity.ProgramSession;
 import com.gnagnoohc.scms.domain.program.entity.ProgramStatus;
 import com.gnagnoohc.scms.domain.program.repository.CompetencyOptionRepository;
@@ -355,9 +356,11 @@ class ProgramServiceTest {
         ProgramApplicationRepository.ProgramApplicantCount applicantCountFixture = buildApplicantCountFixture(1, 4L);
         when(applicationRepository.countActiveApplicantsByProgramIds(List.of(1)))
                 .thenReturn(List.of(applicantCountFixture));
+        when(applicationRepository.findMyApplicationStatusesByProgramIds(100, List.of(1)))
+                .thenReturn(List.of());
 
         PageResponse<ProgramListItemResponseDTO> response =
-                programService.list(ProgramStatus.DRAFT, "프로그램", null, pageable);
+                programService.list(ProgramStatus.DRAFT, "프로그램", null, 100, pageable);
 
         assertThat(response.totalElements()).isEqualTo(1);
         assertThat(response.content()).hasSize(1);
@@ -371,6 +374,41 @@ class ProgramServiceTest {
         assertThat(item.programStatusLabel()).isEqualTo("모집중");
         assertThat(item.applicantCount()).isEqualTo(4L);
         assertThat(item.remainingCapacity()).isEqualTo(6);
+        assertThat(item.myApplicationStatus()).isNull();
+    }
+
+    @Test
+    void list_whenStudentAlreadyApplied_fillsMyApplicationStatus() throws Exception {
+        CommonCode operatingUnitCode = buildCommonCodeFixture(11, "DEPARTMENT", "D200");
+        CommonCode programTypeCode = buildCommonCodeFixture(22, "PROGRAM_TYPE", "PT100");
+        Competency competency = buildCompetencyFixture(33, "리더십");
+
+        ExtracurricularProgram program = buildProgramFixture(
+                1, null, Instant.now().plusSeconds(3600), ProgramStatus.DRAFT);
+        ReflectionTestUtils.setField(program, "programName", "프로그램명");
+        ReflectionTestUtils.setField(program, "capacity", 10);
+        ReflectionTestUtils.setField(program, "operatingUnitCode", operatingUnitCode);
+        ReflectionTestUtils.setField(program, "programTypeCode", programTypeCode);
+        ReflectionTestUtils.setField(program, "competency", competency);
+
+        ProgramApplicationRepository.ProgramApplicantCount applicantCountFixture = buildApplicantCountFixture(1, 1L);
+        ProgramApplicationRepository.MyApplicationStatusProjection myApplicationStatusFixture =
+                buildMyApplicationStatusFixture(1, "APPLIED");
+
+        Pageable pageable = PageRequest.of(0, 20);
+        when(programRepository.search(null, null, null, pageable))
+                .thenReturn(new PageImpl<>(List.of(program), pageable, 1));
+        when(applicationRepository.countActiveApplicantsByProgramIds(List.of(1)))
+                .thenReturn(List.of(applicantCountFixture));
+        when(applicationRepository.findMyApplicationStatusesByProgramIds(100, List.of(1)))
+                .thenReturn(List.of(myApplicationStatusFixture));
+
+        PageResponse<ProgramListItemResponseDTO> response =
+                programService.list(null, null, null, 100, pageable);
+
+        ProgramListItemResponseDTO item = response.content().get(0);
+        assertThat(item.myApplicationStatus()).isEqualTo("APPLIED");
+        assertThat(item.myApplicationStatusLabel()).isEqualTo("신청완료");
     }
 
     @Test
@@ -426,8 +464,10 @@ class ProgramServiceTest {
                 .thenReturn(List.of(session));
         when(applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(eq(1), any()))
                 .thenReturn(3L);
+        when(applicationRepository.findByProgram_ProgramIdAndStudent_UserId(1, 100))
+                .thenReturn(Optional.empty());
 
-        ProgramDetailResponseDTO response = programService.getDetail(1);
+        ProgramDetailResponseDTO response = programService.getDetail(1, 100);
 
         assertThat(response.programId()).isEqualTo(1);
         assertThat(response.competencyName()).isEqualTo("리더십");
@@ -435,13 +475,45 @@ class ProgramServiceTest {
         assertThat(response.applicantCount()).isEqualTo(3L);
         assertThat(response.remainingCapacity()).isEqualTo(7);
         assertThat(response.sessions()).hasSize(1);
+        assertThat(response.myApplicationStatus()).isNull();
+    }
+
+    @Test
+    void getDetail_whenStudentCancelledApplication_myApplicationStatusIsNull() throws Exception {
+        AppUser managerUser = mock(AppUser.class);
+        when(managerUser.getUserName()).thenReturn("담당자명");
+
+        CommonCode operatingUnitCode = buildCommonCodeFixture(11, "DEPARTMENT", "D200");
+        CommonCode programTypeCode = buildCommonCodeFixture(22, "PROGRAM_TYPE", "PT100");
+        Competency competency = buildCompetencyFixture(33, "리더십");
+
+        ExtracurricularProgram program = buildProgramFixture(
+                1, managerUser, Instant.now().plusSeconds(3600), ProgramStatus.DRAFT);
+        ReflectionTestUtils.setField(program, "programName", "프로그램명");
+        ReflectionTestUtils.setField(program, "capacity", 10);
+        ReflectionTestUtils.setField(program, "operatingUnitCode", operatingUnitCode);
+        ReflectionTestUtils.setField(program, "programTypeCode", programTypeCode);
+        ReflectionTestUtils.setField(program, "competency", competency);
+
+        when(programRepository.findDetailById(1)).thenReturn(Optional.of(program));
+        when(programSessionRepository.findByProgram_ProgramIdOrderBySessionNoAsc(1))
+                .thenReturn(List.of());
+        when(applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(eq(1), any()))
+                .thenReturn(0L);
+        when(applicationRepository.findByProgram_ProgramIdAndStudent_UserId(1, 100))
+                .thenReturn(Optional.of(buildApplicationFixture(5, "CANCELLED")));
+
+        ProgramDetailResponseDTO response = programService.getDetail(1, 100);
+
+        assertThat(response.myApplicationStatus()).isNull();
+        assertThat(response.myApplicationStatusLabel()).isNull();
     }
 
     @Test
     void getDetail_whenProgramNotFound_throwsProgramNotFound() {
         when(programRepository.findDetailById(999)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> programService.getDetail(999))
+        assertThatThrownBy(() -> programService.getDetail(999, 100))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.PROGRAM_NOT_FOUND);
@@ -494,6 +566,27 @@ class ProgramServiceTest {
                 mock(ProgramApplicationRepository.ProgramApplicantCount.class);
         when(fixture.getProgramId()).thenReturn(programId);
         when(fixture.getCount()).thenReturn(count);
+        return fixture;
+    }
+
+    // ProgramApplication도 protected 기본 생성자만 있고 setter/빌더가 없어(위 픽스처들과 같은 이유)
+    // 리플렉션으로 만든다. getDetail의 myApplicationStatus 필터링 테스트에는 상태값만 있으면 충분하다.
+    private ProgramApplication buildApplicationFixture(Integer applicationId, String applicationStatus) throws Exception {
+        Constructor<ProgramApplication> constructor = ProgramApplication.class.getDeclaredConstructor();
+        constructor.setAccessible(true);
+        ProgramApplication application = constructor.newInstance();
+        ReflectionTestUtils.setField(application, "applicationId", applicationId);
+        ReflectionTestUtils.setField(application, "applicationStatus", applicationStatus);
+        return application;
+    }
+
+    // MyApplicationStatusProjection도 인터페이스 projection이라 목(mock)으로 값을 채운다.
+    private ProgramApplicationRepository.MyApplicationStatusProjection buildMyApplicationStatusFixture(
+            Integer programId, String status) {
+        ProgramApplicationRepository.MyApplicationStatusProjection fixture =
+                mock(ProgramApplicationRepository.MyApplicationStatusProjection.class);
+        when(fixture.getProgramId()).thenReturn(programId);
+        when(fixture.getStatus()).thenReturn(status);
         return fixture;
     }
 }

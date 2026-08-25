@@ -6,6 +6,7 @@ import com.gnagnoohc.scms.domain.career.dto.relation.JobScrapSummaryResponseDTO;
 import com.gnagnoohc.scms.domain.career.dto.relation.JobScrapToggleResponseDTO;
 import com.gnagnoohc.scms.domain.career.entity.JobPosting;
 import com.gnagnoohc.scms.domain.career.entity.StudentJobRelation;
+import com.gnagnoohc.scms.domain.career.helper.CareerSecurityHelper;
 import com.gnagnoohc.scms.domain.career.repository.JobPostingRepository;
 import com.gnagnoohc.scms.domain.career.repository.StudentJobRelationRepository;
 import com.gnagnoohc.scms.domain.user.entity.AppUser;
@@ -47,6 +48,7 @@ public class StudentJobRelationService {
     private final JobPostingRepository jobPostingRepository;
     private final AppUserRepository appUserRepository;
     private final JdbcUpsertHelper jdbcUpsertHelper;
+    private final CareerSecurityHelper careerSecurityHelper;
 
     /**
      * [학생] 온라인 채용공고 지원 신청
@@ -186,12 +188,14 @@ public class StudentJobRelationService {
     /**
      * [교직원/관리자] 특정 공고별 지원자 목록 및 전형 관리 페이징 조회
      *
+     * @param staffUserId       조회 요청자 식별자 (D400 교직원 또는 ADMIN 검증용)
      * @param jobPostingId      채용공고 식별자
      * @param applicationStatus 전형 상태 필터 조건 (null 허용)
      * @param pageable          페이징 파라미터
      * @return 지원자 목록 페이징 응답 DTO
      */
-    public PageResponse<JobRelationResponseDTO> getApplicantsByJobPosting(Integer jobPostingId, String applicationStatus, Pageable pageable) {
+    public PageResponse<JobRelationResponseDTO> getApplicantsByJobPosting(Integer staffUserId, Integer jobPostingId, String applicationStatus, Pageable pageable) {
+        careerSecurityHelper.validateAndGetCareerStaff(staffUserId);
         Page<StudentJobRelation> page = relationRepository.findApplicantsByJobPosting(jobPostingId, applicationStatus, pageable);
         Page<JobRelationResponseDTO> dtoPage = page.map(this::mapToRelationResponseDTO);
         return PageResponse.from(dtoPage);
