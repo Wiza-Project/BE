@@ -6,19 +6,26 @@ import com.gnagnoohc.scms.domain.program.entity.ProgramStatus;
 import com.gnagnoohc.scms.domain.program.service.ProgramService;
 import com.gnagnoohc.scms.global.common.dto.ApiResponse;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;
+import com.gnagnoohc.scms.global.common.service.FileStorageService;
 import com.gnagnoohc.scms.global.security.AuthUser;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 
 @Tag(name = "StudentProgram", description = "학생의 비교과 프로그램 목록 조회")
 @RestController
@@ -54,5 +61,27 @@ public class StudentProgramController {
     public ApiResponse<ProgramDetailResponseDTO> getDetail(@PathVariable Integer programId,
                                                              @AuthenticationPrincipal AuthUser authUser) {
         return ApiResponse.ok(programService.getDetail(programId, authUser.getId()));
+    }
+
+    @Operation(summary = "운영계획서 다운로드", description = "프로그램에 등록된 운영계획서 원본 파일을 내려받습니다")
+    @GetMapping("/{programId}/file")
+    public ResponseEntity<Resource> downloadFile(@PathVariable Integer programId,
+                                                  @AuthenticationPrincipal AuthUser authUser) {
+        FileStorageService.LoadedFile loadedFile = programService.downloadOperationPlan(programId);
+        String contentType = loadedFile.contentType() != null
+                ? loadedFile.contentType()
+                : MediaType.APPLICATION_OCTET_STREAM_VALUE;
+
+        // filename도 filename*와 동일한 퍼센트 인코딩 문자열로 채운다 — 일부 클라이언트가
+        // filename*를 안 읽고 filename만 파싱해 decodeURIComponent 하는 경우까지 대응하기 위함
+        // (한글 등 ISO-8859-1로 표현 안 되는 문자를 그냥 넣으면 클라이언트/브라우저마다 깨짐).
+        String encodedFileName = URLEncoder.encode(loadedFile.originalFileName(), StandardCharsets.UTF_8)
+                .replace("+", "%20");
+        String contentDisposition = "attachment; filename=\"" + encodedFileName + "\"; filename*=UTF-8''" + encodedFileName;
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(contentType))
+                .header("Content-Disposition", contentDisposition)
+                .body(loadedFile.resource());
     }
 }

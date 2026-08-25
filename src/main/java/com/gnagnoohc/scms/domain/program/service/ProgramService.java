@@ -20,6 +20,7 @@ import com.gnagnoohc.scms.domain.program.repository.ProgramApplicationRepository
 import com.gnagnoohc.scms.domain.program.repository.ProgramSessionRepository;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;
 import com.gnagnoohc.scms.global.common.entity.FileGroup;
+import com.gnagnoohc.scms.global.common.entity.StoredFile;
 import com.gnagnoohc.scms.global.common.helper.FileUploadValidator;
 import com.gnagnoohc.scms.global.common.repository.CommonCodeRepository;
 import com.gnagnoohc.scms.global.common.service.FileGroupService;
@@ -394,7 +395,38 @@ public class ProgramService {
                 .filter(status -> !ApplicationStatus.CANCELLED.name().equals(status))
                 .orElse(null);
 
-        return ProgramDetailResponseDTO.from(program, applicantCount, sessions, myApplicationStatus);
+        String fileName = program.getFileGroup() != null
+                ? fileGroupService.getFiles(program.getFileGroup()).stream()
+                        .findFirst()
+                        .map(StoredFile::getOriginalFileName)
+                        .orElse(null)
+                : null;
+
+        return ProgramDetailResponseDTO.from(program, applicantCount, sessions, myApplicationStatus, fileName);
+    }
+
+    /**
+     * ── "운영계획서 다운로드" 기능 ──────────────────────────────────────────────
+     *
+     * 학생 상세 조회와 동일한 권한(로그인한 학생이면 조회 가능)으로 프로그램에 연결된
+     * 운영계획서 원본 파일을 내려받는다. 별도 소유자 검증은 하지 않는다 — 상세 조회가
+     * 가능한 프로그램이면 첨부파일도 볼 수 있다는 전제.
+     */
+    @Transactional(readOnly = true)
+    public FileStorageService.LoadedFile downloadOperationPlan(Integer programId) {
+        ExtracurricularProgram program = programRepository.findById(programId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PROGRAM_NOT_FOUND));
+
+        FileGroup fileGroup = program.getFileGroup();
+        if (fileGroup == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
+        }
+
+        StoredFile storedFile = fileGroupService.getFiles(fileGroup).stream()
+                .findFirst()
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+
+        return fileStorageService.load(storedFile.getStoredFileId());
     }
 
     /**

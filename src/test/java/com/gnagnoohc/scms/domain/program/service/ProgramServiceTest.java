@@ -19,6 +19,7 @@ import com.gnagnoohc.scms.domain.program.repository.ProgramSessionRepository;
 import com.gnagnoohc.scms.domain.user.entity.AppUser;
 import com.gnagnoohc.scms.global.common.entity.CommonCode;
 import com.gnagnoohc.scms.global.common.entity.FileGroup;
+import com.gnagnoohc.scms.global.common.entity.StoredFile;
 import com.gnagnoohc.scms.global.common.helper.FileUploadValidator;
 import com.gnagnoohc.scms.global.common.repository.CommonCodeRepository;
 import com.gnagnoohc.scms.global.common.service.FileGroupService;
@@ -525,6 +526,45 @@ class ProgramServiceTest {
         assertThat(response.remainingCapacity()).isEqualTo(7);
         assertThat(response.sessions()).hasSize(1);
         assertThat(response.myApplicationStatus()).isNull();
+        assertThat(response.fileName()).isNull();
+    }
+
+    @Test
+    void getDetail_whenFileGroupPresent_returnsFileName() throws Exception {
+        AppUser managerUser = mock(AppUser.class);
+        when(managerUser.getUserName()).thenReturn("담당자명");
+
+        CommonCode operatingUnitCode = buildCommonCodeFixture(11, "DEPARTMENT", "D200");
+        CommonCode programTypeCode = buildCommonCodeFixture(22, "PROGRAM_TYPE", "PT100");
+        Competency competency = buildCompetencyFixture(33, "리더십");
+
+        ExtracurricularProgram program = buildProgramFixture(
+                1, managerUser, Instant.now().plusSeconds(3600), ProgramStatus.DRAFT);
+        ReflectionTestUtils.setField(program, "programName", "프로그램명");
+        ReflectionTestUtils.setField(program, "capacity", 10);
+        ReflectionTestUtils.setField(program, "operatingUnitCode", operatingUnitCode);
+        ReflectionTestUtils.setField(program, "programTypeCode", programTypeCode);
+        ReflectionTestUtils.setField(program, "competency", competency);
+
+        FileGroup fileGroup = FileGroup.create();
+        ReflectionTestUtils.setField(fileGroup, "fileGroupId", 501);
+        ReflectionTestUtils.setField(program, "fileGroup", fileGroup);
+
+        StoredFile storedFile = StoredFile.builder().originalFileName("운영계획서.pdf").build();
+
+        when(programRepository.findDetailById(1)).thenReturn(Optional.of(program));
+        when(programSessionRepository.findByProgram_ProgramIdOrderBySessionNoAsc(1))
+                .thenReturn(List.of());
+        when(applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(eq(1), any()))
+                .thenReturn(0L);
+        when(applicationRepository.findByProgram_ProgramIdAndStudent_UserId(1, 100))
+                .thenReturn(Optional.empty());
+        when(fileGroupService.getFiles(fileGroup)).thenReturn(List.of(storedFile));
+
+        ProgramDetailResponseDTO response = programService.getDetail(1, 100);
+
+        assertThat(response.fileGroupId()).isEqualTo(501);
+        assertThat(response.fileName()).isEqualTo("운영계획서.pdf");
     }
 
     @Test
@@ -566,6 +606,72 @@ class ProgramServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.PROGRAM_NOT_FOUND);
+    }
+
+    @Test
+    void downloadOperationPlan_withFileGroup_returnsLoadedFile() throws Exception {
+        ExtracurricularProgram program = buildProgramFixture(
+                1, mock(AppUser.class), Instant.now().plusSeconds(3600), ProgramStatus.DRAFT);
+
+        FileGroup fileGroup = FileGroup.create();
+        ReflectionTestUtils.setField(fileGroup, "fileGroupId", 501);
+        ReflectionTestUtils.setField(program, "fileGroup", fileGroup);
+
+        StoredFile storedFile = StoredFile.builder().originalFileName("운영계획서.pdf").build();
+        ReflectionTestUtils.setField(storedFile, "storedFileId", 900);
+
+        FileStorageService.LoadedFile loadedFile =
+                new FileStorageService.LoadedFile(mock(org.springframework.core.io.Resource.class),
+                        "운영계획서.pdf", "application/pdf");
+
+        when(programRepository.findById(1)).thenReturn(Optional.of(program));
+        when(fileGroupService.getFiles(fileGroup)).thenReturn(List.of(storedFile));
+        when(fileStorageService.load(900)).thenReturn(loadedFile);
+
+        FileStorageService.LoadedFile result = programService.downloadOperationPlan(1);
+
+        assertThat(result).isSameAs(loadedFile);
+    }
+
+    @Test
+    void downloadOperationPlan_whenProgramNotFound_throwsProgramNotFound() {
+        when(programRepository.findById(999)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> programService.downloadOperationPlan(999))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.PROGRAM_NOT_FOUND);
+    }
+
+    @Test
+    void downloadOperationPlan_whenNoFileGroup_throwsResourceNotFound() throws Exception {
+        ExtracurricularProgram program = buildProgramFixture(
+                1, mock(AppUser.class), Instant.now().plusSeconds(3600), ProgramStatus.DRAFT);
+
+        when(programRepository.findById(1)).thenReturn(Optional.of(program));
+
+        assertThatThrownBy(() -> programService.downloadOperationPlan(1))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.RESOURCE_NOT_FOUND);
+    }
+
+    @Test
+    void downloadOperationPlan_whenNoStoredFile_throwsResourceNotFound() throws Exception {
+        ExtracurricularProgram program = buildProgramFixture(
+                1, mock(AppUser.class), Instant.now().plusSeconds(3600), ProgramStatus.DRAFT);
+
+        FileGroup fileGroup = FileGroup.create();
+        ReflectionTestUtils.setField(fileGroup, "fileGroupId", 501);
+        ReflectionTestUtils.setField(program, "fileGroup", fileGroup);
+
+        when(programRepository.findById(1)).thenReturn(Optional.of(program));
+        when(fileGroupService.getFiles(fileGroup)).thenReturn(List.of());
+
+        assertThatThrownBy(() -> programService.downloadOperationPlan(1))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.RESOURCE_NOT_FOUND);
     }
 
     /**
