@@ -47,6 +47,13 @@ public enum ErrorCode {
     ACCOUNT_LOCKED(HttpStatus.FORBIDDEN, "U005", "잠금 처리된 계정입니다. 관리자에게 문의하세요."),
     ACCOUNT_WITHDRAWN(HttpStatus.FORBIDDEN, "U006", "탈퇴 처리된 계정입니다."),
 
+    // ── 동의(공통 모듈) ───────────────────────────────────────────
+    USER_CONSENT_NOT_FOUND(HttpStatus.NOT_FOUND, "U007", "동의 이력을 찾을 수 없습니다."),
+    CONSENT_ALREADY_WITHDRAWN(HttpStatus.CONFLICT, "U008", "이미 철회된 동의입니다."),
+    REQUIRED_CONSENT_NOT_AGREED(HttpStatus.FORBIDDEN, "U009", "필수 동의 항목에 동의해야 이용할 수 있는 기능입니다."),
+    CONSENT_VERSION_OUTDATED(HttpStatus.CONFLICT, "U010", "약관 또는 개인정보 처리방침이 개정되어 재동의가 필요합니다."),
+    INVALID_CONSENT_POLICY(HttpStatus.BAD_REQUEST, "U011", "만료되었거나 비활성화된 동의 정책입니다."),
+
     // ── 비교과프로그램 ────────────────────────────────────────────
     PROGRAM_NOT_FOUND(HttpStatus.NOT_FOUND, "P001", "비교과 프로그램을 찾을 수 없습니다."),
     PROGRAM_CATEGORY_NOT_FOUND(HttpStatus.NOT_FOUND, "P002", "프로그램 분류를 찾을 수 없습니다."),
@@ -102,11 +109,14 @@ public enum ErrorCode {
     // 같은 문항에 대한 최초 응답 저장이 동시에 들어와 유니크 제약(uq_assessment_response_attempt_question)에
     // 걸렸을 때 사용하는 에러코드. 먼저 간 요청은 이미 저장 성공했으므로 클라이언트는 같은 요청을 재시도하면 된다.
     RESPONSE_SAVE_CONFLICT(HttpStatus.CONFLICT, "Q017", "저장이 동시에 처리되어 실패했습니다. 다시 시도해주세요."),
+    // 아직 제출·채점되지 않은 attempt(assessment_score 미생성)로 결과 조회를 시도할 때 사용하는 에러코드.
+    RESULT_NOT_AVAILABLE(HttpStatus.BAD_REQUEST, "Q018", "아직 채점되지 않은 진단입니다."),
     // ── 상담 ──────────────────────────────────────────────────────
     COUNSELOR_NOT_FOUND(HttpStatus.NOT_FOUND, "S001", "상담사를 찾을 수 없습니다."),
     SCHEDULE_NOT_AVAILABLE(HttpStatus.CONFLICT, "S002", "이미 예약된 시간입니다."),
     RESERVATION_NOT_FOUND(HttpStatus.NOT_FOUND, "S003", "상담 예약을 찾을 수 없습니다."),
     CANNOT_CANCEL_CONFIRMED(HttpStatus.BAD_REQUEST, "S004", "확정된 상담은 취소할 수 없습니다."),
+    ALREADY_PROCESSED_RESERVATION(HttpStatus.CONFLICT, "S005", "이미 처리된 상담 예약입니다."),
 
     // ── 마일리지 ──────────────────────────────────────────────────
     MILEAGE_ITEM_NOT_FOUND(HttpStatus.NOT_FOUND, "M001", "마일리지 항목을 찾을 수 없습니다."),
@@ -132,6 +142,7 @@ public enum ErrorCode {
     APPLICATION_PERIOD_EXPIRED(HttpStatus.BAD_REQUEST, "J010", "접수 마감 기간이 경과하여 지원 또는 취소할 수 없습니다."),
     JOB_POSTING_ALREADY_APPLIED(HttpStatus.CONFLICT, "J011", "이미 해당 채용공고에 지원 완료된 상태입니다."),
     JOB_POSTING_APPLICATION_NOT_FOUND(HttpStatus.NOT_FOUND, "J012", "채용 지원 이력을 찾을 수 없거나 이미 취소된 상태입니다."),
+    DUPLICATE_COMPANY_ACCOUNT_NO(HttpStatus.CONFLICT, "J013", "이미 등록된 사업자등록번호입니다."),
 
     // ── 알림 ──────────────────────────────────────────────────────
     NOTIFICATION_NOT_FOUND(HttpStatus.NOT_FOUND, "N001", "알림을 찾을 수 없습니다.");

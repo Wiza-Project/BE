@@ -46,10 +46,42 @@ public interface ProgramApplicationRepository extends JpaRepository<ProgramAppli
 
     /**
      * "이 학생이 이 프로그램에 낸 신청 건"을 applicationId 없이 (programId, 로그인한 학생 id)만으로 찾을 때 사용한다
-     * (예: ProgramAttendanceService.listMyAttendance).
+     * (예: ProgramAttendanceService.listMyAttendance, ProgramService.getDetail).
      * program_id+student_id 조합은 uq_program_application_program_student 유니크 제약이 걸려있어 항상 0건 또는 1건이다.
      */
     Optional<ProgramApplication> findByProgram_ProgramIdAndStudent_UserId(Integer programId, Integer studentId);
+
+    /**
+     * findByProgram_ProgramIdAndStudent_UserId의 락 버전. ProgramApplicationService.apply()가 재신청(취소된
+     * 건을 되살리는 경우) 여부를 판단하고 그대로 UPDATE하는 사이에 같은 학생의 동시 재신청 요청이 끼어드는
+     * 경쟁 조건을 막기 위해 사용한다 (findByIdForUpdate와 동일 패턴).
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT a FROM ProgramApplication a WHERE a.program.programId = :programId AND a.student.userId = :studentId")
+    Optional<ProgramApplication> findByProgram_ProgramIdAndStudent_UserIdForUpdate(
+            @Param("programId") Integer programId, @Param("studentId") Integer studentId);
+
+    /**
+     * 여러 프로그램에 대해, 로그인한 학생 본인의 신청 상태를 한 번에 조회한다(목록 조회 N+1 방지,
+     * countActiveApplicantsByProgramIds와 같은 이유). program_id+student_id 조합은 유니크 제약이 걸려있어
+     * 프로그램 하나당 결과는 0건 또는 1건이다.
+     * CANCELLED는 apply()가 재신청(reviveApplication) 대상으로 취급하는 상태라, 여기서도 "신청 안 한
+     * 것"과 동일하게 취급되도록 제외한다 — 포함시키면 재신청 가능한 프로그램에서도 FE가 신청 버튼을
+     * 숨기게 되어 재신청 기능 자체가 무의미해진다.
+     */
+    @Query("""
+        SELECT a.program.programId AS programId, a.applicationStatus AS status
+        FROM ProgramApplication a
+        WHERE a.student.userId = :studentId AND a.program.programId IN :programIds
+          AND a.applicationStatus <> 'CANCELLED'
+        """)
+    List<MyApplicationStatusProjection> findMyApplicationStatusesByProgramIds(
+            @Param("studentId") Integer studentId, @Param("programIds") List<Integer> programIds);
+
+    interface MyApplicationStatusProjection {
+        Integer getProgramId();
+        String getStatus();
+    }
 
     /**
      * 신청 건 row에 비관적 락을 걸어 조회한다. 승인/반려 처리 중 같은 신청 건이 동시에
@@ -86,9 +118,9 @@ public interface ProgramApplicationRepository extends JpaRepository<ProgramAppli
      */
     @Query(value = """
         INSERT INTO program_application (
-            program_id, student_id, application_status, waitlist_order, created_at, updated_at
+            program_id, student_id, application_status, waitlist_order, survey_completed, created_at, updated_at
         ) VALUES (
-            :programId, :studentId, :applicationStatus, :waitlistOrder, :now, :now
+            :programId, :studentId, :applicationStatus, :waitlistOrder, :surveyCompleted, :now, :now
         )
         RETURNING application_id
         """, nativeQuery = true)
@@ -97,6 +129,11 @@ public interface ProgramApplicationRepository extends JpaRepository<ProgramAppli
      * program_id + student_id 조합은 uq_program_application_program_student 유니크 제약이 걸려있어,
      * 이미 신청한 학생이 다시 신청하면 이 INSERT가 DataIntegrityViolationException을 던진다
      * (서비스 계층에서 ErrorCode.ALREADY_APPLIED로 변환).
+     * survey_completed는 DB 컬럼이 NOT NULL이고 DEFAULT가 없어(엔티티의 자바 필드 초기값은 이
+     * native INSERT에 반영되지 않음) 명시적으로 채워야 한다 — reviveApplication과 동일한 이유.
+     * 항상 false로 호출되지만(신규 신청은 아직 설문 미완료), 다른 컬럼들과 마찬가지로 바인드 파라미터로
+     * 넘긴다 — SQL 리터럴을 JDBC 플레이스홀더와 섞으면 일부 DB/드라이버 조합(H2 PostgreSQL 호환 모드 등)에서
+     * 이 INSERT ... RETURNING 구문 파싱이 깨진다.
      */
     Integer insertApplication(@Param("programId") Integer programId,
                                @Param("studentId") Integer studentId,
@@ -104,6 +141,8 @@ public interface ProgramApplicationRepository extends JpaRepository<ProgramAppli
                                @Param("applicationStatus") String applicationStatus,
                                // 정원 내 신청이면 null, 대기 신청이면 1부터 매겨지는 순번.
                                @Param("waitlistOrder") Integer waitlistOrder,
+                               // 신규 신청은 항상 false(만족도 설문 미완료).
+                               @Param("surveyCompleted") boolean surveyCompleted,
                                @Param("now") Instant now);
 
     // 특정 프로그램에서 특정 상태(주로 "APPLIED")인 신청 건수. 정원과 비교해 대기 여부를 판단하는 데 쓴다.
@@ -122,10 +161,11 @@ public interface ProgramApplicationRepository extends JpaRepository<ProgramAppli
     Integer findMaxWaitlistOrderByProgramId(@Param("programId") Integer programId);
 
     /**
-     * 특정 프로그램에서 대기 순번이 가장 앞선(가장 먼저 대기한) 신청 건 1개.
-     * 취소로 정원 슬롯이 비었을 때, 자리를 안내할 대기 1순위 학생을 찾는 데 쓴다.
+     * 특정 프로그램의 대기자 전원을 대기 순번 오름차순으로 조회한다.
+     * 취소로 정원 슬롯이 비었을 때, 열린 자리 수와 함께 대기자 전원에게 안내 알림을 보내는 데 쓴다
+     * (특정 1명만 골라 예약하지 않으므로 동시에 여러 슬롯이 열려도 경쟁 조건이 없다).
      */
-    Optional<ProgramApplication> findFirstByProgram_ProgramIdAndApplicationStatusOrderByWaitlistOrderAsc(
+    List<ProgramApplication> findAllByProgram_ProgramIdAndApplicationStatusOrderByWaitlistOrderAsc(
             Integer programId, String applicationStatus);
 
     /**
@@ -235,6 +275,13 @@ public interface ProgramApplicationRepository extends JpaRepository<ProgramAppli
      * 여기서는 그 이스케이프와 짝을 맞추는 ESCAPE '!' 절만 LIKE마다 붙이면 된다. 이스케이프 문자로 백슬래시 대신 '!'를
      * 쓰는 이유: 백슬래시는 Java 텍스트 블록 → JPQL 문자열 리터럴 → (HQL은 이 리터럴을 그대로 SQL로 넘김) SQL 문자열
      * 리터럴까지 여러 계층을 거치며 각 계층의 이스케이프 규칙이 서로 달라 의도한 한 글자로 남는다는 보장이 없다.
+     *
+     * CAST(:keyword AS string): keyword가 null일 때(검색어 없이 전체 조회) PostgreSQL이 CONCAT('%', ?, '%')의
+     * ?(파라미터) 타입을 추론하지 못해 "function lower(bytea) does not exist"로 500이 나던 버그의 수정.
+     * ":keyword IS NULL OR ..."로 논리적으로는 건너뛰어도, Postgres는 플래닝 단계에서 OR의 양쪽 식을 전부
+     * 타입 검사하므로 타입을 알 수 없는 null 파라미터가 CONCAT/LOWER 안에 그대로 들어가면 실패한다(status처럼
+     * 컬럼과 직접 비교되는 경우는 좌변에서 타입을 추론할 수 있어 문제가 없었다). CAST로 명시적으로 타입을
+     * 알려주면 null이어도 planning이 통과한다.
      */
     @Query(value = """
         SELECT a FROM ProgramApplication a
@@ -242,16 +289,16 @@ public interface ProgramApplicationRepository extends JpaRepository<ProgramAppli
         WHERE a.program.programId = :programId
           AND (:status IS NULL OR a.applicationStatus = :status)
           AND (:keyword IS NULL
-               OR LOWER(a.student.userName) LIKE LOWER(CONCAT('%', :keyword, '%')) ESCAPE '!'
-               OR LOWER(a.student.universityNo) LIKE LOWER(CONCAT('%', :keyword, '%')) ESCAPE '!')
+               OR LOWER(a.student.userName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) ESCAPE '!'
+               OR LOWER(a.student.universityNo) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) ESCAPE '!')
         """,
         countQuery = """
         SELECT COUNT(a) FROM ProgramApplication a
         WHERE a.program.programId = :programId
           AND (:status IS NULL OR a.applicationStatus = :status)
           AND (:keyword IS NULL
-               OR LOWER(a.student.userName) LIKE LOWER(CONCAT('%', :keyword, '%')) ESCAPE '!'
-               OR LOWER(a.student.universityNo) LIKE LOWER(CONCAT('%', :keyword, '%')) ESCAPE '!')
+               OR LOWER(a.student.userName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) ESCAPE '!'
+               OR LOWER(a.student.universityNo) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) ESCAPE '!')
         """)
     Page<ProgramApplication> findAllByProgramIdAndStatus(@Param("programId") Integer programId,
                                                            @Param("status") String status,
@@ -308,4 +355,40 @@ public interface ProgramApplicationRepository extends JpaRepository<ProgramAppli
                             // 취소 사유. 학생이 입력하지 않았으면 null.
                             @Param("reason") String reason,
                             @Param("now") Instant now);
+
+    /**
+     * ── 여기부터 "취소된 신청 되살리기(재신청, Update)" 기능 ────────────────────────────
+     *
+     * 학생이 스스로 취소(CANCELLED)한 신청 건에 같은 프로그램으로 다시 신청하면, program_id+student_id
+     * 유니크 제약 때문에 새 row를 INSERT할 수 없다. 대신 기존 row를 새 신청인 것처럼 되살린다: 신청
+     * 상태/대기순번/시각만 새로 채우고, 이전 취소/반려/이수판정 이력에 해당하는 컬럼은 전부 초기화한다.
+     * WHERE 절의 application_status = 'CANCELLED' 조건은 ProgramApplicationService.apply()에서 이미
+     * 확인한 상태가, 이 UPDATE 실행 직전까지 여전히 CANCELLED인지 재확인한다(updateCancellation과
+     * 동일한 경쟁 조건 방지 패턴) — 0건이면 그 사이 다른 요청이 먼저 되살렸거나 처리했다는 뜻이다.
+     */
+    @Modifying(clearAutomatically = true)
+    @Query(value = """
+        UPDATE program_application
+        SET application_status = :applicationStatus,
+            waitlist_order = :waitlistOrder,
+            processed_by = NULL,
+            processed_at = NULL,
+            decision_reason = NULL,
+            canceled_at = NULL,
+            cancellation_reason = NULL,
+            completion_status = NULL,
+            survey_completed = false,
+            certificate_no = NULL,
+            certificate_issued_at = NULL,
+            judged_by = NULL,
+            completed_at = NULL,
+            updated_at = :now
+        WHERE application_id = :applicationId
+          AND application_status = 'CANCELLED'
+        """, nativeQuery = true)
+    int reviveApplication(@Param("applicationId") Integer applicationId,
+                           // "APPLIED" 또는 "WAITLISTED". apply()가 정원 비교 결과로 결정한다.
+                           @Param("applicationStatus") String applicationStatus,
+                           @Param("waitlistOrder") Integer waitlistOrder,
+                           @Param("now") Instant now);
 }

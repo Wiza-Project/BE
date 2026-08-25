@@ -11,6 +11,7 @@ import com.gnagnoohc.scms.domain.program.dto.request.ProgramUpdateRequestDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramSessionResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramUpdateResponseDTO;
 import com.gnagnoohc.scms.domain.program.entity.ExtracurricularProgram;
+import com.gnagnoohc.scms.domain.program.entity.ProgramApplication;
 import com.gnagnoohc.scms.domain.program.entity.ProgramStatus;
 import com.gnagnoohc.scms.domain.program.repository.CompetencyOptionRepository;
 import com.gnagnoohc.scms.domain.program.repository.ExtracurricularProgramRepository;
@@ -311,11 +312,13 @@ public class ProgramService {
      */
     @Transactional(readOnly = true)
     public PageResponse<ProgramListItemResponseDTO> list(ProgramStatus status, String keyword, Integer competencyId,
-                                                           Pageable pageable) {
+                                                           Integer studentId, Pageable pageable) {
         Page<ExtracurricularProgram> page = programRepository.search(status, keyword, competencyId, pageable);
         Map<Integer, Long> applicantCounts = countApplicantsByProgram(page.getContent());
+        Map<Integer, String> myApplicationStatuses = findMyApplicationStatuses(page.getContent(), studentId);
         return PageResponse.from(page.map(program ->
-                ProgramListItemResponseDTO.from(program, applicantCounts.getOrDefault(program.getProgramId(), 0L))));
+                ProgramListItemResponseDTO.from(program, applicantCounts.getOrDefault(program.getProgramId(), 0L),
+                        myApplicationStatuses.get(program.getProgramId()))));
     }
 
     /**
@@ -343,7 +346,7 @@ public class ProgramService {
      * 학생이 프로그램 상세 화면에서 볼 기본정보 전체 + 회차 목록 + 신청자 수를 한 번에 조립한다.
      */
     @Transactional(readOnly = true)
-    public ProgramDetailResponseDTO getDetail(Integer programId) {
+    public ProgramDetailResponseDTO getDetail(Integer programId, Integer studentId) {
         ExtracurricularProgram program = programRepository.findDetailById(programId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PROGRAM_NOT_FOUND));
 
@@ -356,7 +359,15 @@ public class ProgramService {
         long applicantCount = applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(
                 programId, List.of(ApplicationStatus.APPLIED.name(), ApplicationStatus.APPROVED.name()));
 
-        return ProgramDetailResponseDTO.from(program, applicantCount, sessions);
+        // CANCELLED는 apply()가 재신청 대상으로 취급하는 상태라, "신청 안 한 것"과 동일하게 null로 내려준다
+        // (findMyApplicationStatusesByProgramIds와 같은 이유 — 재신청 가능한 프로그램에서 버튼을 숨기면 안 됨).
+        String myApplicationStatus = applicationRepository
+                .findByProgram_ProgramIdAndStudent_UserId(programId, studentId)
+                .map(ProgramApplication::getApplicationStatus)
+                .filter(status -> !ApplicationStatus.CANCELLED.name().equals(status))
+                .orElse(null);
+
+        return ProgramDetailResponseDTO.from(program, applicantCount, sessions, myApplicationStatus);
     }
 
     /**
@@ -398,6 +409,18 @@ public class ProgramService {
                 .collect(Collectors.toMap(
                         ProgramApplicationRepository.ProgramApplicantCount::getProgramId,
                         ProgramApplicationRepository.ProgramApplicantCount::getCount));
+    }
+
+    // 목록 페이지 한 번에 해당하는 프로그램들에 대한 로그인 학생 본인의 신청 상태를 한 번의 쿼리로 배치 조회한다(N+1 방지).
+    private Map<Integer, String> findMyApplicationStatuses(List<ExtracurricularProgram> programs, Integer studentId) {
+        if (programs.isEmpty()) {
+            return Map.of();
+        }
+        List<Integer> programIds = programs.stream().map(ExtracurricularProgram::getProgramId).toList();
+        return applicationRepository.findMyApplicationStatusesByProgramIds(studentId, programIds).stream()
+                .collect(Collectors.toMap(
+                        ProgramApplicationRepository.MyApplicationStatusProjection::getProgramId,
+                        ProgramApplicationRepository.MyApplicationStatusProjection::getStatus));
     }
 
     // 프로그램 등록 폼의 핵심역량 드롭다운용 옵션 목록. 최상위(하위 역량 없음) + 활성 상태만 노출한다.
