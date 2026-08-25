@@ -9,7 +9,7 @@ import java.util.List;
 /** 선택 학기에 적용할 활성 인증·장학 정책을 조회한다. */
 public interface MileageBenefitPolicyRepository extends JpaRepository<MileageBenefitPolicy, Integer> {
 
-    /** 학생에게 공개할 활성 장학금 정책을 학기와 연간 정책으로 나누어 조회한다. */
+    /** 선택 학기에 적용되는 활성 마일리지 등급 정책을 최소 점수 오름차순으로 조회한다. */
     List<MileageBenefitPolicy> findByActiveTrueAndBenefitTypeAndAcademicYearAndSemesterCodeInOrderByMinimumPointsAsc(
             String benefitType,
             Integer academicYear,
