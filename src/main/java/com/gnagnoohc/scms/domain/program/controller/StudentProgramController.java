@@ -6,12 +6,14 @@ import com.gnagnoohc.scms.domain.program.entity.ProgramStatus;
 import com.gnagnoohc.scms.domain.program.service.ProgramService;
 import com.gnagnoohc.scms.global.common.dto.ApiResponse;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;
+import com.gnagnoohc.scms.global.security.AuthUser;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -41,13 +43,16 @@ public class StudentProgramController {
              * 기본값은 최신 등록순 20건씩. 마감임박순 등 다른 정렬은 sort=recruitmentEndsAt,asc 처럼 그대로 넘기면 된다
              * (ExtracurricularProgramRepositoryImpl.resolveOrderSpecifiers가 허용하는 필드만 화이트리스트로 반영한다).
              */
-            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
-        return ApiResponse.ok(programService.list(status, keyword, competencyId, pageable));
+            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable,
+            // 지금 로그인해서 이 요청을 보낸 학생의 id (인증 정보에서 옴). 카드별 "내 신청 상태"를 채우는 데 쓴다.
+            @AuthenticationPrincipal AuthUser authUser) {
+        return ApiResponse.ok(programService.list(status, keyword, competencyId, authUser.getId(), pageable));
     }
 
     @Operation(summary = "프로그램 상세 조회", description = "프로그램 기본정보, 회차 목록, 신청자 수를 조회합니다")
     @GetMapping("/{programId}")
-    public ApiResponse<ProgramDetailResponseDTO> getDetail(@PathVariable Integer programId) {
-        return ApiResponse.ok(programService.getDetail(programId));
+    public ApiResponse<ProgramDetailResponseDTO> getDetail(@PathVariable Integer programId,
+                                                             @AuthenticationPrincipal AuthUser authUser) {
+        return ApiResponse.ok(programService.getDetail(programId, authUser.getId()));
     }
 }
