@@ -1,7 +1,8 @@
-package com.gnagnoohc.scms.global.common.util;
+package com.gnagnoohc.scms.global.common.helper;
 
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
+import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -9,33 +10,30 @@ import java.util.Locale;
 import java.util.Set;
 
 /**
- * 첨부파일(이미지/PDF) 업로드 검증 유틸리티.
+ * 첨부파일(이미지/PDF) 업로드 검증 헬퍼.
  *
  * 클라이언트가 보낸 파일명 확장자·Content-Type은 쉽게 위조할 수 있으므로, 파일 앞부분
  * 바이트(매직넘버)를 직접 읽어 실제 형식과 일치하는지 확인한다. 실행 파일 등을 이미지/PDF로
  * 위장해 업로드하는 것을 막기 위한 최소한의 방어이며, 알려진 악성코드 시그니처를 탐지하는
- * 백신 스캔은 아니다 — 그 부분은 {@link com.gnagnoohc.scms.global.common.service.MalwareScanner}
- * 확장 지점에서 별도로 다룰 예정이다 (현재는 미구현).
+ * 백신 스캔은 아니다
  *
  * 그 전역 상한보다 더 엄격한 제한이 필요한
  * 화면만 크기를 받는 {@link #validate(MultipartFile, Set, long)}를 쓴다.
  */
-public final class FileValidator {
+@Component
+public class FileUploadValidator {
 
-    /** 매직바이트 검사를 지원하는, 즉 이 유틸이 실제로 검증 가능한 전체 확장자 목록. */
+    /** 매직바이트 검사를 지원하는, 즉 이 헬퍼가 실제로 검증 가능한 전체 확장자 목록. */
     public static final Set<String> SUPPORTED_EXTENSIONS =
             Set.of("jpg", "jpeg", "png", "gif", "webp", "pdf");
 
-    private FileValidator() {
-    }
-
     /** 기본 허용 확장자({@link #SUPPORTED_EXTENSIONS}) 전체를 기준으로, 크기 제한 없이 검증한다. */
-    public static void validate(MultipartFile file) {
+    public void validate(MultipartFile file) {
         validate(file, SUPPORTED_EXTENSIONS);
     }
 
     /** 확장자를 좁혀서(예: 이미지만) 검증하되 크기는 별도로 제한하지 않는다. */
-    public static void validate(MultipartFile file, Set<String> allowedExtensions) {
+    public void validate(MultipartFile file, Set<String> allowedExtensions) {
         validateInternal(file, allowedExtensions, null);
     }
 
@@ -49,11 +47,11 @@ public final class FileValidator {
      *                          {@code Set.of("jpg", "jpeg", "png")}처럼 더 좁혀서 넘기면 된다.
      * @param maxFileSize       허용 최대 크기(byte)
      */
-    public static void validate(MultipartFile file, Set<String> allowedExtensions, long maxFileSize) {
+    public void validate(MultipartFile file, Set<String> allowedExtensions, long maxFileSize) {
         validateInternal(file, allowedExtensions, maxFileSize);
     }
 
-    private static void validateInternal(MultipartFile file, Set<String> allowedExtensions, Long maxFileSize) {
+    private void validateInternal(MultipartFile file, Set<String> allowedExtensions, Long maxFileSize) {
         if (file == null || file.isEmpty()) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "업로드할 파일이 비어 있습니다.");
         }
@@ -73,7 +71,7 @@ public final class FileValidator {
         validateMagicBytes(file, extension);
     }
 
-    private static String validateFileName(String originalFileName) {
+    private String validateFileName(String originalFileName) {
         if (originalFileName == null || originalFileName.isBlank()) {
             throw new BusinessException(ErrorCode.INVALID_FILE_NAME, "파일명이 비어 있습니다.");
         }
@@ -85,7 +83,7 @@ public final class FileValidator {
         return originalFileName;
     }
 
-    private static String extractExtension(String fileName) {
+    private String extractExtension(String fileName) {
         int dotIndex = fileName.lastIndexOf('.');
         if (dotIndex < 0 || dotIndex == fileName.length() - 1) {
             throw new BusinessException(ErrorCode.INVALID_FILE_TYPE, "확장자가 없는 파일입니다.");
@@ -96,7 +94,7 @@ public final class FileValidator {
     /**
      * 파일 앞부분 바이트를 읽어 실제 형식이 (위조되지 않았다고 주장하는) 확장자와 일치하는지 확인한다.
      */
-    private static void validateMagicBytes(MultipartFile file, String extension) {
+    private void validateMagicBytes(MultipartFile file, String extension) {
         byte[] header;
         try (var in = file.getInputStream()) {
             header = in.readNBytes(12);
@@ -121,7 +119,7 @@ public final class FileValidator {
         }
     }
 
-    private static boolean startsWith(byte[] header, int... expected) {
+    private boolean startsWith(byte[] header, int... expected) {
         if (header.length < expected.length) {
             return false;
         }
