@@ -13,6 +13,7 @@ import com.gnagnoohc.scms.domain.competency.entity.AssessmentRoundQuestionId;
 import com.gnagnoohc.scms.domain.competency.entity.Competency;
 import com.gnagnoohc.scms.domain.competency.repository.AssessmentResponseRepository;
 import com.gnagnoohc.scms.domain.competency.repository.AssessmentRoundQuestionRepository;
+import com.gnagnoohc.scms.domain.competency.repository.AssessmentRoundRepository;
 import com.gnagnoohc.scms.domain.competency.repository.AssessmentScoreRepository;
 import com.gnagnoohc.scms.domain.user.entity.AppUser;
 import com.gnagnoohc.scms.global.error.BusinessException;
@@ -30,11 +31,14 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -55,6 +59,9 @@ class AssessmentSubmissionServiceTest {
     AssessmentRoundQuestionRepository assessmentRoundQuestionRepository;
 
     @Mock
+    AssessmentRoundRepository assessmentRoundRepository;
+
+    @Mock
     AssessmentScoreRepository assessmentScoreRepository;
 
     // AssessmentScoreCalculator는 리포지토리 의존성 없는 순수 계산 컴포넌트라 목(mock) 대신 실제 인스턴스를 사용한다
@@ -65,7 +72,7 @@ class AssessmentSubmissionServiceTest {
     void setUp() {
         assessmentSubmissionService = new AssessmentSubmissionService(
                 assessmentAttemptAccessGuard, assessmentResponseRepository,
-                assessmentRoundQuestionRepository, assessmentScoreRepository,
+                assessmentRoundQuestionRepository, assessmentRoundRepository, assessmentScoreRepository,
                 new AssessmentScoreCalculator());
     }
 
@@ -159,6 +166,7 @@ class AssessmentSubmissionServiceTest {
                 .thenReturn(List.of(rq1, rq2));
         when(assessmentResponseRepository.findByAttempt_AttemptId(ATTEMPT_ID))
                 .thenReturn(List.of(response1, response2));
+        when(assessmentRoundRepository.findByIdForUpdate(ROUND_ID)).thenReturn(Optional.of(round));
         when(assessmentScoreRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         AssessmentSubmitResponse result = assessmentSubmissionService.submit(ATTEMPT_ID, STUDENT_ID);
@@ -201,6 +209,7 @@ class AssessmentSubmissionServiceTest {
                 .thenReturn(List.of(rq1, rq2, rq3));
         when(assessmentResponseRepository.findByAttempt_AttemptId(ATTEMPT_ID))
                 .thenReturn(List.of(response1, response2, response3));
+        when(assessmentRoundRepository.findByIdForUpdate(ROUND_ID)).thenReturn(Optional.of(round));
         when(assessmentScoreRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         AssessmentSubmitResponse result = assessmentSubmissionService.submit(ATTEMPT_ID, STUDENT_ID);
@@ -286,6 +295,35 @@ class AssessmentSubmissionServiceTest {
                 .isEqualTo(ErrorCode.DIAGNOSIS_PERIOD_CLOSED);
     }
 
+    // 배치(AssessmentPercentileBatchService)가 이 회차의 잠금을 먼저 잡고 COMPLETED로 확정한 뒤에야
+    // 이 제출이 잠금을 얻어 재개되는 경합 상황을 재현한다. 최초 assertPeriodOpen(38번 줄) 시점엔 기간
+    // 안이었더라도, 잠금 획득 후 재검증에서 걸러져야 하고 saveAll이 호출되면 안 된다.
+    @Test
+    void submit_whenRoundAlreadyCompletedByBatch_throwsDiagnosisPeriodClosedWithoutSaving() throws Exception {
+        Instant now = Instant.now();
+        AssessmentRound round = buildRound(now.minus(1, ChronoUnit.DAYS), now.plus(6, ChronoUnit.DAYS));
+        round.completePercentileCalculation();
+        AssessmentAttempt attempt = buildAttempt(round, buildStudent(STUDENT_ID));
+        Competency competency = buildCompetency(100);
+        AssessmentQuestion question = buildQuestion(competency, QUESTION_ID);
+        AssessmentRoundQuestion rq = buildRoundQuestion(round, question, 1);
+        AssessmentResponse response = AssessmentResponse.create(attempt, question, BigDecimal.valueOf(4), STUDENT_ID);
+
+        when(assessmentAttemptAccessGuard.getOwnAttempt(ATTEMPT_ID, STUDENT_ID)).thenReturn(attempt);
+        when(assessmentRoundQuestionRepository.findByAssessmentRound_AssessmentRoundIdOrderByDisplayOrderAsc(ROUND_ID))
+                .thenReturn(List.of(rq));
+        when(assessmentResponseRepository.findByAttempt_AttemptId(ATTEMPT_ID)).thenReturn(List.of(response));
+        when(assessmentRoundRepository.findByIdForUpdate(ROUND_ID)).thenReturn(Optional.of(round));
+
+        assertThatThrownBy(() -> assessmentSubmissionService.submit(ATTEMPT_ID, STUDENT_ID))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.DIAGNOSIS_PERIOD_CLOSED);
+
+        verify(assessmentScoreRepository, never()).saveAll(any());
+        assertThat(attempt.getAttemptStatus()).isEqualTo("NOT_STARTED");
+    }
+
     @Test
     void submit_whenAttemptNotOwnedByStudent_throwsAssessmentAttemptNotFound() {
         when(assessmentAttemptAccessGuard.getOwnAttempt(ATTEMPT_ID, STUDENT_ID))
@@ -324,6 +362,7 @@ class AssessmentSubmissionServiceTest {
         when(assessmentRoundQuestionRepository.findByAssessmentRound_AssessmentRoundIdOrderByDisplayOrderAsc(ROUND_ID))
                 .thenReturn(List.of(rq));
         when(assessmentResponseRepository.findByAttempt_AttemptId(ATTEMPT_ID)).thenReturn(List.of(response));
+        when(assessmentRoundRepository.findByIdForUpdate(ROUND_ID)).thenReturn(Optional.of(round));
         when(assessmentScoreRepository.saveAll(any()))
                 .thenThrow(new DataIntegrityViolationException("uq_assessment_score_attempt_competency"));
 
