@@ -10,6 +10,7 @@ import com.gnagnoohc.scms.domain.user.repository.UserConsentRepository;
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -56,8 +57,15 @@ public class UserConsentService implements ConsentVerifier {
         AppUser user = appUserRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
-        UserConsent saved = userConsentRepository.save(UserConsent.create(user, policy, now));
-        return UserConsentHistoryResponse.from(saved);
+        // 위 조회~저장 사이에 동시 요청이 끼어들면 활성 동의가 중복 저장될 수 있다. DB에
+        // 이를 막는 제약(부분 유니크 인덱스)이 아직 없어 앱 레벨에서 최소한의 방어만 한다 —
+        // 저장 자체가 실패하면 그대로 예외를 던진다(멱등 반환 아님).
+        try {
+            UserConsent saved = userConsentRepository.saveAndFlush(UserConsent.create(user, policy, now));
+            return UserConsentHistoryResponse.from(saved);
+        } catch (DataIntegrityViolationException e) {
+            throw new BusinessException(ErrorCode.CONSENT_SAVE_CONFLICT);
+        }
     }
 
     /**

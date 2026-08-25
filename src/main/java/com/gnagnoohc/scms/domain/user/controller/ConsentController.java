@@ -43,7 +43,7 @@ public class ConsentController {
     private final ConsentPolicyService consentPolicyService;
     private final UserConsentService userConsentService;
 
-    @Operation(summary = "동의 정책 목록 조회", description = "moduleCode(COMMON/ASSESSMENT/COUNSELING/CAREER) 기준으로 현재 유효한 정책을 유형별로 내려준다.")
+    @Operation(summary = "동의 정책 목록 조회", description = "moduleCode(COMMON/ASSESSMENT/COUNSELING/CAREER/PROGRAM) 기준으로 현재 유효한 정책을 유형별로 내려준다.")
     @GetMapping("/policies")
     public ApiResponse<List<ConsentPolicyResponse>> getPolicies(@RequestParam String moduleCode) {
         return ApiResponse.ok(consentPolicyService.getEffectivePolicies(moduleCode));
