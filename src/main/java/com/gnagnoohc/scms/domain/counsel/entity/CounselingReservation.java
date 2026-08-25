@@ -23,6 +23,7 @@ public class CounselingReservation extends BaseTimeEntity {
     // 상태를 다루는 곳에서는 항상 이 상수를 통해서만 비교·대입한다.
     private static final String REQUESTED_STATUS = "REQUESTED";
     private static final String APPROVED_STATUS = "APPROVED";
+    private static final String REJECTED_STATUS = "REJECTED";
     private static final String CANCELED_STATUS = "CANCELED";
 
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -71,9 +72,9 @@ public class CounselingReservation extends BaseTimeEntity {
      * 두 조건 중 하나라도 어기면 즉시 예외를 던지고 필드는 하나도 바뀌지 않으므로,
      * 취소 처리가 절반만 반영된 상태(상태만 바뀌고 사유는 안 남는 등)는 생기지 않는다.
      */
-    // BLOCKED(체크리스트 6 의존) — APPROVED 취소 시 활성 배정 종료 미처리.
-    //   현재 승인·배정(6번) 미구현이라 APPROVED 도달 경로가 없어 잠복. 6번 구현 시
-    //   이 취소 트랜잭션에서 CounselingAssignment.ended_at을 함께 채워 활성 배정 모순을 막을 것.
+    // APPROVED 상태의 예약을 취소하면 CounselingReservationService.cancel()이 같은 트랜잭션 안에서
+    // 이 예약의 활성 배정(CounselingAssignment)도 함께 종료(ended_at 세팅)한다. 여기 cancel()은
+    // 예약 자체의 상태·사유만 책임지고, 배정 종료는 서비스가 담당한다(엔티티는 다른 엔티티를 몰라야 함).
     public void cancel(String reason, Instant now) {
         if (!REQUESTED_STATUS.equals(reservationStatus) && !APPROVED_STATUS.equals(reservationStatus)) {
             throw new BusinessException(ErrorCode.CANNOT_CANCEL_CONFIRMED);
@@ -84,6 +85,44 @@ public class CounselingReservation extends BaseTimeEntity {
         this.reservationStatus = CANCELED_STATUS;
         this.canceledAt = now;
         this.cancellationReason = reason;
+    }
+
+    /**
+     * 상담사가 REQUESTED 상태 예약을 승인한다.
+     * 이미 처리(승인·거절)됐거나 취소된 예약을 다시 승인하면 배정이 중복 생성되거나 상태가
+     * 되돌아갈 수 있으므로, REQUESTED가 아니면 필드를 하나도 바꾸지 않고 즉시 예외로 막는다.
+     * 같은 예약에 동시에 승인 요청이 두 번 들어와도, 서비스가 미리 잡은 행 잠금 덕분에 두 번째
+     * 요청은 이미 APPROVED로 바뀐 상태를 보고 여기서 걸린다.
+     */
+    public void approve(Integer processedBy, Instant now) {
+        if (!REQUESTED_STATUS.equals(reservationStatus)) {
+            throw new BusinessException(ErrorCode.ALREADY_PROCESSED_RESERVATION);
+        }
+        this.reservationStatus = APPROVED_STATUS;
+        this.processedBy = processedBy;
+        this.processedAt = now;
+    }
+
+    /**
+     * 상담사가 REQUESTED 상태 예약을 거절한다. approve()와 같은 이유로 REQUESTED가 아니면 막는다.
+     * 거절 사유는 학생에게 공개되는 처리 결과이므로 반드시 함께 저장한다.
+     */
+    public void reject(String decisionReason, Integer processedBy, Instant now) {
+        if (!REQUESTED_STATUS.equals(reservationStatus)) {
+            throw new BusinessException(ErrorCode.ALREADY_PROCESSED_RESERVATION);
+        }
+        this.reservationStatus = REJECTED_STATUS;
+        this.processedBy = processedBy;
+        this.processedAt = now;
+        this.decisionReason = decisionReason;
+    }
+
+    /**
+     * 취소 처리 전에 "취소되기 직전까지 APPROVED였는지"를 판별하는 데 쓴다.
+     * cancel()이 상태를 CANCELED로 바꾸고 나면 더 이상 구분할 수 없으므로 반드시 cancel() 호출 전에 확인한다.
+     */
+    public boolean isApproved() {
+        return APPROVED_STATUS.equals(reservationStatus);
     }
 
     /**
