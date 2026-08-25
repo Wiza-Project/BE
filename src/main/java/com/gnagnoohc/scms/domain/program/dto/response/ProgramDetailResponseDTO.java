@@ -1,6 +1,7 @@
 package com.gnagnoohc.scms.domain.program.dto.response;
 
 import com.gnagnoohc.scms.domain.program.entity.ExtracurricularProgram;
+import com.gnagnoohc.scms.domain.program.service.ApplicationStatus;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -28,10 +29,14 @@ public record ProgramDetailResponseDTO(
         Instant operationStartsAt,
         Instant operationEndsAt,
         Instant createdAt,
-        List<ProgramSessionResponseDTO> sessions
+        List<ProgramSessionResponseDTO> sessions,
+        // 로그인한 학생 본인의 이 프로그램에 대한 신청 상태. 신청 이력이 없으면(또는 취소해 재신청 가능하면) null.
+        String myApplicationStatus,
+        String myApplicationStatusLabel
 ) {
     public static ProgramDetailResponseDTO from(ExtracurricularProgram program, long applicantCount,
-                                                 List<ProgramSessionResponseDTO> sessions) {
+                                                 List<ProgramSessionResponseDTO> sessions,
+                                                 String myApplicationStatus) {
         return new ProgramDetailResponseDTO(
                 program.getProgramId(),
                 program.getProgramName(),
@@ -53,7 +58,9 @@ public record ProgramDetailResponseDTO(
                 program.getOperationStartsAt(),
                 program.getOperationEndsAt(),
                 program.getCreatedAt(),
-                sessions
+                sessions,
+                myApplicationStatus,
+                myApplicationStatus != null ? ApplicationStatus.valueOf(myApplicationStatus).getLabel() : null
         );
     }
 }
