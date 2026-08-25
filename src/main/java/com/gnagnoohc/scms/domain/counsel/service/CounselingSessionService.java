@@ -10,6 +10,7 @@ import com.gnagnoohc.scms.domain.counsel.repository.CounselingAssignmentReposito
 import com.gnagnoohc.scms.domain.counsel.repository.CounselingReservationRepository;
 import com.gnagnoohc.scms.domain.counsel.repository.CounselingScheduleRepository;
 import com.gnagnoohc.scms.domain.counsel.repository.CounselingSessionRepository;
+import com.gnagnoohc.scms.domain.user.entity.AppUser;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
@@ -82,7 +83,14 @@ public class CounselingSessionService {
         }
 
         // 같은 상담사의 빈 시간대를 동시에 선점하지 못하도록 사용자 행부터 잠근다(일정 등록·수정과 같은 순서).
-        counselUserRepository.findByIdForUpdate(counselorId);
+        // 잠근 뒤에는 시작부의 비잠금 검사(ensureActiveCounselor) 대신 잠긴 행에서 활성·ST200을 다시 확인해,
+        // 검사와 잠금 사이에 계정 비활성화·역할 회수가 커밋된 경우를 배제한다(CounselingScheduleService와 같은 패턴).
+        AppUser lockedCounselor = counselUserRepository.findByIdForUpdate(counselorId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
+        if (!"ACTIVE".equals(lockedCounselor.getAccountStatus())
+                || !counselUserRepository.hasCounselorRole(counselorId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
 
         CounselingAssignment assignment = counselingAssignmentRepository.findByIdForUpdate(assignmentId)
                 .filter(a -> a.isOwnedBy(counselorId))
@@ -132,11 +140,11 @@ public class CounselingSessionService {
 
         session.complete(attendanceStatus, nextSessionAt, now);
         if ("PRESENT".equals(attendanceStatus)) {
-            // 예약 상태를 바꾸기 전에 예약 행을 잠그고 최신 상태에서 전이한다. 학생 취소도 같은 예약 행을
-            // 잠그므로(findByIdForUpdate) 두 트랜잭션이 직렬화된다. 잠금 없이 LAZY 로드한 예약을 수정하면,
-            // 동시에 커밋된 취소(@Version 없는 전체 컬럼 UPDATE)를 덮어써 취소된 예약이 IN_PROGRESS로
-            // 되살아나고 취소 사유가 소실되는 lost update가 생긴다. markInProgressIfApproved()는 APPROVED일
-            // 때만 전이하므로, 사이에 취소가 커밋돼 CANCELED가 되어 있으면 여기서 no-op이 되어 취소가 보존된다.
+            // 예약 상태를 바꾸기 전에 예약 행을 잠그고 최신 상태를 다시 읽어 전이한다. 학생 취소도 같은
+            // 예약 행을 잠그므로(findByIdForUpdate) 두 트랜잭션이 직렬화된다. 잠금 없이 LAZY 로드한 예약을
+            // 그대로 수정하면 이 트랜잭션의 flush가 @Version 없는 전체 컬럼 UPDATE로 나가, 먼저 커밋된 취소를
+            // 덮어써 취소된 예약이 IN_PROGRESS로 되살아나고 취소 사유가 사라진다(lost update).
+            // markInProgressIfApproved()는 APPROVED일 때만 전이하므로, 사이에 취소가 커밋됐으면 no-op이 되어 취소가 보존된다.
             Integer reservationId = assignment.getCounselingReservation().getCounselingReservationId();
             CounselingReservation reservation = counselingReservationRepository.findByIdForUpdate(reservationId)
                     .orElseThrow(() -> new BusinessException(ErrorCode.RESERVATION_NOT_FOUND));
