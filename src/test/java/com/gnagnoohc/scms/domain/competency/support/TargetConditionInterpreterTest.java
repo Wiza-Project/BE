@@ -86,14 +86,81 @@ class TargetConditionInterpreterTest {
         assertThat(interpreter.toPredicate(condition)).isNull();
     }
 
-    // colleges(단과대)는 학적 데이터에 대응하는 계층이 없어 조용히 무시하지 않고 예외로 실패시킨다.
+    // grades가 배열이 아니면(예: 관리자가 단일 값을 실수로 저장) 조용히 "조건 없음"으로 넘기지 않고
+    // 실패시켜야 한다 — 그렇지 않으면 전체 학생으로 잘못 집계된다(재검토 스레드 1번 근거).
     @Test
-    void toPredicate_whenCollegesPresent_throwsUnsupported() {
+    void toPredicate_whenGradesNotArray_throwsInvalidFormat() {
+        JsonNode condition = objectMapper.valueToTree(Map.of("grades", 3));
+
+        assertThatThrownBy(() -> interpreter.toPredicate(condition))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.ASSESSMENT_TARGET_CONDITION_INVALID_FORMAT);
+    }
+
+    // asInt()는 true를 1로 변환해버려서, 검증 없이 그대로 쓰면 "그럴듯하지만 틀린" 조건이
+    // 에러 없이 만들어진다(재검토 스레드 4번 근거) — isIntegralNumber()로 미리 걸러야 한다.
+    @Test
+    void toPredicate_whenGradeElementIsBoolean_throwsInvalidFormat() {
+        JsonNode condition = objectMapper.valueToTree(Map.of("grades", List.of(true)));
+
+        assertThatThrownBy(() -> interpreter.toPredicate(condition))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.ASSESSMENT_TARGET_CONDITION_INVALID_FORMAT);
+    }
+
+    // 4000.7처럼 소수점 값도 asInt()가 4000으로 잘라버려, 우연히 존재하는 다른 학과 코드ID와
+    // 매칭될 수 있다 — 마찬가지로 등록 이전에 막아야 한다.
+    @Test
+    void toPredicate_whenMajorCodeIdElementIsDecimal_throwsInvalidFormat() {
+        JsonNode condition = objectMapper.valueToTree(Map.of("majorCodeIds", List.of(4000.7)));
+
+        assertThatThrownBy(() -> interpreter.toPredicate(condition))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.ASSESSMENT_TARGET_CONDITION_INVALID_FORMAT);
+    }
+
+    @Test
+    void isValidShape_whenGradesAndMajorCodeIdsAreProperArrays_returnsTrue() {
+        JsonNode condition = objectMapper.valueToTree(Map.of("grades", List.of(1, 2), "majorCodeIds", List.of(4000)));
+
+        assertThat(interpreter.isValidShape(condition)).isTrue();
+    }
+
+    @Test
+    void isValidShape_whenTargetConditionNull_returnsTrue() {
+        assertThat(interpreter.isValidShape(null)).isTrue();
+    }
+
+    // grades/majorCodeIds가 아닌 키(예전 colleges 포함, 오타 등)는 조용히 무시하지 않고 예외로
+    // 실패시킨다 — 이 학교는 단과대 자체가 없어 colleges를 특별 취급할 이유가 없으므로, 인식 못
+    // 하는 키 전부를 하나의 규칙으로 막는다.
+    @Test
+    void toPredicate_whenUnrecognizedKeyPresent_throwsUnsupported() {
         JsonNode condition = objectMapper.valueToTree(Map.of("colleges", List.of("공과대학")));
 
         assertThatThrownBy(() -> interpreter.toPredicate(condition))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.ASSESSMENT_TARGET_CONDITION_UNSUPPORTED);
+    }
+
+    @Test
+    void toPredicate_whenTypoKeyPresent_throwsUnsupported() {
+        JsonNode condition = objectMapper.valueToTree(Map.of("grade", List.of(3)));
+
+        assertThatThrownBy(() -> interpreter.toPredicate(condition))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.ASSESSMENT_TARGET_CONDITION_UNSUPPORTED);
+    }
+
+    @Test
+    void hasUnrecognizedKey_whenOnlyKnownKeys_returnsFalse() {
+        JsonNode condition = objectMapper.valueToTree(Map.of("grades", List.of(1), "majorCodeIds", List.of(4000)));
+
+        assertThat(interpreter.hasUnrecognizedKey(condition)).isFalse();
     }
 }
