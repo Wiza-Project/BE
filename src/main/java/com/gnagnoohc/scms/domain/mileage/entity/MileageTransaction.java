@@ -55,4 +55,28 @@ public class MileageTransaction extends BaseCreatedAtEntity {
         transaction.postedAt = postedAt;
         return transaction;
     }
+
+    /** 증빙이 확인된 외부활동 마일리지 신청의 승인 적립 원장을 생성한다. */
+    public static MileageTransaction earnFromExternalClaim(
+            ExternalActivityClaim claim,
+            BigDecimal points,
+            Integer processedBy,
+            Instant postedAt
+    ) {
+        MileagePolicy policy = claim.getMileagePolicy();
+
+        MileageTransaction transaction = new MileageTransaction();
+        transaction.student = claim.getStudent();
+        transaction.mileagePolicy = policy;
+        transaction.competency = claim.getActivityType().getCompetency();
+        transaction.sourceExternalClaim = claim;
+        transaction.transactionType = "EARN";
+        transaction.points = points;
+        transaction.transactionStatus = "POSTED";
+        transaction.requestedBy = claim.getStudent().getUserId();
+        transaction.processedBy = processedBy;
+        transaction.transactionReason = "외부활동 마일리지 심사 승인";
+        transaction.postedAt = postedAt;
+        return transaction;
+    }
 }

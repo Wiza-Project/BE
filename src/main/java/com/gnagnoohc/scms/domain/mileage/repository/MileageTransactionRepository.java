@@ -18,6 +18,9 @@ public interface MileageTransactionRepository extends JpaRepository<MileageTrans
     /** 동일 비교과 신청으로 이미 생성된 적립 원장을 찾아 중복 적립을 막는다. */
     Optional<MileageTransaction> findBySourceProgramApplication_ApplicationId(Integer applicationId);
 
+    /** 동일 외부활동 신청으로 이미 생성된 적립 원장을 찾아 중복 승인을 막는다. */
+    Optional<MileageTransaction> findBySourceExternalClaim_ExternalClaimId(Integer externalClaimId);
+
     /** 모든 학기의 확정 거래를 합산해 학생의 누적 마일리지를 조회한다. */
     @Query("""
             select coalesce(sum(t.points), 0)
