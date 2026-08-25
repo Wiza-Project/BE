@@ -1,12 +1,9 @@
 package com.gnagnoohc.scms.domain.career.controller;
 
-import com.gnagnoohc.scms.domain.career.dto.company.CompanyDetailResponseDTO;
-import com.gnagnoohc.scms.domain.career.dto.company.CompanyRegisterRequestDTO;
-import com.gnagnoohc.scms.domain.career.dto.company.CompanySearchConditionDTO;
-import com.gnagnoohc.scms.domain.career.dto.company.CompanySummaryResponseDTO;
-import com.gnagnoohc.scms.domain.career.dto.company.CompanyVerifyRequestDTO;
+import com.gnagnoohc.scms.domain.career.dto.company.*;
 import com.gnagnoohc.scms.domain.career.service.CompanyAccountService;
 import com.gnagnoohc.scms.global.common.dto.ApiResponse;
+import com.gnagnoohc.scms.global.security.AuthUser;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -17,15 +14,8 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.ModelAttribute;
-import org.springframework.web.bind.annotation.PatchMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.*;
 
 /**
  * 협약기업 메타데이터 등록, 조회 및 교직원 심사 검증 REST 컨트롤러.
@@ -67,19 +57,10 @@ public class CompanyAccountController {
     @PatchMapping("/{companyAccountId}/verify")
     public ResponseEntity<ApiResponse<Void>> verifyCompany(
             @PathVariable Integer companyAccountId,
-            Authentication authentication,
+            @AuthenticationPrincipal AuthUser authUser,
             @Valid @RequestBody CompanyVerifyRequestDTO requestDTO) {
 
-        Integer reviewerUserId = null;
-        if (authentication != null && authentication.getName() != null) {
-            try {
-                reviewerUserId = Integer.valueOf(authentication.getName());
-            } catch (NumberFormatException ignored) {
-                // 프로젝트의 SecurityPrincipal 구조에 맞게 처리
-            }
-        }
-
-        companyAccountService.verifyCompany(companyAccountId, reviewerUserId, requestDTO);
+        companyAccountService.verifyCompany(companyAccountId, authUser.getId(), requestDTO);
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
 }
