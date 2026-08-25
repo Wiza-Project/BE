@@ -26,4 +26,21 @@ public class MileageBenefitApplication {
     @Column(name = "decision_reason", columnDefinition = "text") private String decisionReason;
     @Column(name = "applied_at", nullable = false) private Instant appliedAt = Instant.now();
     @Column(name = "updated_at", nullable = false) private Instant updatedAt = Instant.now();
+
+    /** 학생이 장학금 신청을 제출한 시점의 점수를 고정해 신청 이력을 생성한다. */
+    public static MileageBenefitApplication apply(
+            MileageBenefitPolicy benefitPolicy,
+            AppUser student,
+            BigDecimal pointsSnapshot,
+            Instant appliedAt
+    ) {
+        MileageBenefitApplication application = new MileageBenefitApplication();
+        application.benefitPolicy = benefitPolicy;
+        application.student = student;
+        application.pointsSnapshot = pointsSnapshot;
+        application.applicationStatus = "APPLIED";
+        application.appliedAt = appliedAt;
+        application.updatedAt = appliedAt;
+        return application;
+    }
 }
