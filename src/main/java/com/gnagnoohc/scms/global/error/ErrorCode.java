@@ -47,6 +47,13 @@ public enum ErrorCode {
     ACCOUNT_LOCKED(HttpStatus.FORBIDDEN, "U005", "잠금 처리된 계정입니다. 관리자에게 문의하세요."),
     ACCOUNT_WITHDRAWN(HttpStatus.FORBIDDEN, "U006", "탈퇴 처리된 계정입니다."),
 
+    // ── 동의(공통 모듈) ───────────────────────────────────────────
+    USER_CONSENT_NOT_FOUND(HttpStatus.NOT_FOUND, "U007", "동의 이력을 찾을 수 없습니다."),
+    CONSENT_ALREADY_WITHDRAWN(HttpStatus.CONFLICT, "U008", "이미 철회된 동의입니다."),
+    REQUIRED_CONSENT_NOT_AGREED(HttpStatus.FORBIDDEN, "U009", "필수 동의 항목에 동의해야 이용할 수 있는 기능입니다."),
+    CONSENT_VERSION_OUTDATED(HttpStatus.CONFLICT, "U010", "약관 또는 개인정보 처리방침이 개정되어 재동의가 필요합니다."),
+    INVALID_CONSENT_POLICY(HttpStatus.BAD_REQUEST, "U011", "만료되었거나 비활성화된 동의 정책입니다."),
+
     // ── 비교과프로그램 ────────────────────────────────────────────
     PROGRAM_NOT_FOUND(HttpStatus.NOT_FOUND, "P001", "비교과 프로그램을 찾을 수 없습니다."),
     PROGRAM_CATEGORY_NOT_FOUND(HttpStatus.NOT_FOUND, "P002", "프로그램 분류를 찾을 수 없습니다."),
@@ -135,6 +142,7 @@ public enum ErrorCode {
     APPLICATION_PERIOD_EXPIRED(HttpStatus.BAD_REQUEST, "J010", "접수 마감 기간이 경과하여 지원 또는 취소할 수 없습니다."),
     JOB_POSTING_ALREADY_APPLIED(HttpStatus.CONFLICT, "J011", "이미 해당 채용공고에 지원 완료된 상태입니다."),
     JOB_POSTING_APPLICATION_NOT_FOUND(HttpStatus.NOT_FOUND, "J012", "채용 지원 이력을 찾을 수 없거나 이미 취소된 상태입니다."),
+    DUPLICATE_COMPANY_ACCOUNT_NO(HttpStatus.CONFLICT, "J013", "이미 등록된 사업자등록번호입니다."),
 
     // ── 알림 ──────────────────────────────────────────────────────
     NOTIFICATION_NOT_FOUND(HttpStatus.NOT_FOUND, "N001", "알림을 찾을 수 없습니다.");
