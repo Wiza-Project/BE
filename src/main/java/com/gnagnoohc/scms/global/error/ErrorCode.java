@@ -112,6 +112,10 @@ public enum ErrorCode {
     RESPONSE_SAVE_CONFLICT(HttpStatus.CONFLICT, "Q017", "저장이 동시에 처리되어 실패했습니다. 다시 시도해주세요."),
     // 아직 제출·채점되지 않은 attempt(assessment_score 미생성)로 결과 조회를 시도할 때 사용하는 에러코드.
     RESULT_NOT_AVAILABLE(HttpStatus.BAD_REQUEST, "Q018", "아직 채점되지 않은 진단입니다."),
+    // target_condition에 colleges(단과대) 키가 있을 때 사용하는 에러코드. 학적 데이터에 단과대
+    // 계층이 없어 해석할 수 없으므로, 조건을 조용히 무시해 잘못된 집계를 내보내는 대신 실패시킨다.
+    ASSESSMENT_TARGET_CONDITION_UNSUPPORTED(HttpStatus.NOT_IMPLEMENTED, "Q019", "단과대 기준 대상자 조건은 아직 지원하지 않습니다."),
+
     // ── 상담 ──────────────────────────────────────────────────────
     COUNSELOR_NOT_FOUND(HttpStatus.NOT_FOUND, "S001", "상담사를 찾을 수 없습니다."),
     SCHEDULE_NOT_AVAILABLE(HttpStatus.CONFLICT, "S002", "이미 예약된 시간입니다."),
