@@ -4,6 +4,7 @@ import com.gnagnoohc.scms.domain.program.dto.response.CompetencyOptionResponseDT
 import com.gnagnoohc.scms.domain.program.dto.request.ProgramRegisterRequestDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramAdminDetailResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramAdminListItemResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramFileUploadResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramRegisterResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.request.ProgramUpdateRequestDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramUpdateResponseDTO;
@@ -31,6 +32,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -72,6 +74,15 @@ public class ProgramController {
             @AuthenticationPrincipal AuthUser authUser) {
         // authUser.getId()로 등록 담당자를 서버가 직접 결정해서 서비스에 넘긴다.
         return ApiResponse.ok(programService.register(request, authUser.getId(), authUser.getDepartmentCodeId()));
+    }
+
+    @Operation(summary = "운영계획서 업로드", description = "프로그램 등록/수정에 첨부할 운영계획서(PDF)를 업로드하고 fileGroupId를 발급받습니다")
+    @PostMapping("/files")
+    @ResponseStatus(HttpStatus.CREATED)
+    public ApiResponse<ProgramFileUploadResponseDTO> uploadOperationPlan(
+            @RequestParam("file") MultipartFile file,
+            @AuthenticationPrincipal AuthUser authUser) {
+        return ApiResponse.ok(programService.uploadOperationPlan(file, authUser.getId()));
     }
 
     @Operation(summary = "핵심역량 옵션 조회", description = "프로그램 등록 폼에서 사용할 핵심역량 목록을 조회합니다")

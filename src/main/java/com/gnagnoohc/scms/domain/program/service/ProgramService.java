@@ -15,10 +15,15 @@ import com.gnagnoohc.scms.domain.program.entity.ProgramApplication;
 import com.gnagnoohc.scms.domain.program.entity.ProgramStatus;
 import com.gnagnoohc.scms.domain.program.repository.CompetencyOptionRepository;
 import com.gnagnoohc.scms.domain.program.repository.ExtracurricularProgramRepository;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramFileUploadResponseDTO;
 import com.gnagnoohc.scms.domain.program.repository.ProgramApplicationRepository;
 import com.gnagnoohc.scms.domain.program.repository.ProgramSessionRepository;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;
+import com.gnagnoohc.scms.global.common.entity.FileGroup;
+import com.gnagnoohc.scms.global.common.helper.FileUploadValidator;
 import com.gnagnoohc.scms.global.common.repository.CommonCodeRepository;
+import com.gnagnoohc.scms.global.common.service.FileGroupService;
+import com.gnagnoohc.scms.global.common.service.FileStorageService;
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.DbConstraintViolationMatcher;
 import com.gnagnoohc.scms.global.error.ErrorCode;
@@ -28,11 +33,13 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -54,12 +61,17 @@ public class ProgramService {
     private static final String DEFAULT_DEPARTMENT_CODE = "D200"; // 비교과운영부서
     private static final String PROGRAM_TYPE_GROUP = "PROGRAM_TYPE";
     private static final String DEFAULT_PROGRAM_TYPE_CODE = "PT100"; // 학습
+    // 운영계획서는 문서 1개(PDF)만 받는다 — FileUploadValidator의 기본 허용 확장자(이미지+PDF)보다 좁게 검증한다.
+    private static final Set<String> OPERATION_PLAN_EXTENSIONS = Set.of("pdf");
 
     private final ExtracurricularProgramRepository programRepository;
     private final CompetencyOptionRepository competencyOptionRepository;
     private final CommonCodeRepository commonCodeRepository;
     private final ProgramSessionRepository programSessionRepository;
     private final ProgramApplicationRepository applicationRepository;
+    private final FileGroupService fileGroupService;
+    private final FileStorageService fileStorageService;
+    private final FileUploadValidator fileUploadValidator;
 
     /**
      * ── "등록(Create)" 기능 ──────────────────────────────────────────────
@@ -159,6 +171,21 @@ public class ProgramService {
                 request.operationEndsAt(),
                 now
         );
+    }
+
+    /**
+     * ── "운영계획서 업로드" 기능 ──────────────────────────────────────────────
+     *
+     * 등록/수정 폼에서 첨부할 운영계획서(PDF)를 미리 업로드해 fileGroupId를 발급받는 메서드.
+     * 어떤 프로그램에 귀속될지 아직 정해지지 않은 시점(등록 전에도 호출 가능)의 업로드이므로
+     * programId를 받지 않는다 — 여기서 반환한 fileGroupId를 register()/update() 요청의
+     * fileGroupId 필드에 그대로 실어 보내면 된다.
+     */
+    public ProgramFileUploadResponseDTO uploadOperationPlan(MultipartFile file, Integer uploaderId) {
+        fileUploadValidator.validate(file, OPERATION_PLAN_EXTENSIONS);
+        FileGroup fileGroup = fileGroupService.createGroup();
+        fileStorageService.store(file, fileGroup, uploaderId);
+        return new ProgramFileUploadResponseDTO(fileGroup.getFileGroupId(), file.getOriginalFilename());
     }
 
     /**

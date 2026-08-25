@@ -4,6 +4,7 @@ import com.gnagnoohc.scms.domain.competency.entity.Competency;
 import com.gnagnoohc.scms.domain.program.dto.request.ProgramRegisterRequestDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramAdminListItemResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramDetailResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramFileUploadResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramRegisterResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.request.ProgramUpdateRequestDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramUpdateResponseDTO;
@@ -17,7 +18,11 @@ import com.gnagnoohc.scms.domain.program.repository.ProgramApplicationRepository
 import com.gnagnoohc.scms.domain.program.repository.ProgramSessionRepository;
 import com.gnagnoohc.scms.domain.user.entity.AppUser;
 import com.gnagnoohc.scms.global.common.entity.CommonCode;
+import com.gnagnoohc.scms.global.common.entity.FileGroup;
+import com.gnagnoohc.scms.global.common.helper.FileUploadValidator;
 import com.gnagnoohc.scms.global.common.repository.CommonCodeRepository;
+import com.gnagnoohc.scms.global.common.service.FileGroupService;
+import com.gnagnoohc.scms.global.common.service.FileStorageService;
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramListItemResponseDTO;
@@ -27,11 +32,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.lang.reflect.Constructor;
 import java.time.Instant;
@@ -44,6 +52,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -63,6 +72,15 @@ class ProgramServiceTest {
 
     @Mock
     ProgramApplicationRepository applicationRepository;
+
+    @Mock
+    FileGroupService fileGroupService;
+
+    @Mock
+    FileStorageService fileStorageService;
+
+    @Spy
+    FileUploadValidator fileUploadValidator = new FileUploadValidator();
 
     @InjectMocks
     ProgramService programService;
@@ -169,6 +187,37 @@ class ProgramServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.DEPARTMENT_FORBIDDEN);
+    }
+
+    @Test
+    void uploadOperationPlan_withPdfFile_createsFileGroupAndStoresFile() {
+        FileGroup fileGroup = FileGroup.create();
+        ReflectionTestUtils.setField(fileGroup, "fileGroupId", 77);
+        when(fileGroupService.createGroup()).thenReturn(fileGroup);
+
+        MultipartFile file = new MockMultipartFile(
+                "file", "운영계획서.pdf", "application/pdf",
+                new byte[]{0x25, 0x50, 0x44, 0x46, '-', '1', '.', '4'}); // "%PDF-1.4"
+
+        ProgramFileUploadResponseDTO response = programService.uploadOperationPlan(file, 100);
+
+        assertThat(response.fileGroupId()).isEqualTo(77);
+        assertThat(response.fileName()).isEqualTo("운영계획서.pdf");
+        verify(fileStorageService).store(file, fileGroup, 100);
+    }
+
+    @Test
+    void uploadOperationPlan_withNonPdfFile_throwsInvalidFileType() {
+        MultipartFile file = new MockMultipartFile(
+                "file", "poster.jpg", "image/jpeg",
+                new byte[]{(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, 0, 0}); // JPEG magic bytes
+
+        assertThatThrownBy(() -> programService.uploadOperationPlan(file, 100))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.INVALID_FILE_TYPE);
+
+        verifyNoInteractions(fileGroupService, fileStorageService);
     }
 
     @Test
