@@ -5,10 +5,12 @@ import com.gnagnoohc.scms.domain.counsel.dto.CounselingReservationDetailResponse
 import com.gnagnoohc.scms.domain.counsel.dto.CounselingReservationRequest;
 import com.gnagnoohc.scms.domain.counsel.dto.CounselingReservationResponse;
 import com.gnagnoohc.scms.domain.counsel.dto.CounselingReservationScheduleChangeRequest;
+import com.gnagnoohc.scms.domain.counsel.entity.CounselingAssignment;
 import com.gnagnoohc.scms.domain.counsel.entity.CounselingReservation;
 import com.gnagnoohc.scms.domain.counsel.entity.CounselingSchedule;
 import com.gnagnoohc.scms.domain.counsel.entity.CounselingType;
 import com.gnagnoohc.scms.domain.counsel.repository.CounselUserRepository;
+import com.gnagnoohc.scms.domain.counsel.repository.CounselingAssignmentRepository;
 import com.gnagnoohc.scms.domain.counsel.repository.CounselingConsentRepository;
 import com.gnagnoohc.scms.domain.counsel.repository.CounselingReservationRepository;
 import com.gnagnoohc.scms.domain.counsel.repository.CounselingScheduleRepository;
@@ -43,6 +45,7 @@ public class CounselingReservationService {
     private final CounselingScheduleRepository counselingScheduleRepository;
     private final CounselingReservationRepository counselingReservationRepository;
     private final CounselingConsentRepository counselingConsentRepository;
+    private final CounselingAssignmentRepository counselingAssignmentRepository;
 
     /**
      * 학생 행을 먼저 잠가 같은 학생의 서로 다른 일정 예약도 순서대로 검증한다.
@@ -98,6 +101,11 @@ public class CounselingReservationService {
      * 트랜잭션 전체를 롤백한다. reservation.cancel()이 바꾼 필드(reservationStatus 등)는
      * 트랜잭션이 정상 종료돼 커밋될 때 비로소 UPDATE 쿼리로 반영되므로, 예외가 나면 DB에는
      * 아무 흔적도 남지 않는다(부분 반영 없음).
+     * 취소 대상이 승인(APPROVED)까지 갔던 예약이면, 예약이 만든 배정도 그대로 활성 상태로 남아
+     * "취소된 예약인데 활성 배정이 있다"는 모순이 생긴다. 이를 막기 위해 같은 트랜잭션 안에서
+     * 그 예약의 활성 배정을 함께 종료(ended_at 세팅)한다. reservation.cancel()이 상태를 CANCELED로
+     * 바꾸고 나면 "취소 직전에 APPROVED였는지" 더 이상 구분할 수 없으므로, wasApproved는 반드시
+     * cancel() 호출 전에 읽어 둔다.
      */
     @Transactional
     public CounselingReservationResponse cancel(
@@ -107,7 +115,16 @@ public class CounselingReservationService {
     ) {
         Instant now = Instant.now();
         CounselingReservation reservation = getReservationForUpdate(reservationId, studentId);
+        boolean wasApproved = reservation.isApproved();
         reservation.cancel(request.cancellationReason(), now);
+        if (wasApproved) {
+            CounselingAssignment activeAssignment = counselingAssignmentRepository
+                    .findByCounselingReservationCounselingReservationIdAndEndedAtIsNull(reservationId)
+                    // 승인된 예약에 활성 배정이 없는 것은 데이터 모순이므로 조용히 넘어가지 않고
+                    // 예외로 트랜잭션 전체를 롤백시켜 잘못된 취소가 커밋되지 않게 한다.
+                    .orElseThrow(() -> new BusinessException(ErrorCode.INTERNAL_ERROR));
+            activeAssignment.end(now);
+        }
         return CounselingReservationResponse.from(reservation);
     }
 

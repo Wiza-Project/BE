@@ -33,4 +33,10 @@ public class AssessmentScore {
         score.convertedScore = convertedScore;
         return score;
     }
+
+    // 회차 종료 후 백분위 산출 배치(AssessmentPercentileBatchService)가 전체 응시자 점수를 모아 채운다.
+    // 제출 시점엔 다른 응시자 점수가 아직 안 갖춰져 계산 불가하므로 create()에는 없다.
+    public void applyPercentile(BigDecimal percentile) {
+        this.percentile = percentile;
+    }
 }
