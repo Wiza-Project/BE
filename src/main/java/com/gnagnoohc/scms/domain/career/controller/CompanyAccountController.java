@@ -14,6 +14,8 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -45,6 +47,7 @@ public class CompanyAccountController {
 
     @Operation(summary = "[교직원 전용] 기업 목록 검색 및 페이징 조회", description = "승인 상태, 기업명 등의 필터 조건으로 기업 목록을 페이징 조회합니다.")
     @GetMapping
+    @PreAuthorize("@careerSecurity.isCareerStaff(principal)")
     public ResponseEntity<ApiResponse<Page<CompanySummaryResponseDTO>>> searchCompanies(
             @ModelAttribute CompanySearchConditionDTO conditionDTO,
             @PageableDefault(size = 10, sort = "companyAccountId", direction = Sort.Direction.DESC) Pageable pageable) {
@@ -54,6 +57,7 @@ public class CompanyAccountController {
 
     @Operation(summary = "[교직원 전용] 기업 승인/반려 심사 처리", description = "취창업지원과 교직원이 기업의 등록 승인(VERIFIED) 또는 반려(REJECTED)를 처리합니다.")
     @PatchMapping("/{companyAccountId}/verify")
+    @PreAuthorize("@careerSecurity.isCareerStaff(principal)")
     public ResponseEntity<ApiResponse<Void>> verifyCompany(
             @PathVariable Integer companyAccountId,
             @AuthenticationPrincipal AuthUser authUser,
