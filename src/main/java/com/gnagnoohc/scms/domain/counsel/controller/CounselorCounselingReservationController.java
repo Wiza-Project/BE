@@ -9,6 +9,7 @@ import com.gnagnoohc.scms.global.common.dto.ApiResponse;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;
 import com.gnagnoohc.scms.global.security.AuthUser;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -37,7 +38,7 @@ public class CounselorCounselingReservationController {
     @GetMapping("/pending")
     public ApiResponse<PageResponse<CounselorPendingReservationResponse>> getPending(
             @RequestParam(defaultValue = "0") @Min(0) int page,
-            @RequestParam(defaultValue = "20") @Min(1) int size,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size,
             @AuthenticationPrincipal AuthUser authUser
     ) {
         return ApiResponse.ok(counselorReservationService.getPending(authUser.getId(), page, size));
