@@ -122,6 +122,19 @@ class TargetConditionInterpreterTest {
                 .isEqualTo(ErrorCode.ASSESSMENT_TARGET_CONDITION_INVALID_FORMAT);
     }
 
+    // 4294971296 = 2^32 + 4000. isIntegralNumber()는 통과하지만 int로 캐스팅하면 오버플로우돼
+    // 정확히 4000이 되어버린다 — 실제 존재하는 학과 코드ID 4000으로 조용히 둔갑할 수 있으므로
+    // canConvertToInt()로 범위까지 확인해야 한다.
+    @Test
+    void toPredicate_whenMajorCodeIdElementExceedsIntRange_throwsInvalidFormat() {
+        JsonNode condition = objectMapper.valueToTree(Map.of("majorCodeIds", List.of(4294971296L)));
+
+        assertThatThrownBy(() -> interpreter.toPredicate(condition))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.ASSESSMENT_TARGET_CONDITION_INVALID_FORMAT);
+    }
+
     @Test
     void isValidShape_whenGradesAndMajorCodeIdsAreProperArrays_returnsTrue() {
         JsonNode condition = objectMapper.valueToTree(Map.of("grades", List.of(1, 2), "majorCodeIds", List.of(4000)));

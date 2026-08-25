@@ -130,6 +130,22 @@ class AssessmentRoundServiceTest {
         verify(assessmentRoundRepository, never()).save(any());
     }
 
+    // 4294971296(2^32+4000)은 isIntegralNumber()는 통과하지만 int로 캐스팅하면 4000으로
+    // 오버플로우된다 — 존재하는 학과 코드ID로 조용히 둔갑하지 않도록 등록 시점에 막는다.
+    @Test
+    void registerRound_whenTargetConditionMajorCodeIdExceedsIntRange_throwsInvalidInput() {
+        Instant startsAt = Instant.now();
+        Instant endsAt = startsAt.plus(7, ChronoUnit.DAYS);
+
+        assertThatThrownBy(() -> assessmentRoundService.registerRound(
+                buildRequest(startsAt, endsAt, Map.of("majorCodeIds", List.of(4294971296L))), 1))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.INVALID_INPUT);
+
+        verify(assessmentRoundRepository, never()).save(any());
+    }
+
     @Test
     void registerRound_whenTargetConditionNull_meansAllStudents() {
         Instant startsAt = Instant.now();

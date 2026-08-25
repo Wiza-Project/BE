@@ -67,10 +67,13 @@ public class TargetConditionInterpreter {
         return false;
     }
 
-    // grades/majorCodeIds가 존재한다면 배열이어야 하고 원소는 전부 정수여야 한다. asInt()는
-    // "true"→1, 4000.7→4000처럼 정수가 아닌 값도 그럴듯한 숫자로 조용히 변환해버리므로,
-    // 변환 전에 isIntegralNumber()로 걸러야 잘못된(그러나 유효 범위 안의) 조건이 만들어지는 걸 막는다.
-    // 빈 배열의 의미(조건 생략 vs 오류)는 아직 FE 계약이 정해지지 않아 현행(조건 생략)을 유지한다.
+    // grades/majorCodeIds가 존재한다면 배열이어야 하고 원소는 전부 int로 안전하게 변환 가능해야
+    // 한다. asInt()는 true→1, 4000.7→4000처럼 정수가 아닌 값도 그럴듯한 숫자로 바꿔버리고,
+    // isIntegralNumber()만으로는 4294971296(2^32+4000)처럼 long 범위 정수가 int로 캐스팅되며
+    // 4000으로 오버플로우되는 것도 못 막는다 — 그래서 canConvertToInt()로 범위까지 확인한다.
+    // FE(회차 등록 화면)는 선택이 없으면 키 자체를 안 보내고 targetCondition을 null로 보낸다
+    // (buildTargetCondition: fGrades.length/fDepts.length 확인 후에만 키를 채움) — 빈 배열이
+    // 실제로 올 일이 없어 조건 생략으로 처리해도 무해하다.
     public boolean isValidShape(JsonNode targetCondition) {
         if (targetCondition == null || targetCondition.isNull()) {
             return true;
@@ -87,7 +90,9 @@ public class TargetConditionInterpreter {
             return false;
         }
         for (JsonNode element : node) {
-            if (!element.isIntegralNumber()) {
+            // canConvertToInt()만으로는 4000.7 같은 소수를 못 거른다(범위 안에 들어오면 통과) —
+            // isIntegralNumber()로 소수를, canConvertToInt()로 int 범위 초과를 각각 막아야 한다.
+            if (!element.isIntegralNumber() || !element.canConvertToInt()) {
                 return false;
             }
         }
