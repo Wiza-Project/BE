@@ -11,5 +11,6 @@ public enum NotificationType {
     DEADLINE_IMMINENT,           // 마감임박
     RESERVATION_CONFIRMED,       // 상담확정
     MILEAGE_EARNED,              // 마일리지 적립완료
-    EVIDENCE_SUPPLEMENT_NEEDED   // 증빙보완 필요
+    EVIDENCE_SUPPLEMENT_NEEDED,  // 증빙보완 필요
+    WAITLIST_SLOT_OPENED         // 대기 자리 발생
 }

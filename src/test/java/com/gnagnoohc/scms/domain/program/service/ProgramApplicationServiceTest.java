@@ -9,12 +9,14 @@ import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplicationSurveyRe
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplyResponseDTO;
 import com.gnagnoohc.scms.domain.program.entity.ExtracurricularProgram;
 import com.gnagnoohc.scms.domain.program.entity.ProgramApplication;
+import com.gnagnoohc.scms.domain.program.event.WaitlistSlotOpenedEvent;
 import com.gnagnoohc.scms.domain.program.repository.ExtracurricularProgramRepository;
 import com.gnagnoohc.scms.domain.program.repository.ProgramApplicationRepository;
 import com.gnagnoohc.scms.domain.program.repository.ProgramAttendanceRepository;
 import com.gnagnoohc.scms.domain.program.repository.ProgramMileageTransactionRepository;
 import com.gnagnoohc.scms.domain.user.entity.AppUser;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;
+import com.gnagnoohc.scms.global.common.notification.NotificationSender;
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
 import org.junit.jupiter.api.Test;
@@ -22,6 +24,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -36,11 +39,15 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -58,6 +65,12 @@ class ProgramApplicationServiceTest {
 
     @Mock
     ProgramMileageTransactionRepository mileageTransactionRepository;
+
+    @Mock
+    NotificationSender notificationSender;
+
+    @Mock
+    ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     ProgramApplicationService programApplicationService;
@@ -252,6 +265,7 @@ class ProgramApplicationServiceTest {
         assertThat(response.applicationStatus()).isEqualTo("CANCELLED");
         assertThat(response.applicationStatusLabel()).isEqualTo("취소");
         assertThat(response.cancellationReason()).isEqualTo("일정 변경");
+        verify(eventPublisher).publishEvent(any(WaitlistSlotOpenedEvent.class));
     }
 
     @Test
@@ -268,6 +282,7 @@ class ProgramApplicationServiceTest {
                 programApplicationService.cancel(1, 5, 100, null);
 
         assertThat(response.applicationStatus()).isEqualTo("CANCELLED");
+        verify(eventPublisher).publishEvent(any(WaitlistSlotOpenedEvent.class));
     }
 
     @Test
@@ -348,6 +363,55 @@ class ProgramApplicationServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.APPLICATION_NOT_CANCELABLE);
+    }
+
+    /**
+     * notifyNextWaitlistedApplicant는 cancel()의 트랜잭션 커밋 이후(@TransactionalEventListener
+     * AFTER_COMMIT)에 실행되는 리스너라, cancel()을 거치지 않고 이벤트를 직접 넘겨 호출한다.
+     */
+    @Test
+    void notifyNextWaitlistedApplicant_whenWaitlistedApplicantExists_sendsNotification() throws Exception {
+        ExtracurricularProgram program = buildProgramFixture(1, Instant.now(), Instant.now(), 10);
+        ProgramApplication nextInLine = buildApplicationFixture(7, program, "WAITLISTED", 200);
+
+        when(applicationRepository.findFirstByProgram_ProgramIdAndApplicationStatusOrderByWaitlistOrderAsc(
+                        1, "WAITLISTED"))
+                .thenReturn(Optional.of(nextInLine));
+
+        programApplicationService.notifyNextWaitlistedApplicant(
+                new WaitlistSlotOpenedEvent(1, "테스트 프로그램"));
+
+        verify(notificationSender).send(argThat(request ->
+                request.recipientUserId().equals(200)
+                        && request.content().contains("테스트 프로그램")));
+    }
+
+    @Test
+    void notifyNextWaitlistedApplicant_whenNoWaitlistedApplicant_sendsNothing() {
+        when(applicationRepository.findFirstByProgram_ProgramIdAndApplicationStatusOrderByWaitlistOrderAsc(
+                        1, "WAITLISTED"))
+                .thenReturn(Optional.empty());
+
+        programApplicationService.notifyNextWaitlistedApplicant(
+                new WaitlistSlotOpenedEvent(1, "테스트 프로그램"));
+
+        verify(notificationSender, never()).send(any());
+    }
+
+    @Test
+    void notifyNextWaitlistedApplicant_whenSendFails_swallowsException() throws Exception {
+        ExtracurricularProgram program = buildProgramFixture(1, Instant.now(), Instant.now(), 10);
+        ProgramApplication nextInLine = buildApplicationFixture(7, program, "WAITLISTED", 200);
+
+        when(applicationRepository.findFirstByProgram_ProgramIdAndApplicationStatusOrderByWaitlistOrderAsc(
+                        1, "WAITLISTED"))
+                .thenReturn(Optional.of(nextInLine));
+        doThrow(new RuntimeException("발송 실패"))
+                .when(notificationSender).send(any());
+
+        assertThatCode(() -> programApplicationService.notifyNextWaitlistedApplicant(
+                new WaitlistSlotOpenedEvent(1, "테스트 프로그램")))
+                .doesNotThrowAnyException();
     }
 
     @Test

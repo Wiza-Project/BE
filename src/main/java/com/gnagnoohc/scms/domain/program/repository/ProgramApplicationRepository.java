@@ -122,6 +122,13 @@ public interface ProgramApplicationRepository extends JpaRepository<ProgramAppli
     Integer findMaxWaitlistOrderByProgramId(@Param("programId") Integer programId);
 
     /**
+     * 특정 프로그램에서 대기 순번이 가장 앞선(가장 먼저 대기한) 신청 건 1개.
+     * 취소로 정원 슬롯이 비었을 때, 자리를 안내할 대기 1순위 학생을 찾는 데 쓴다.
+     */
+    Optional<ProgramApplication> findFirstByProgram_ProgramIdAndApplicationStatusOrderByWaitlistOrderAsc(
+            Integer programId, String applicationStatus);
+
+    /**
      * ── 여기부터 "승인/반려 처리(Update)" 기능 ──────────────────────────────────────
      *
      * ProgramApplication 엔티티는 setter/빌더가 없어(insertApplication과 같은 이유),
