@@ -53,6 +53,7 @@ public enum ErrorCode {
     REQUIRED_CONSENT_NOT_AGREED(HttpStatus.FORBIDDEN, "U009", "필수 동의 항목에 동의해야 이용할 수 있는 기능입니다."),
     CONSENT_VERSION_OUTDATED(HttpStatus.CONFLICT, "U010", "약관 또는 개인정보 처리방침이 개정되어 재동의가 필요합니다."),
     INVALID_CONSENT_POLICY(HttpStatus.BAD_REQUEST, "U011", "만료되었거나 비활성화된 동의 정책입니다."),
+    CONSENT_SAVE_CONFLICT(HttpStatus.CONFLICT, "U012", "동의 처리가 동시에 요청되어 실패했습니다. 다시 시도해주세요."),
 
     // ── 비교과프로그램 ────────────────────────────────────────────
     PROGRAM_NOT_FOUND(HttpStatus.NOT_FOUND, "P001", "비교과 프로그램을 찾을 수 없습니다."),

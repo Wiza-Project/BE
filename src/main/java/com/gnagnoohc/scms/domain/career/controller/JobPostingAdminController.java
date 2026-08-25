@@ -59,6 +59,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/v1/admin/job-postings")
 @RequiredArgsConstructor
+@PreAuthorize("@careerSecurity.isCareerStaff(principal)")
 public class JobPostingAdminController {
 
     private final JobPostingService jobPostingService;
@@ -98,7 +99,6 @@ public class JobPostingAdminController {
 
     @Operation(summary = "채용공고 검수 (승인/반려) 처리",
             description = "공고를 승인(PUBLISHED)하거나 반려 사유와 함께 반려(REJECTED)합니다.")
-    @PreAuthorize("hasAnyRole('ST100', 'AD100')")
     @PatchMapping("/{jobPostingId}/review")
     public ResponseEntity<Void> reviewJobPosting(
             @Parameter(description = "채용공고 식별자 (PK)", example = "1")
