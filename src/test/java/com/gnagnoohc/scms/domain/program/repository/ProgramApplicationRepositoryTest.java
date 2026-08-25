@@ -17,6 +17,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.lang.reflect.Constructor;
 import java.time.Instant;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -57,6 +58,26 @@ class ProgramApplicationRepositoryTest {
         assertThat(result.getContent().get(0).getApplicationId()).isEqualTo(target.getApplicationId());
     }
 
+    /**
+     * status/keyword가 둘 다 null인, 참여관리 화면을 필터 없이 처음 열 때의 경로. 실제 Postgres에서는
+     * CONCAT('%', ?, '%')의 ? 타입을 추론 못해 "function lower(bytea) does not exist"로 500이 났었다
+     * (CAST(:keyword AS string)로 수정). H2는 이 타입 추론 문제를 재현하지 않아 이 테스트만으로는 그
+     * 회귀를 못 잡지만, 최소한 null/null 조합에서 로직 자체(전체 조회)가 깨지지 않는지는 검증한다.
+     */
+    @Test
+    void findAllByProgramIdAndStatus_whenStatusAndKeywordBothNull_returnsAll() throws Exception {
+        ExtracurricularProgram program = saveProgram();
+        ProgramApplication first = saveApplication(program, saveStudent("전체조회학생1", "ALL-STU-0001"));
+        ProgramApplication second = saveApplication(program, saveStudent("전체조회학생2", "ALL-STU-0002"));
+
+        Page<ProgramApplication> result = applicationRepository.findAllByProgramIdAndStatus(
+                program.getProgramId(), null, null, PageRequest.of(0, 20));
+
+        assertThat(result.getContent())
+                .extracting(ProgramApplication::getApplicationId)
+                .containsExactlyInAnyOrder(first.getApplicationId(), second.getApplicationId());
+    }
+
     @Test
     void findAllByProgramIdAndStatus_whenKeywordHasEscapedUnderscore_matchesOnlyLiteralValue() throws Exception {
         ExtracurricularProgram program = saveProgram();
@@ -69,6 +90,38 @@ class ProgramApplicationRepositoryTest {
 
         assertThat(result.getContent()).hasSize(1);
         assertThat(result.getContent().get(0).getApplicationId()).isEqualTo(target.getApplicationId());
+    }
+
+    /**
+     * ProgramService.list가 목록 카드의 myApplicationStatus를 채울 때 이 쿼리를 쓴다. CANCELLED는
+     * apply()가 재신청(reviveApplication) 대상으로 취급하는 "신청 안 한 것"과 동등한 상태라, 결과에서
+     * 제외되어야 FE가 재신청 가능한 프로그램에서도 신청 버튼을 정상적으로 보여줄 수 있다.
+     */
+    @Test
+    void findMyApplicationStatusesByProgramIds_excludesCancelledApplication() throws Exception {
+        ExtracurricularProgram program = saveProgram();
+        AppUser student = saveStudent("취소학생", "CANCEL-STU-0001");
+        saveApplication(program, student, "CANCELLED");
+
+        List<ProgramApplicationRepository.MyApplicationStatusProjection> result =
+                applicationRepository.findMyApplicationStatusesByProgramIds(
+                        student.getUserId(), List.of(program.getProgramId()));
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void findMyApplicationStatusesByProgramIds_includesActiveApplication() throws Exception {
+        ExtracurricularProgram program = saveProgram();
+        AppUser student = saveStudent("신청학생", "ACTIVE-STU-0001");
+        saveApplication(program, student, "APPLIED");
+
+        List<ProgramApplicationRepository.MyApplicationStatusProjection> result =
+                applicationRepository.findMyApplicationStatusesByProgramIds(
+                        student.getUserId(), List.of(program.getProgramId()));
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getStatus()).isEqualTo("APPLIED");
     }
 
     private ExtracurricularProgram saveProgram() throws Exception {
@@ -110,12 +163,17 @@ class ProgramApplicationRepositoryTest {
     }
 
     private ProgramApplication saveApplication(ExtracurricularProgram program, AppUser student) throws Exception {
+        return saveApplication(program, student, "APPLIED");
+    }
+
+    private ProgramApplication saveApplication(
+            ExtracurricularProgram program, AppUser student, String applicationStatus) throws Exception {
         Constructor<ProgramApplication> constructor = ProgramApplication.class.getDeclaredConstructor();
         constructor.setAccessible(true);
         ProgramApplication application = constructor.newInstance();
         ReflectionTestUtils.setField(application, "program", program);
         ReflectionTestUtils.setField(application, "student", student);
-        ReflectionTestUtils.setField(application, "applicationStatus", "APPLIED");
+        ReflectionTestUtils.setField(application, "applicationStatus", applicationStatus);
         return applicationRepository.save(application);
     }
 
