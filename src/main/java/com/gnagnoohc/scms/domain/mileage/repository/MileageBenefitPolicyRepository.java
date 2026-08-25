@@ -9,6 +9,11 @@ import java.util.List;
 /** 선택 학기에 적용할 활성 인증·장학 정책을 조회한다. */
 public interface MileageBenefitPolicyRepository extends JpaRepository<MileageBenefitPolicy, Integer> {
 
+    /** 학생 마일리지 시뮬레이션에서 선택할 수 있는 활성 인증·장학 정책을 조회한다. */
+    java.util.Optional<MileageBenefitPolicy> findByBenefitPolicyIdAndActiveTrue(
+            Integer benefitPolicyId
+    );
+
     /** 학생에게 공개할 활성 장학금 정책을 학기와 연간 정책으로 나누어 조회한다. */
     List<MileageBenefitPolicy> findByActiveTrueAndBenefitTypeAndAcademicYearAndSemesterCodeInOrderByMinimumPointsAsc(
             String benefitType,
