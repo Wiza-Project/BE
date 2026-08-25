@@ -102,4 +102,60 @@ public interface CounselingReservationRepository extends JpaRepository<Counselin
             Integer reservationId,
             Integer studentId
     );
+
+    /**
+     * 상담사의 승인·거절 처리는 학생 소유가 아니라 예약 자체를 잠가야 하므로 studentId 조건 없이 잠근다.
+     * 실제 소유권(담당 일정의 상담사인지) 검증은 잠금 조회 이후 서비스가 schedule.counselor로 확인한다.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select reservation
+            from CounselingReservation reservation
+            where reservation.counselingReservationId = :reservationId
+            """)
+    Optional<CounselingReservation> findByIdForUpdate(@Param("reservationId") Integer reservationId);
+
+    /**
+     * 로그인한 상담사의 일정에 걸린 REQUESTED 예약만 처리 대기 목록으로 보여준다.
+     * counselingSchedule에 대한 inner join이므로, 일정이 없는 CENTER(센터 접수) 예약은
+     * 자연히 이 목록에서 빠진다(현재 CENTER 신청 자체가 막혀 있어 실질적으로 발생하지 않는다).
+     * DTO 변환(from)에서 counselingType·counselingSchedule·student를 바로 읽으므로
+     * join fetch로 함께 가져와 목록 페이지마다 N+1 지연로딩 쿼리가 나가지 않게 한다.
+     */
+    @Query(value = """
+            select r from CounselingReservation r
+            join fetch r.counselingSchedule s
+            join fetch r.counselingType
+            join fetch r.student
+            where s.counselor.userId = :counselorId
+              and r.reservationStatus = 'REQUESTED'
+            order by s.startsAt asc
+            """,
+           countQuery = """
+            select count(r) from CounselingReservation r
+            join r.counselingSchedule s
+            where s.counselor.userId = :counselorId
+              and r.reservationStatus = 'REQUESTED'
+            """)
+    Page<CounselingReservation> findPendingByCounselor(
+            @Param("counselorId") Integer counselorId,
+            Pageable pageable
+    );
+
+    /**
+     * 상담사 상세 조회는 본인이 담당한 일정의 예약만 허용한다.
+     * 다른 상담사의 예약인지와 없는 예약인지를 구분하지 않아 예약 존재를 노출하지 않는다.
+     */
+    @Query("""
+            select r from CounselingReservation r
+            join fetch r.counselingSchedule s
+            join fetch r.counselingType
+            join fetch r.student
+            where r.counselingReservationId = :reservationId
+              and s.counselor.userId = :counselorId
+            """)
+    Optional<CounselingReservation> findByIdAndCounselor(
+            @Param("reservationId") Integer reservationId,
+            @Param("counselorId") Integer counselorId
+    );
 }

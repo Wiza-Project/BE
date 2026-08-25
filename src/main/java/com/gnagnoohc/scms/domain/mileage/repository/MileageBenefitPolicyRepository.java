@@ -16,6 +16,12 @@ public interface MileageBenefitPolicyRepository extends JpaRepository<MileageBen
             Collection<String> semesterCodes
     );
 
+    /** 학생 장학금 상세·신청 대상 정책을 조회한다. */
+    java.util.Optional<MileageBenefitPolicy> findByBenefitPolicyIdAndBenefitTypeAndActiveTrue(
+            Integer benefitPolicyId,
+            String benefitType
+    );
+
     /** 해당 학기와 연간(ALL) 정책을 목표 점수 오름차순으로 조회한다. */
     List<MileageBenefitPolicy> findByActiveTrueAndAcademicYearAndSemesterCodeInOrderByMinimumPointsAsc(
             Integer academicYear,
