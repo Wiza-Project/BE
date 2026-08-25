@@ -27,6 +27,20 @@ public interface MileageTransactionRepository extends JpaRepository<MileageTrans
             """)
     BigDecimal sumPostedPointsByStudent(@Param("studentId") Integer studentId);
 
+    /** 연간 장학금 정책에 사용할 해당 학년도 확정 점수를 합산한다. */
+    @Query("""
+            select coalesce(sum(t.points), 0)
+            from MileageTransaction t
+            join t.mileagePolicy p
+            where t.student.userId = :studentId
+              and t.transactionStatus = 'POSTED'
+              and p.academicYear = :academicYear
+            """)
+    BigDecimal sumPostedPointsByStudentAndAcademicYear(
+            @Param("studentId") Integer studentId,
+            @Param("academicYear") Integer academicYear
+    );
+
     /** 선택 학기 또는 연간 정책에 귀속된 확정 거래를 합산한다. */
     @Query("""
             select coalesce(sum(t.points), 0)
