@@ -112,6 +112,11 @@ public enum ErrorCode {
     RESPONSE_SAVE_CONFLICT(HttpStatus.CONFLICT, "Q017", "저장이 동시에 처리되어 실패했습니다. 다시 시도해주세요."),
     // 아직 제출·채점되지 않은 attempt(assessment_score 미생성)로 결과 조회를 시도할 때 사용하는 에러코드.
     RESULT_NOT_AVAILABLE(HttpStatus.BAD_REQUEST, "Q018", "아직 채점되지 않은 진단입니다."),
+    // target_condition에 grades/majorCodeIds 외의 키가 있을 때 사용. 조용히 무시하면 대상자 집계가 잘못된다.
+    ASSESSMENT_TARGET_CONDITION_UNSUPPORTED(HttpStatus.BAD_REQUEST, "Q019", "지원하지 않는 응시 대상 조건입니다."),
+    // grades/majorCodeIds 값이 배열이 아니거나 원소가 정수가 아닐 때 사용. Q019(인식 못 하는 키)와 달리 키는 맞음.
+    ASSESSMENT_TARGET_CONDITION_INVALID_FORMAT(HttpStatus.BAD_REQUEST, "Q020", "저장된 응시 대상 조건의 형식이 올바르지 않습니다. 회차 등록/수정 화면에서 대상 조건을 다시 확인해주세요."),
+
     // ── 상담 ──────────────────────────────────────────────────────
     COUNSELOR_NOT_FOUND(HttpStatus.NOT_FOUND, "S001", "상담사를 찾을 수 없습니다."),
     SCHEDULE_NOT_AVAILABLE(HttpStatus.CONFLICT, "S002", "이미 예약된 시간입니다."),
