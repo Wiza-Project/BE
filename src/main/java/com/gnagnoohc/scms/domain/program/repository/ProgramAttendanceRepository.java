@@ -49,6 +49,13 @@ public interface ProgramAttendanceRepository extends JpaRepository<ProgramAttend
      */
     List<ProgramAttendance> findByApplication_ApplicationId(Integer applicationId);
 
+    /**
+     * 취소됐던 신청 건을 되살릴 때(ProgramApplicationService.apply()의 reviveApplication 경로),
+     * 이전 사이클에 남아있을 수 있는 출결 기록을 지우는 데 쓴다 — 그대로 두면 judgeCompletion이
+     * application_id 기준으로 출결을 집계할 때 이전 사이클의 기록까지 새 사이클의 이수 판정에 섞어버린다.
+     */
+    void deleteByApplication_ApplicationId(Integer applicationId);
+
     // upsertAttendance 실행 직후, 방금 upsert된 row를 다시 읽어 응답 DTO를 만드는 데 사용한다.
     Optional<ProgramAttendance> findByApplication_ApplicationIdAndProgramSession_ProgramSessionId(
             Integer applicationId, Integer programSessionId);

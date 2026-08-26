@@ -6,9 +6,11 @@ import com.gnagnoohc.scms.domain.counsel.dto.CounselorReservationDetailResponse;
 import com.gnagnoohc.scms.domain.counsel.entity.CounselingAssignment;
 import com.gnagnoohc.scms.domain.counsel.entity.CounselingReservation;
 import com.gnagnoohc.scms.domain.counsel.entity.CounselingSchedule;
+import com.gnagnoohc.scms.domain.counsel.entity.CounselingSession;
 import com.gnagnoohc.scms.domain.counsel.repository.CounselUserRepository;
 import com.gnagnoohc.scms.domain.counsel.repository.CounselingAssignmentRepository;
 import com.gnagnoohc.scms.domain.counsel.repository.CounselingReservationRepository;
+import com.gnagnoohc.scms.domain.counsel.repository.CounselingSessionRepository;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
@@ -32,6 +34,7 @@ public class CounselorReservationService {
     private final CounselUserRepository counselUserRepository;
     private final CounselingReservationRepository counselingReservationRepository;
     private final CounselingAssignmentRepository counselingAssignmentRepository;
+    private final CounselingSessionRepository counselingSessionRepository;
 
     public PageResponse<CounselorPendingReservationResponse> getPending(
             Integer counselorId,
@@ -88,7 +91,16 @@ public class CounselorReservationService {
                 now
         );
         counselingAssignmentRepository.save(assignment);
-        return CounselorReservationDecisionResponse.from(reservation, assignment);
+
+        // 설계 3.1: DIRECT 예약 승인 트랜잭션에서 최초 활성 배정과 1회기를 함께 생성한다.
+        // 1회기 저장이 실패하면(유니크 제약, 강제 예외 등) 이 메서드 전체가 롤백되어 예약 승인과
+        // 배정 생성도 함께 취소된다 — CounselingSessionApprovalRollbackIntegrationTest가 검증한다.
+        CounselingSession firstSession = CounselingSession.createFirst(
+                assignment, schedule.getStartsAt(), schedule.getEndsAt(), counselorId
+        );
+        counselingSessionRepository.save(firstSession);
+
+        return CounselorReservationDecisionResponse.from(reservation, assignment, firstSession);
     }
 
     @Transactional

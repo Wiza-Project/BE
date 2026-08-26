@@ -15,10 +15,17 @@ import com.gnagnoohc.scms.domain.program.entity.ProgramApplication;
 import com.gnagnoohc.scms.domain.program.entity.ProgramStatus;
 import com.gnagnoohc.scms.domain.program.repository.CompetencyOptionRepository;
 import com.gnagnoohc.scms.domain.program.repository.ExtracurricularProgramRepository;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramFileUploadResponseDTO;
 import com.gnagnoohc.scms.domain.program.repository.ProgramApplicationRepository;
 import com.gnagnoohc.scms.domain.program.repository.ProgramSessionRepository;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;
+import com.gnagnoohc.scms.global.common.entity.FileGroup;
+import com.gnagnoohc.scms.global.common.entity.StoredFile;
+import com.gnagnoohc.scms.global.common.helper.FileUploadValidator;
 import com.gnagnoohc.scms.global.common.repository.CommonCodeRepository;
+import com.gnagnoohc.scms.global.common.repository.FileGroupRepository;
+import com.gnagnoohc.scms.global.common.service.FileGroupService;
+import com.gnagnoohc.scms.global.common.service.FileStorageService;
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.DbConstraintViolationMatcher;
 import com.gnagnoohc.scms.global.error.ErrorCode;
@@ -28,11 +35,14 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -54,12 +64,18 @@ public class ProgramService {
     private static final String DEFAULT_DEPARTMENT_CODE = "D200"; // 비교과운영부서
     private static final String PROGRAM_TYPE_GROUP = "PROGRAM_TYPE";
     private static final String DEFAULT_PROGRAM_TYPE_CODE = "PT100"; // 학습
+    // 운영계획서는 문서 1개(PDF)만 받는다 — FileUploadValidator의 기본 허용 확장자(이미지+PDF)보다 좁게 검증한다.
+    private static final Set<String> OPERATION_PLAN_EXTENSIONS = Set.of("pdf");
 
     private final ExtracurricularProgramRepository programRepository;
     private final CompetencyOptionRepository competencyOptionRepository;
     private final CommonCodeRepository commonCodeRepository;
     private final ProgramSessionRepository programSessionRepository;
     private final ProgramApplicationRepository applicationRepository;
+    private final FileGroupService fileGroupService;
+    private final FileGroupRepository fileGroupRepository;
+    private final FileStorageService fileStorageService;
+    private final FileUploadValidator fileUploadValidator;
 
     /**
      * ── "등록(Create)" 기능 ──────────────────────────────────────────────
@@ -89,6 +105,13 @@ public class ProgramService {
          */
         validatePeriod(request.recruitmentStartsAt(), request.recruitmentEndsAt(),
                 request.operationStartsAt(), request.operationEndsAt());
+
+        /**
+         * (a-2) 첨부파일 검증 ----------------------------------------------------------
+         * 클라이언트가 보낸 fileGroupId를 검증 없이 그대로 저장하면, 업로더 본인이 아닌 그룹이나
+         * 이미 다른 프로그램에 연결된 그룹을 임의로 지정해 연결할 수 있다. 아래에서 소유권/단일PDF/재사용을 검증한다.
+         */
+        validateFileGroupForLinking(request.fileGroupId(), managerUserId, null);
 
         /**
          * (b) 기본값 보정 -------------------------------------------------------------
@@ -159,6 +182,65 @@ public class ProgramService {
                 request.operationEndsAt(),
                 now
         );
+    }
+
+    /**
+     * ── "운영계획서 업로드" 기능 ──────────────────────────────────────────────
+     *
+     * 등록/수정 폼에서 첨부할 운영계획서(PDF)를 미리 업로드해 fileGroupId를 발급받는 메서드.
+     * 어떤 프로그램에 귀속될지 아직 정해지지 않은 시점(등록 전에도 호출 가능)의 업로드이므로
+     * programId를 받지 않는다 — 여기서 반환한 fileGroupId를 register()/update() 요청의
+     * fileGroupId 필드에 그대로 실어 보내면 된다.
+     * register()/update()와 마찬가지로 비교과운영부서(D200) 소속만 업로드할 수 있다.
+     */
+    public ProgramFileUploadResponseDTO uploadOperationPlan(MultipartFile file, Integer uploaderId,
+                                                              Integer departmentCodeId) {
+        if (!isOperatingDepartment(departmentCodeId)) {
+            throw new BusinessException(ErrorCode.DEPARTMENT_FORBIDDEN);
+        }
+        fileUploadValidator.validate(file, OPERATION_PLAN_EXTENSIONS);
+        FileGroup fileGroup = fileGroupService.createGroup();
+        fileStorageService.store(file, fileGroup, uploaderId);
+        return new ProgramFileUploadResponseDTO(fileGroup.getFileGroupId(), file.getOriginalFilename());
+    }
+
+    /**
+     * register()/update()가 fileGroupId를 실제로 프로그램에 연결하기 전에 검증하는 메서드.
+     * fileGroupId를 검증 없이 그대로 저장하면, 요청자가 (1) 본인이 업로드하지 않은 그룹이나
+     * (2) 이미 다른 프로그램에 연결된 그룹을 임의로 지정해 연결할 수 있다. 아래 세 가지를 확인한다:
+     *   - 그룹이 실제로 존재하는지
+     *   - 그룹에 속한 파일이 PDF 1개뿐인지(우회 경로로 임의의 fileGroupId를 넣는 경우까지 대비한 방어)
+     *   - 그 파일을 올린 사람(StoredFile.createdBy)이 지금 요청자 본인인지
+     *   - 같은 부서 소속의 다른 담당자가 등록한 프로그램이라도, 이 그룹이 program 도메인 내 다른 프로그램에
+     *     이미 연결돼 있지 않은지 (excludeProgramId는 update()에서 "자기 자신과의 기존 연결"을 재사용으로
+     *     치지 않기 위한 예외)
+     * FileGroup은 program 외에 다른 도메인(게시글 첨부 등)도 함께 쓰는 공용 테이블이라, 그 도메인들에서의
+     * 재사용까지는 이 검증으로 막지 못한다.
+     */
+    private void validateFileGroupForLinking(Integer fileGroupId, Integer uploaderId, Integer excludeProgramId) {
+        if (fileGroupId == null) {
+            return;
+        }
+
+        FileGroup fileGroup = fileGroupRepository.findById(fileGroupId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PROGRAM_FILE_GROUP_NOT_FOUND));
+
+        List<StoredFile> files = fileGroupService.getFiles(fileGroup);
+        String originalFileName = files.size() == 1 ? files.get(0).getOriginalFileName() : null;
+        if (files.size() != 1 || originalFileName == null
+                || !originalFileName.toLowerCase(Locale.ROOT).endsWith(".pdf")) {
+            throw new BusinessException(ErrorCode.INVALID_FILE_TYPE, "운영계획서는 PDF 파일 1개만 첨부할 수 있습니다.");
+        }
+        if (!files.get(0).getCreatedBy().equals(uploaderId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+
+        boolean alreadyLinked = excludeProgramId == null
+                ? programRepository.existsByFileGroup_FileGroupId(fileGroupId)
+                : programRepository.existsByFileGroup_FileGroupIdAndProgramIdNot(fileGroupId, excludeProgramId);
+        if (alreadyLinked) {
+            throw new BusinessException(ErrorCode.PROGRAM_FILE_GROUP_ALREADY_LINKED);
+        }
     }
 
     /**
@@ -240,6 +322,18 @@ public class ProgramService {
         Integer fileGroupId = request.fileGroupId() != null
                 ? request.fileGroupId()
                 : (program.getFileGroup() != null ? program.getFileGroup().getFileGroupId() : null);
+
+        /**
+         * (d-1) 첨부파일 검증 ----------------------------------------------------------
+         * 요청이 실제로 새 fileGroupId를 지정한 경우(기존과 다른 값)에만 검증한다 — 기존에 이미
+         * 이 프로그램에 연결돼 있던 fileGroupId를 그대로 유지하는 경우까지 재검증할 필요는 없다.
+         */
+        boolean isNewFileGroup = request.fileGroupId() != null
+                && (program.getFileGroup() == null
+                        || !request.fileGroupId().equals(program.getFileGroup().getFileGroupId()));
+        if (isNewFileGroup) {
+            validateFileGroupForLinking(fileGroupId, currentUserId, programId);
+        }
 
         /**
          * (e) 실제 DB 반영 -------------------------------------------------------------
@@ -367,7 +461,38 @@ public class ProgramService {
                 .filter(status -> !ApplicationStatus.CANCELLED.name().equals(status))
                 .orElse(null);
 
-        return ProgramDetailResponseDTO.from(program, applicantCount, sessions, myApplicationStatus);
+        String fileName = program.getFileGroup() != null
+                ? fileGroupService.getFiles(program.getFileGroup()).stream()
+                        .findFirst()
+                        .map(StoredFile::getOriginalFileName)
+                        .orElse(null)
+                : null;
+
+        return ProgramDetailResponseDTO.from(program, applicantCount, sessions, myApplicationStatus, fileName);
+    }
+
+    /**
+     * ── "운영계획서 다운로드" 기능 ──────────────────────────────────────────────
+     *
+     * 학생 상세 조회와 동일한 권한(로그인한 학생이면 조회 가능)으로 프로그램에 연결된
+     * 운영계획서 원본 파일을 내려받는다. 별도 소유자 검증은 하지 않는다 — 상세 조회가
+     * 가능한 프로그램이면 첨부파일도 볼 수 있다는 전제.
+     */
+    @Transactional(readOnly = true)
+    public FileStorageService.LoadedFile downloadOperationPlan(Integer programId) {
+        ExtracurricularProgram program = programRepository.findById(programId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PROGRAM_NOT_FOUND));
+
+        FileGroup fileGroup = program.getFileGroup();
+        if (fileGroup == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
+        }
+
+        StoredFile storedFile = fileGroupService.getFiles(fileGroup).stream()
+                .findFirst()
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+
+        return fileStorageService.load(storedFile.getStoredFileId());
     }
 
     /**
@@ -521,6 +646,16 @@ public class ProgramService {
      * (DbConstraintViolationMatcher가 원인 예외 메시지에서 토큰 포함 여부를 안전하게 검사해준다.)
      */
     private BusinessException resolveForeignKeyViolation(DataIntegrityViolationException e) {
+        /**
+         * file_group_id는 유니크 제약(uq_extracurricular_program_file_group_id) 위반일 수도 있다
+         * (동시에 두 요청이 같은 fileGroupId를 서로 다른 프로그램에 연결하려 한 경쟁 조건 케이스).
+         * validateFileGroupForLinking()의 애플리케이션 계층 검사가 이미 흔한 경우는 막아주지만,
+         * 레이스 상황에 대한 최종 방어선은 이 DB 제약이다. file_group_id는 컬럼명 자체도 FK 제약
+         * 위반 메시지에 등장할 수 있어(아래 컬럼명 매칭 방식과 달리) 컬럼명이 아닌 제약조건 이름으로 구분한다.
+         */
+        if (DbConstraintViolationMatcher.contains(e, "uq_extracurricular_program_file_group_id")) {
+            return new BusinessException(ErrorCode.PROGRAM_FILE_GROUP_ALREADY_LINKED);
+        }
         // 메시지 안에 "operating_unit_code_id"라는 컬럼명이 들어있다면, 존재하지 않는 운영 단위 코드를 참조한 것.
         if (DbConstraintViolationMatcher.contains(e, "operating_unit_code_id")) {
             return new BusinessException(ErrorCode.OPERATING_UNIT_NOT_FOUND);

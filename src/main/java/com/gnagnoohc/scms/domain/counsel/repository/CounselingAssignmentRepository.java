@@ -1,7 +1,11 @@
 package com.gnagnoohc.scms.domain.counsel.repository;
 
 import com.gnagnoohc.scms.domain.counsel.entity.CounselingAssignment;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
 
@@ -15,4 +19,12 @@ public interface CounselingAssignmentRepository extends JpaRepository<Counseling
     Optional<CounselingAssignment> findByCounselingReservationCounselingReservationIdAndEndedAtIsNull(
             Integer reservationId
     );
+
+    /**
+     * 후속 회기 생성이 상담사 사용자 행 다음으로 잠그는 대상이다.
+     * 소유권(isOwnedBy)·활성 여부(isActive)는 잠금 후 서비스가 검사한다.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select a from CounselingAssignment a where a.counselingAssignmentId = :assignmentId")
+    Optional<CounselingAssignment> findByIdForUpdate(@Param("assignmentId") Integer assignmentId);
 }
