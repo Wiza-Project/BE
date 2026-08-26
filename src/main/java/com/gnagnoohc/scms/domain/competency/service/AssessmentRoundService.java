@@ -8,6 +8,7 @@ import com.gnagnoohc.scms.domain.competency.dto.AssessmentRoundResponse;
 import com.gnagnoohc.scms.domain.competency.entity.AssessmentRound;
 import com.gnagnoohc.scms.domain.competency.repository.AssessmentAttemptRepository;
 import com.gnagnoohc.scms.domain.competency.repository.AssessmentRoundRepository;
+import com.gnagnoohc.scms.domain.competency.support.TargetConditionInterpreter;
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -26,11 +27,14 @@ public class AssessmentRoundService {
 
     private final AssessmentRoundRepository assessmentRoundRepository;
     private final AssessmentAttemptRepository assessmentAttemptRepository;
+    private final TargetConditionInterpreter targetConditionInterpreter;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public AssessmentRoundResponse registerRound(AssessmentRoundRequest request, Integer staffId) {
         validatePeriod(request.startsAt(), request.endsAt());
         validateNoDuplicate(request.academicYear(), request.semesterCode(), request.assessmentType(), null);
+        JsonNode targetCondition = mapToJsonNode(request.targetCondition());
+        validateTargetConditionShape(targetCondition);
 
         AssessmentRound round = AssessmentRound.create(
                 request.assessmentName(),
@@ -39,7 +43,7 @@ public class AssessmentRoundService {
                 request.assessmentType(),
                 request.startsAt(),
                 request.endsAt(),
-                mapToJsonNode(request.targetCondition()),
+                targetCondition,
                 staffId
         );
 
@@ -65,6 +69,8 @@ public class AssessmentRoundService {
 
         validatePeriod(request.startsAt(), request.endsAt());
         validateNoDuplicate(request.academicYear(), request.semesterCode(), request.assessmentType(), roundId);
+        JsonNode targetCondition = mapToJsonNode(request.targetCondition());
+        validateTargetConditionShape(targetCondition);
 
         round.update(
                 request.assessmentName(),
@@ -73,7 +79,7 @@ public class AssessmentRoundService {
                 request.assessmentType(),
                 request.startsAt(),
                 request.endsAt(),
-                mapToJsonNode(request.targetCondition())
+                targetCondition
         );
 
         try {
@@ -85,6 +91,15 @@ public class AssessmentRoundService {
         }
 
         return toResponse(round);
+    }
+
+    // 판정 자체는 TargetConditionInterpreter(hasUnrecognizedKey/isValidShape) 하나로 고정하고
+    // (재검토 스레드 참고), 여기서는 등록·수정 요청에 맞는 에러코드(INVALID_INPUT)로만 변환한다.
+    private void validateTargetConditionShape(JsonNode targetCondition) {
+        if (targetConditionInterpreter.hasUnrecognizedKey(targetCondition)
+                || !targetConditionInterpreter.isValidShape(targetCondition)) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
     }
 
     private void validatePeriod(java.time.Instant startsAt, java.time.Instant endsAt) {
