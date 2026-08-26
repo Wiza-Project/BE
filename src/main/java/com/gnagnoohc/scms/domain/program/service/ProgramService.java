@@ -57,13 +57,11 @@ public class ProgramService {
      */
     private static final ProgramStatus INITIAL_STATUS = ProgramStatus.DRAFT;
     /**
-     * 요청에 부서/프로그램 유형 코드가 없을 때 채워 넣을 기본값(CommonCode의 code_group/code).
-     * 코드값은 CommonCodeSeeder 기준(접두어+100단위 형식으로 리네임됨: 학습=PT100, 비교과운영부서=D200).
+     * 로그인한 사용자가 비교과운영부서 소속인지 검증(isOperatingDepartment)할 때 기준이 되는 CommonCode 값.
+     * 코드값은 CommonCodeSeeder 기준(비교과운영부서=D200).
      */
     private static final String DEPARTMENT_GROUP = "DEPARTMENT";
     private static final String DEFAULT_DEPARTMENT_CODE = "D200"; // 비교과운영부서
-    private static final String PROGRAM_TYPE_GROUP = "PROGRAM_TYPE";
-    private static final String DEFAULT_PROGRAM_TYPE_CODE = "PT100"; // 학습
     // 운영계획서는 문서 1개(PDF)만 받는다 — FileUploadValidator의 기본 허용 확장자(이미지+PDF)보다 좁게 검증한다.
     private static final Set<String> OPERATION_PLAN_EXTENSIONS = Set.of("pdf");
 
@@ -119,13 +117,9 @@ public class ProgramService {
          */
         BigDecimal completionRate = request.completionRate() != null
                 ? request.completionRate() : DEFAULT_COMPLETION_RATE;
-        // 요청에 operatingUnitCodeId/programTypeCodeId가 없으면(null) 각각 "비교과운영부서"/"학습" 코드로 채운다.
-        Integer operatingUnitCodeId = resolveCodeId(
-                request.operatingUnitCodeId(), DEPARTMENT_GROUP, DEFAULT_DEPARTMENT_CODE,
-                ErrorCode.OPERATING_UNIT_NOT_FOUND);
-        Integer programTypeCodeId = resolveCodeId(
-                request.programTypeCodeId(), PROGRAM_TYPE_GROUP, DEFAULT_PROGRAM_TYPE_CODE,
-                ErrorCode.PROGRAM_CATEGORY_NOT_FOUND);
+        // operatingUnitCodeId/programTypeCodeId는 이제 프론트가 드롭다운으로 선택해서 보내는 필수값이라 그대로 사용한다.
+        Integer operatingUnitCodeId = request.operatingUnitCodeId();
+        Integer programTypeCodeId = request.programTypeCodeId();
         /**
          * "지금 이 순간"의 시각을 한 번만 만들어서, 아래 INSERT 쿼리(created_at/updated_at)와
          * 응답 DTO(createdAt)에 똑같은 값으로 사용한다.
@@ -313,9 +307,8 @@ public class ProgramService {
         BigDecimal completionRate = request.completionRate() != null
                 ? request.completionRate() : DEFAULT_COMPLETION_RATE;
 
-        // 운영단위는 이 API로 변경할 수 없는 값이다.
-        // 요청 DTO에는 이 값을 받는 필드 자체가 없으므로, 항상 프로그램에 이미 저장된 값을 그대로 유지한다.
-        Integer operatingUnitCodeId = program.getOperatingUnitCode().getCodeId();
+        // 운영단위도 이제 프론트가 드롭다운으로 선택해서 보내는 필수값이라 그대로 사용한다.
+        Integer operatingUnitCodeId = request.operatingUnitCodeId();
 
         // 첨부파일은 별도 업로드 화면에서만 바뀌므로, 수정 폼이 파일을 다시 첨부하지 않아
         // 요청에 안 담겨오면(null) 기존에 첨부돼 있던 파일을 그대로 유지한다(지우지 않는다).
@@ -621,23 +614,6 @@ public class ProgramService {
                 .stream()
                 .filter(commonCode -> commonCode.getCode().equals(DEFAULT_DEPARTMENT_CODE))
                 .anyMatch(commonCode -> commonCode.getCodeId().equals(departmentCodeId));
-    }
-
-    /**
-     * 요청값이 있으면 그대로 쓰고, 없으면(null) 주어진 그룹에서 defaultCode와 일치하는 CommonCode를 찾아 그 codeId를 대신 쓴다.
-     * (CommonCodeRepository에는 group+code 단건 조회 메서드가 없어, 기존에 있는 그룹 전체 조회 메서드로 가져온 뒤 code로 걸러낸다.)
-     */
-    private Integer resolveCodeId(Integer requestedCodeId, String codeGroup, String defaultCode,
-                                   ErrorCode notFoundError) {
-        if (requestedCodeId != null) {
-            return requestedCodeId;
-        }
-        return commonCodeRepository.findByCodeGroupAndActiveTrueOrderBySortOrderAsc(codeGroup)
-                .stream()
-                .filter(commonCode -> commonCode.getCode().equals(defaultCode))
-                .findFirst()
-                .orElseThrow(() -> new BusinessException(notFoundError))
-                .getCodeId();
     }
 
     /**

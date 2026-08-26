@@ -25,11 +25,11 @@ public record ProgramRegisterRequestDTO(
         // 첨부파일 그룹 id. 포스터 등 이미지가 없을 수도 있으므로 @NotNull을 붙이지 않았다(선택값).
         Integer fileGroupId,
 
-        // 운영 단위 코드 id. 요청에 안 담겨오면(null) 서비스에서 기본값("비교과운영부서")으로 채운다.
-        Integer operatingUnitCodeId,
+        // 운영 단위(부서) 코드 id. 프론트가 드롭다운으로 선택해서 보내야 하는 필수값.
+        @NotNull Integer operatingUnitCodeId,
 
-        // 프로그램 유형(분류) 코드 id. 요청에 안 담겨오면(null) 서비스에서 기본값("학습")으로 채운다.
-        Integer programTypeCodeId,
+        // 프로그램 유형(분류) 코드 id. 프론트가 드롭다운으로 선택해서 보내야 하는 필수값.
+        @NotNull Integer programTypeCodeId,
 
         // 이 프로그램과 연결된 핵심역량 id. 필수값.
         @NotNull Integer competencyId,
