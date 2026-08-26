@@ -89,9 +89,7 @@ public class ProgramMileageAccrualService {
                 || policy.getActivityType().getCompetency() == null
                 || policy.getPoints() == null
                 || policy.getPoints().compareTo(BigDecimal.ZERO) <= 0
-                || policy.getValidFrom() == null
-                || completionDate.isBefore(policy.getValidFrom())
-                || (policy.getValidTo() != null && completionDate.isAfter(policy.getValidTo()))) {
+                || !policy.isApplicableOn(completionDate)) {
             throw new BusinessException(
                     ErrorCode.MILEAGE_POLICY_NOT_FOUND,
                     "이수일에 적용할 수 있는 마일리지 정책이 없습니다.");

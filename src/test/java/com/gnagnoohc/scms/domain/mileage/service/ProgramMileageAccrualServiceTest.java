@@ -109,6 +109,7 @@ class ProgramMileageAccrualServiceTest {
         when(policy.getPolicyStatus()).thenReturn("ACTIVE");
         when(policy.getValidFrom()).thenReturn(LocalDate.of(2026, 1, 1));
         when(policy.getValidTo()).thenReturn(null);
+        when(policy.isApplicableOn(any(LocalDate.class))).thenReturn(true);
         return policy;
     }
 }

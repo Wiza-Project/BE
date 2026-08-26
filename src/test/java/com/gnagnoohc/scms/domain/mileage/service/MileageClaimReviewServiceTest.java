@@ -181,6 +181,7 @@ class MileageClaimReviewServiceTest {
         lenient().when(policy.getPolicyStatus()).thenReturn("ACTIVE");
         lenient().when(policy.getValidFrom()).thenReturn(LocalDate.of(2026, 1, 1));
         lenient().when(policy.getValidTo()).thenReturn(LocalDate.of(2026, 12, 31));
+        lenient().when(policy.isApplicableOn(any(LocalDate.class))).thenReturn(true);
         lenient().when(policy.getPoints()).thenReturn(new BigDecimal("10"));
         lenient().when(policy.getMaximumPoints()).thenReturn(new BigDecimal("20"));
 
