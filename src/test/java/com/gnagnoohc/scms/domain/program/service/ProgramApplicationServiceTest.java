@@ -15,6 +15,10 @@ import com.gnagnoohc.scms.domain.program.repository.ProgramApplicationRepository
 import com.gnagnoohc.scms.domain.program.repository.ProgramAttendanceRepository;
 import com.gnagnoohc.scms.domain.program.repository.ProgramMileageTransactionRepository;
 import com.gnagnoohc.scms.domain.user.entity.AppUser;
+import com.gnagnoohc.scms.domain.user.entity.UserConsent;
+import com.gnagnoohc.scms.domain.user.service.consent.ConsentModuleCode;
+import com.gnagnoohc.scms.domain.user.service.consent.ConsentType;
+import com.gnagnoohc.scms.domain.user.service.consent.ConsentVerifier;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;
 import com.gnagnoohc.scms.global.common.notification.NotificationSender;
 import com.gnagnoohc.scms.global.error.BusinessException;
@@ -77,6 +81,9 @@ class ProgramApplicationServiceTest {
     @Mock
     PlatformTransactionManager transactionManager;
 
+    @Mock
+    ConsentVerifier consentVerifier;
+
     @InjectMocks
     ProgramApplicationService programApplicationService;
 
@@ -86,12 +93,13 @@ class ProgramApplicationServiceTest {
         ExtracurricularProgram program = buildProgramFixture(
                 1, now.minusSeconds(3600), now.plusSeconds(3600), 10);
 
+        mockValidProgramConsent(100, 900);
         when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
         when(applicationRepository.findByProgram_ProgramIdAndStudent_UserIdForUpdate(1, 100))
                 .thenReturn(Optional.empty());
         when(applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(1, List.of("APPLIED", "APPROVED")))
                 .thenReturn(9L);
-        when(applicationRepository.insertApplication(eq(1), eq(100), eq("APPLIED"), eq(null), eq(false), any()))
+        when(applicationRepository.insertApplication(eq(1), eq(100), eq("APPLIED"), eq(null), eq(false), eq(900), any()))
                 .thenReturn(1);
 
         ProgramApplyResponseDTO response = programApplicationService.apply(1, 100);
@@ -107,13 +115,14 @@ class ProgramApplicationServiceTest {
         ExtracurricularProgram program = buildProgramFixture(
                 1, now.minusSeconds(3600), now.plusSeconds(3600), 10);
 
+        mockValidProgramConsent(100, 900);
         when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
         when(applicationRepository.findByProgram_ProgramIdAndStudent_UserIdForUpdate(1, 100))
                 .thenReturn(Optional.empty());
         when(applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(1, List.of("APPLIED", "APPROVED")))
                 .thenReturn(10L);
         when(applicationRepository.findMaxWaitlistOrderByProgramId(1)).thenReturn(2);
-        when(applicationRepository.insertApplication(eq(1), eq(100), eq("WAITLISTED"), eq(3), eq(false), any()))
+        when(applicationRepository.insertApplication(eq(1), eq(100), eq("WAITLISTED"), eq(3), eq(false), eq(900), any()))
                 .thenReturn(1);
 
         ProgramApplyResponseDTO response = programApplicationService.apply(1, 100);
@@ -129,6 +138,7 @@ class ProgramApplicationServiceTest {
         ExtracurricularProgram program = buildProgramFixture(
                 1, now.plusSeconds(3600), now.plusSeconds(7200), 10);
 
+        mockValidProgramConsent(100, 900);
         when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
 
         assertThatThrownBy(() -> programApplicationService.apply(1, 100))
@@ -143,6 +153,7 @@ class ProgramApplicationServiceTest {
         ExtracurricularProgram program = buildProgramFixture(
                 1, now.minusSeconds(7200), now.minusSeconds(3600), 10);
 
+        mockValidProgramConsent(100, 900);
         when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
 
         assertThatThrownBy(() -> programApplicationService.apply(1, 100))
@@ -152,17 +163,31 @@ class ProgramApplicationServiceTest {
     }
 
     @Test
+    void apply_whenNotAgreedToRequiredConsent_throwsRequiredConsentNotAgreed() throws Exception {
+        when(consentVerifier.hasAgreedAllRequired(eq(100), eq(ConsentModuleCode.PROGRAM), any()))
+                .thenReturn(false);
+
+        assertThatThrownBy(() -> programApplicationService.apply(1, 100))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.REQUIRED_CONSENT_NOT_AGREED);
+
+        verify(programRepository, never()).findByIdForUpdate(any());
+    }
+
+    @Test
     void apply_whenDuplicate_throwsAlreadyApplied() throws Exception {
         Instant now = Instant.now();
         ExtracurricularProgram program = buildProgramFixture(
                 1, now.minusSeconds(3600), now.plusSeconds(3600), 10);
 
+        mockValidProgramConsent(100, 900);
         when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
         when(applicationRepository.findByProgram_ProgramIdAndStudent_UserIdForUpdate(1, 100))
                 .thenReturn(Optional.empty());
         when(applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(1, List.of("APPLIED", "APPROVED")))
                 .thenReturn(0L);
-        when(applicationRepository.insertApplication(anyInt(), anyInt(), eq("APPLIED"), eq(null), anyBoolean(), any()))
+        when(applicationRepository.insertApplication(anyInt(), anyInt(), eq("APPLIED"), eq(null), anyBoolean(), any(), any()))
                 .thenThrow(new DataIntegrityViolationException("duplicate"));
 
         assertThatThrownBy(() -> programApplicationService.apply(1, 100))
@@ -178,6 +203,7 @@ class ProgramApplicationServiceTest {
                 1, now.minusSeconds(3600), now.plusSeconds(3600), 10);
         ProgramApplication existing = buildApplicationFixture(5, program, "APPLIED", 100);
 
+        mockValidProgramConsent(100, 900);
         when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
         when(applicationRepository.findByProgram_ProgramIdAndStudent_UserIdForUpdate(1, 100))
                 .thenReturn(Optional.of(existing));
@@ -187,8 +213,8 @@ class ProgramApplicationServiceTest {
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.ALREADY_APPLIED);
 
-        verify(applicationRepository, never()).insertApplication(anyInt(), anyInt(), any(), any(), anyBoolean(), any());
-        verify(applicationRepository, never()).reviveApplication(anyInt(), any(), any(), any());
+        verify(applicationRepository, never()).insertApplication(anyInt(), anyInt(), any(), any(), anyBoolean(), any(), any());
+        verify(applicationRepository, never()).reviveApplication(anyInt(), any(), any(), any(), any());
     }
 
     @Test
@@ -198,6 +224,7 @@ class ProgramApplicationServiceTest {
                 1, now.minusSeconds(3600), now.plusSeconds(3600), 10);
         ProgramApplication existing = buildApplicationFixture(5, program, "REJECTED", 100);
 
+        mockValidProgramConsent(100, 900);
         when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
         when(applicationRepository.findByProgram_ProgramIdAndStudent_UserIdForUpdate(1, 100))
                 .thenReturn(Optional.of(existing));
@@ -207,7 +234,7 @@ class ProgramApplicationServiceTest {
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.ALREADY_APPLIED);
 
-        verify(applicationRepository, never()).reviveApplication(anyInt(), any(), any(), any());
+        verify(applicationRepository, never()).reviveApplication(anyInt(), any(), any(), any(), any());
     }
 
     @Test
@@ -217,18 +244,19 @@ class ProgramApplicationServiceTest {
                 1, now.minusSeconds(3600), now.plusSeconds(3600), 10);
         ProgramApplication existing = buildApplicationFixture(5, program, "CANCELLED", 100);
 
+        mockValidProgramConsent(100, 900);
         when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
         when(applicationRepository.findByProgram_ProgramIdAndStudent_UserIdForUpdate(1, 100))
                 .thenReturn(Optional.of(existing));
         when(applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(1, List.of("APPLIED", "APPROVED")))
                 .thenReturn(0L);
-        when(applicationRepository.reviveApplication(eq(5), eq("APPLIED"), eq(null), any())).thenReturn(1);
+        when(applicationRepository.reviveApplication(eq(5), eq("APPLIED"), eq(null), eq(900), any())).thenReturn(1);
 
         ProgramApplyResponseDTO response = programApplicationService.apply(1, 100);
 
         assertThat(response.applicationId()).isEqualTo(5);
         assertThat(response.applicationStatus()).isEqualTo("APPLIED");
-        verify(applicationRepository, never()).insertApplication(anyInt(), anyInt(), any(), any(), anyBoolean(), any());
+        verify(applicationRepository, never()).insertApplication(anyInt(), anyInt(), any(), any(), anyBoolean(), any(), any());
     }
 
     @Test
@@ -238,12 +266,13 @@ class ProgramApplicationServiceTest {
                 1, now.minusSeconds(3600), now.plusSeconds(3600), 10);
         ProgramApplication existing = buildApplicationFixture(5, program, "CANCELLED", 100);
 
+        mockValidProgramConsent(100, 900);
         when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
         when(applicationRepository.findByProgram_ProgramIdAndStudent_UserIdForUpdate(1, 100))
                 .thenReturn(Optional.of(existing));
         when(applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(1, List.of("APPLIED", "APPROVED")))
                 .thenReturn(0L);
-        when(applicationRepository.reviveApplication(eq(5), eq("APPLIED"), eq(null), any())).thenReturn(0);
+        when(applicationRepository.reviveApplication(eq(5), eq("APPLIED"), eq(null), eq(900), any())).thenReturn(0);
 
         assertThatThrownBy(() -> programApplicationService.apply(1, 100))
                 .isInstanceOf(BusinessException.class)
@@ -252,7 +281,8 @@ class ProgramApplicationServiceTest {
     }
 
     @Test
-    void apply_whenProgramNotFound_throwsProgramNotFound() {
+    void apply_whenProgramNotFound_throwsProgramNotFound() throws Exception {
+        mockValidProgramConsent(100, 900);
         when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> programApplicationService.apply(1, 100))
@@ -953,6 +983,24 @@ class ProgramApplicationServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.PROGRAM_NOT_FOUND);
+    }
+
+    // apply() 맨 앞의 동의 게이트를 통과시키고, FK 증빙으로 쓰일 UserConsent를 반환하도록 목을 세팅한다.
+    private void mockValidProgramConsent(Integer studentId, Integer userConsentId) throws Exception {
+        when(consentVerifier.hasAgreedAllRequired(eq(studentId), eq(ConsentModuleCode.PROGRAM), any()))
+                .thenReturn(true);
+        when(consentVerifier.findCurrentValidConsent(
+                eq(studentId), eq(ConsentModuleCode.PROGRAM), eq(ConsentType.PERSONAL_INFO), any()))
+                .thenReturn(Optional.of(buildUserConsentFixture(userConsentId)));
+    }
+
+    // UserConsent도 같은 이유(protected 기본 생성자, setter/빌더 없음)로 리플렉션 픽스처를 사용한다.
+    private UserConsent buildUserConsentFixture(Integer userConsentId) throws Exception {
+        Constructor<UserConsent> constructor = UserConsent.class.getDeclaredConstructor();
+        constructor.setAccessible(true);
+        UserConsent consent = constructor.newInstance();
+        ReflectionTestUtils.setField(consent, "userConsentId", userConsentId);
+        return consent;
     }
 
     /**
