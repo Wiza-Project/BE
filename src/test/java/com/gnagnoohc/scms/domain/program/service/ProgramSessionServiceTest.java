@@ -1,6 +1,7 @@
 package com.gnagnoohc.scms.domain.program.service;
 
 import com.gnagnoohc.scms.domain.program.dto.request.ProgramSessionRegisterRequestDTO;
+import com.gnagnoohc.scms.domain.program.dto.request.ProgramSessionUpdateRequestDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramSessionResponseDTO;
 import com.gnagnoohc.scms.domain.program.entity.ExtracurricularProgram;
 import com.gnagnoohc.scms.domain.program.entity.ProgramSession;
@@ -107,6 +108,59 @@ class ProgramSessionServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.PROGRAM_NOT_FOUND);
+    }
+
+    @Test
+    void updateSession_whenSessionExists_returnsUpdatedSession() throws Exception {
+        ExtracurricularProgram program = buildProgramFixture(1);
+        ProgramSession session = buildSessionFixture(10, program, 1);
+        Instant startsAt = Instant.now().plusSeconds(3600);
+        Instant endsAt = startsAt.plusSeconds(3600);
+        ProgramSessionUpdateRequestDTO request =
+                new ProgramSessionUpdateRequestDTO(1, "1주차(수정)", startsAt, endsAt, "본관 202호");
+
+        when(sessionRepository.findByProgramSessionIdAndProgram_ProgramId(10, 1))
+                .thenReturn(java.util.Optional.of(session));
+        when(sessionRepository.updateSession(10, 1, 1, "1주차(수정)", startsAt, endsAt, "본관 202호"))
+                .thenReturn(1);
+
+        ProgramSessionResponseDTO response = programSessionService.updateSession(1, 10, request);
+
+        assertThat(response.programSessionId()).isEqualTo(10);
+        assertThat(response.sessionName()).isEqualTo("1주차(수정)");
+        assertThat(response.location()).isEqualTo("본관 202호");
+    }
+
+    @Test
+    void updateSession_whenSessionNotFound_throwsProgramSessionNotFound() {
+        ProgramSessionUpdateRequestDTO request =
+                new ProgramSessionUpdateRequestDTO(1, null, Instant.now(), Instant.now().plusSeconds(3600), null);
+
+        when(sessionRepository.findByProgramSessionIdAndProgram_ProgramId(10, 1))
+                .thenReturn(java.util.Optional.empty());
+
+        assertThatThrownBy(() -> programSessionService.updateSession(1, 10, request))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.PROGRAM_SESSION_NOT_FOUND);
+    }
+
+    @Test
+    void updateSession_whenSessionNoDuplicate_throwsDuplicateSessionNo() throws Exception {
+        ExtracurricularProgram program = buildProgramFixture(1);
+        ProgramSession session = buildSessionFixture(10, program, 1);
+        ProgramSessionUpdateRequestDTO request =
+                new ProgramSessionUpdateRequestDTO(2, null, Instant.now(), Instant.now().plusSeconds(3600), null);
+
+        when(sessionRepository.findByProgramSessionIdAndProgram_ProgramId(10, 1))
+                .thenReturn(java.util.Optional.of(session));
+        when(sessionRepository.updateSession(eq(10), eq(1), eq(2), any(), any(), any(), any()))
+                .thenThrow(new DataIntegrityViolationException("duplicate"));
+
+        assertThatThrownBy(() -> programSessionService.updateSession(1, 10, request))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.DUPLICATE_SESSION_NO);
     }
 
     /**

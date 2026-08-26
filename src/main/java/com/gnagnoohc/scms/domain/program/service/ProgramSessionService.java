@@ -1,6 +1,7 @@
 package com.gnagnoohc.scms.domain.program.service;
 
 import com.gnagnoohc.scms.domain.program.dto.request.ProgramSessionRegisterRequestDTO;
+import com.gnagnoohc.scms.domain.program.dto.request.ProgramSessionUpdateRequestDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramSessionResponseDTO;
 import com.gnagnoohc.scms.domain.program.entity.ProgramSession;
 import com.gnagnoohc.scms.domain.program.repository.ExtracurricularProgramRepository;
@@ -59,5 +60,34 @@ public class ProgramSessionService {
                 .stream()
                 .map(ProgramSessionResponseDTO::from)
                 .toList();
+    }
+
+    /**
+     * 운영부서가 이미 등록된 회차의 내용(장소 포함)을 수정한다.
+     * ProgramSession 엔티티에는 updated_by 컬럼이 없어 등록과 달리 담당자 id는 받지 않는다.
+     */
+    public ProgramSessionResponseDTO updateSession(Integer programId, Integer sessionId,
+                                                    ProgramSessionUpdateRequestDTO request) {
+        if (!sessionRepository.findByProgramSessionIdAndProgram_ProgramId(sessionId, programId).isPresent()) {
+            throw new BusinessException(ErrorCode.PROGRAM_SESSION_NOT_FOUND);
+        }
+
+        int updatedRows;
+        try {
+            updatedRows = sessionRepository.updateSession(
+                    sessionId, programId, request.sessionNo(), request.sessionName(),
+                    request.startsAt(), request.endsAt(), request.location());
+        } catch (DataIntegrityViolationException e) {
+            // uq_program_session_program_no 유니크 제약 위반 = 다른 회차가 이미 쓰고 있는 회차 번호.
+            throw new BusinessException(ErrorCode.DUPLICATE_SESSION_NO);
+        }
+
+        if (updatedRows == 0) {
+            throw new BusinessException(ErrorCode.PROGRAM_SESSION_NOT_FOUND);
+        }
+
+        return new ProgramSessionResponseDTO(
+                sessionId, programId, request.sessionNo(), request.sessionName(),
+                request.startsAt(), request.endsAt(), request.location());
     }
 }

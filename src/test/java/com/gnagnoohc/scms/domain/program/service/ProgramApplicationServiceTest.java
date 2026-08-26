@@ -416,6 +416,8 @@ class ProgramApplicationServiceTest {
         when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
         when(applicationRepository.findByIdForUpdate(5)).thenReturn(Optional.of(application));
         when(applicationRepository.updateCancellation(eq(5), eq("일정 변경"), any())).thenReturn(1);
+        when(applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(eq(1), any()))
+                .thenReturn(4L);
 
         ProgramApplicationCancelResponseDTO response =
                 programApplicationService.cancel(1, 5, 100, "일정 변경");
@@ -423,6 +425,8 @@ class ProgramApplicationServiceTest {
         assertThat(response.applicationStatus()).isEqualTo("CANCELLED");
         assertThat(response.applicationStatusLabel()).isEqualTo("취소");
         assertThat(response.cancellationReason()).isEqualTo("일정 변경");
+        assertThat(response.remainingCapacity()).isEqualTo(6);
+        assertThat(response.recruitmentEndsAt()).isEqualTo(program.getRecruitmentEndsAt());
         verify(eventPublisher).publishEvent(any(WaitlistSlotOpenedEvent.class));
     }
 
