@@ -16,6 +16,7 @@ import com.gnagnoohc.scms.domain.user.service.consent.ConsentVerifier;
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,9 +34,12 @@ public class AssessmentIntroService {
     // schema/기획서에 별도 필드가 없어 BE에서 정한 추정값이다 — 실측 데이터가 쌓이면 조정한다.
     private static final int SECONDS_PER_QUESTION = 20;
 
+    private static final String DUPLICATE_ATTEMPT_CONSTRAINT = "uq_assessment_attempt_round_student";
+
     private final AssessmentRoundRepository assessmentRoundRepository;
     private final AssessmentRoundQuestionRepository assessmentRoundQuestionRepository;
     private final AssessmentAttemptRepository assessmentAttemptRepository;
+    private final AssessmentAttemptStartRecovery assessmentAttemptStartRecovery;
     private final AppUserRepository appUserRepository;
     private final ConsentVerifier consentVerifier;
 
@@ -82,10 +86,26 @@ public class AssessmentIntroService {
         AppUser student = appUserRepository.getReferenceById(studentId);
         UserConsent linkedConsent = findRepresentativeConsent(studentId, now);
 
-        AssessmentAttempt attempt = assessmentAttemptRepository.save(
-                AssessmentAttempt.create(round, student, linkedConsent));
+        AssessmentAttempt attempt;
+        try {
+            attempt = assessmentAttemptRepository.save(AssessmentAttempt.create(round, student, linkedConsent));
+        } catch (DataIntegrityViolationException e) {
+            attempt = recoverFromConcurrentStart(roundId, studentId, e);
+        }
 
         return toResponse(attempt);
+    }
+
+    // 위 findBy~존재 확인과 save() 사이에 동시 요청(더블클릭 등)이 먼저 커밋되면 uq_assessment_attempt_round_student
+    // 위반이 난다. 멱등 계약(이미 시작했으면 기존 attempt 반환)을 지키려면 여기서 CONFLICT를 던지고 클라이언트가
+    // 재시도하게 하는 대신, 이긴 요청이 남긴 attempt를 바로 찾아 반환해야 한다. 다만 이 트랜잭션은 이미
+    // aborted 상태라(Postgres) 같은 트랜잭션에서 재조회해도 실패하므로 별도 트랜잭션(REQUIRES_NEW)에 위임한다.
+    private AssessmentAttempt recoverFromConcurrentStart(Integer roundId, Integer studentId, DataIntegrityViolationException e) {
+        String detail = e.getMostSpecificCause().getMessage();
+        if (detail == null || !detail.contains(DUPLICATE_ATTEMPT_CONSTRAINT)) {
+            throw e;
+        }
+        return assessmentAttemptStartRecovery.findExisting(roundId, studentId).orElseThrow(() -> e);
     }
 
     // attempt.userConsent는 증빙용 참조 하나만 가리킬 수 있어(FK 1개), 진단 응답에 가장 직결되는

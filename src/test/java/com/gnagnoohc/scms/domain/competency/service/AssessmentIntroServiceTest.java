@@ -20,6 +20,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 
 import java.lang.reflect.Field;
 import java.time.Instant;
@@ -41,6 +42,7 @@ class AssessmentIntroServiceTest {
     @Mock AssessmentRoundRepository assessmentRoundRepository;
     @Mock AssessmentRoundQuestionRepository assessmentRoundQuestionRepository;
     @Mock AssessmentAttemptRepository assessmentAttemptRepository;
+    @Mock AssessmentAttemptStartRecovery assessmentAttemptStartRecovery;
     @Mock AppUserRepository appUserRepository;
     @Mock ConsentVerifier consentVerifier;
 
@@ -172,6 +174,63 @@ class AssessmentIntroServiceTest {
 
         assertThat(response.attemptStatus()).isEqualTo("NOT_STARTED");
         verify(assessmentAttemptRepository).save(any(AssessmentAttempt.class));
+    }
+
+    // 더블클릭 등으로 findBy~존재 확인과 save() 사이에 동시 요청이 먼저 커밋되면 uq_assessment_attempt_round_student
+    // 위반이 난다. 멱등 계약(이미 시작했으면 기존 attempt 반환)을 지키려면 이 경우에도 에러 대신 이긴 요청이
+    // 남긴 attempt를 그대로 돌려줘야 한다.
+    @Test
+    void startAttempt_whenConcurrentStartViolatesUniqueConstraint_recoversExistingAttempt() {
+        Instant startsAt = Instant.now().minus(1, ChronoUnit.DAYS);
+        Instant endsAt = Instant.now().plus(7, ChronoUnit.DAYS);
+        AssessmentRound round = buildRound(startsAt, endsAt);
+        AppUser student = mock(AppUser.class);
+        AssessmentAttempt winnerAttempt = AssessmentAttempt.create(round, student, null);
+        setField(winnerAttempt, "attemptId", 777);
+
+        when(assessmentRoundRepository.findById(ROUND_ID)).thenReturn(Optional.of(round));
+        when(assessmentAttemptRepository.findByAssessmentRound_AssessmentRoundIdAndStudent_UserId(ROUND_ID, STUDENT_ID))
+                .thenReturn(Optional.empty());
+        when(consentVerifier.hasAgreedAllRequired(eq(STUDENT_ID), eq(ConsentModuleCode.ASSESSMENT), any(Instant.class)))
+                .thenReturn(true);
+        when(consentVerifier.findCurrentValidConsent(any(), any(), any(), any()))
+                .thenReturn(Optional.empty());
+        when(appUserRepository.getReferenceById(STUDENT_ID)).thenReturn(student);
+        when(assessmentAttemptRepository.save(any(AssessmentAttempt.class)))
+                .thenThrow(new DataIntegrityViolationException("uq_assessment_attempt_round_student"));
+        when(assessmentAttemptStartRecovery.findExisting(ROUND_ID, STUDENT_ID))
+                .thenReturn(Optional.of(winnerAttempt));
+
+        AssessmentAttemptResponse response = assessmentIntroService.startAttempt(ROUND_ID, STUDENT_ID);
+
+        assertThat(response.attemptId()).isEqualTo(777);
+    }
+
+    // 제약명이 uq_assessment_attempt_round_student가 아닌 무결성 위반(예: student_id NOT NULL)까지
+    // "동시 시작"으로 둔갑시켜 복구를 시도하면 안 된다 — 원래 예외 그대로 다시 던져야 한다.
+    @Test
+    void startAttempt_whenUnrelatedIntegrityViolation_rethrowsOriginalException() {
+        Instant startsAt = Instant.now().minus(1, ChronoUnit.DAYS);
+        Instant endsAt = Instant.now().plus(7, ChronoUnit.DAYS);
+        AssessmentRound round = buildRound(startsAt, endsAt);
+        AppUser student = mock(AppUser.class);
+        DataIntegrityViolationException notNullViolation = new DataIntegrityViolationException(
+                "null value in column \"student_id\" violates not-null constraint");
+
+        when(assessmentRoundRepository.findById(ROUND_ID)).thenReturn(Optional.of(round));
+        when(assessmentAttemptRepository.findByAssessmentRound_AssessmentRoundIdAndStudent_UserId(ROUND_ID, STUDENT_ID))
+                .thenReturn(Optional.empty());
+        when(consentVerifier.hasAgreedAllRequired(eq(STUDENT_ID), eq(ConsentModuleCode.ASSESSMENT), any(Instant.class)))
+                .thenReturn(true);
+        when(consentVerifier.findCurrentValidConsent(any(), any(), any(), any()))
+                .thenReturn(Optional.empty());
+        when(appUserRepository.getReferenceById(STUDENT_ID)).thenReturn(student);
+        when(assessmentAttemptRepository.save(any(AssessmentAttempt.class))).thenThrow(notNullViolation);
+
+        assertThatThrownBy(() -> assessmentIntroService.startAttempt(ROUND_ID, STUDENT_ID))
+                .isSameAs(notNullViolation);
+
+        verify(assessmentAttemptStartRecovery, never()).findExisting(any(), any());
     }
 
     @Test
