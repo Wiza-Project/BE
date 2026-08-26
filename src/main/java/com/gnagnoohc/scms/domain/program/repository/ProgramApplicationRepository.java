@@ -4,6 +4,7 @@ import com.gnagnoohc.scms.domain.program.entity.ProgramApplication;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
@@ -164,7 +165,10 @@ public interface ProgramApplicationRepository extends JpaRepository<ProgramAppli
      * 특정 프로그램의 대기자 전원을 대기 순번 오름차순으로 조회한다.
      * 취소로 정원 슬롯이 비었을 때, 열린 자리 수와 함께 대기자 전원에게 안내 알림을 보내는 데 쓴다
      * (특정 1명만 골라 예약하지 않으므로 동시에 여러 슬롯이 열려도 경쟁 조건이 없다).
+     * 호출부(collectWaitlistNotificationTargets)가 대기자마다 student를 읽어 N+1이 발생하므로
+     * @EntityGraph로 함께 fetch한다.
      */
+    @EntityGraph(attributePaths = "student")
     List<ProgramApplication> findAllByProgram_ProgramIdAndApplicationStatusOrderByWaitlistOrderAsc(
             Integer programId, String applicationStatus);
 
@@ -382,6 +386,7 @@ public interface ProgramApplicationRepository extends JpaRepository<ProgramAppli
             certificate_issued_at = NULL,
             judged_by = NULL,
             completed_at = NULL,
+            created_at = :now,
             updated_at = :now
         WHERE application_id = :applicationId
           AND application_status = 'CANCELLED'
