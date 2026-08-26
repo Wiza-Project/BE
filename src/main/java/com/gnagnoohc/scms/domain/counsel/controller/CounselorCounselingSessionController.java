@@ -36,6 +36,9 @@ public class CounselorCounselingSessionController {
 
     private final CounselingSessionService counselingSessionService;
 
+    /**
+     * 로그인 상담사의 현재·과거 배정에 연결된 회기 목록을 조회한다. 신청 원문·비공개 기록·공개 결과는 포함하지 않는다.
+     */
     @GetMapping("/counseling-sessions")
     public ApiResponse<PageResponse<CounselingSessionResponse>> getSessions(
             @RequestParam(defaultValue = "0") @Min(0) int page,
@@ -50,6 +53,9 @@ public class CounselorCounselingSessionController {
         );
     }
 
+    /**
+     * 회기 하나의 상세를 조회한다. 현재 또는 과거 배정의 담당 상담사 본인만 조회할 수 있다.
+     */
     @GetMapping("/counseling-sessions/{sessionId}")
     public ApiResponse<CounselingSessionResponse> getSession(
             @PathVariable Integer sessionId,
@@ -58,6 +64,9 @@ public class CounselorCounselingSessionController {
         return ApiResponse.ok(counselingSessionService.getSession(sessionId, authUser.getId()));
     }
 
+    /**
+     * 현재 활성 배정의 담당 상담사가 후속 회기를 생성한다. 번호는 배정 안에서 자동 채번된다.
+     */
     @PostMapping("/counseling-assignments/{assignmentId}/sessions")
     public ApiResponse<CounselingSessionResponse> createFollowUp(
             @PathVariable Integer assignmentId,
@@ -69,6 +78,9 @@ public class CounselorCounselingSessionController {
         ));
     }
 
+    /**
+     * PLANNED 회기의 출결을 완료 처리한다. PRESENT이고 예약이 APPROVED면 예약도 IN_PROGRESS로 바뀐다.
+     */
     @PatchMapping("/counseling-sessions/{sessionId}/complete")
     public ApiResponse<CounselingSessionResponse> complete(
             @PathVariable Integer sessionId,
@@ -80,6 +92,9 @@ public class CounselorCounselingSessionController {
         ));
     }
 
+    /**
+     * 시작 시각 전의 PLANNED 회기를 취소한다. 예약·배정 상태는 바꾸지 않는다.
+     */
     @PatchMapping("/counseling-sessions/{sessionId}/cancel")
     public ApiResponse<CounselingSessionResponse> cancel(
             @PathVariable Integer sessionId,
