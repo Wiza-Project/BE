@@ -123,6 +123,9 @@ public enum ErrorCode {
     RESERVATION_NOT_FOUND(HttpStatus.NOT_FOUND, "S003", "상담 예약을 찾을 수 없습니다."),
     CANNOT_CANCEL_CONFIRMED(HttpStatus.BAD_REQUEST, "S004", "확정된 상담은 취소할 수 없습니다."),
     ALREADY_PROCESSED_RESERVATION(HttpStatus.CONFLICT, "S005", "이미 처리된 상담 예약입니다."),
+    ASSIGNMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "S006", "상담사 배정을 찾을 수 없습니다."),
+    SESSION_NOT_FOUND(HttpStatus.NOT_FOUND, "S007", "상담 회기를 찾을 수 없습니다."),
+    SESSION_STATE_NOT_ALLOWED(HttpStatus.CONFLICT, "S008", "허용되지 않은 회기 상태입니다."),
 
     // ── 마일리지 ──────────────────────────────────────────────────
     MILEAGE_ITEM_NOT_FOUND(HttpStatus.NOT_FOUND, "M001", "마일리지 항목을 찾을 수 없습니다."),
