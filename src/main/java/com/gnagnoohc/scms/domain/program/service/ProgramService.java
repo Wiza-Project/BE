@@ -646,6 +646,16 @@ public class ProgramService {
      * (DbConstraintViolationMatcher가 원인 예외 메시지에서 토큰 포함 여부를 안전하게 검사해준다.)
      */
     private BusinessException resolveForeignKeyViolation(DataIntegrityViolationException e) {
+        /**
+         * file_group_id는 유니크 제약(uq_extracurricular_program_file_group_id) 위반일 수도 있다
+         * (동시에 두 요청이 같은 fileGroupId를 서로 다른 프로그램에 연결하려 한 경쟁 조건 케이스).
+         * validateFileGroupForLinking()의 애플리케이션 계층 검사가 이미 흔한 경우는 막아주지만,
+         * 레이스 상황에 대한 최종 방어선은 이 DB 제약이다. file_group_id는 컬럼명 자체도 FK 제약
+         * 위반 메시지에 등장할 수 있어(아래 컬럼명 매칭 방식과 달리) 컬럼명이 아닌 제약조건 이름으로 구분한다.
+         */
+        if (DbConstraintViolationMatcher.contains(e, "uq_extracurricular_program_file_group_id")) {
+            return new BusinessException(ErrorCode.PROGRAM_FILE_GROUP_ALREADY_LINKED);
+        }
         // 메시지 안에 "operating_unit_code_id"라는 컬럼명이 들어있다면, 존재하지 않는 운영 단위 코드를 참조한 것.
         if (DbConstraintViolationMatcher.contains(e, "operating_unit_code_id")) {
             return new BusinessException(ErrorCode.OPERATING_UNIT_NOT_FOUND);

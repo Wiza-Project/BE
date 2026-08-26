@@ -22,6 +22,7 @@ import com.gnagnoohc.scms.global.common.entity.FileGroup;
 import com.gnagnoohc.scms.global.common.entity.StoredFile;
 import com.gnagnoohc.scms.global.common.helper.FileUploadValidator;
 import com.gnagnoohc.scms.global.common.repository.CommonCodeRepository;
+import com.gnagnoohc.scms.global.common.repository.FileGroupRepository;
 import com.gnagnoohc.scms.global.common.service.FileGroupService;
 import com.gnagnoohc.scms.global.common.service.FileStorageService;
 import com.gnagnoohc.scms.global.error.BusinessException;
@@ -35,6 +36,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -73,6 +75,9 @@ class ProgramServiceTest {
 
     @Mock
     ProgramApplicationRepository applicationRepository;
+
+    @Mock
+    FileGroupRepository fileGroupRepository;
 
     @Mock
     FileGroupService fileGroupService;
@@ -188,6 +193,44 @@ class ProgramServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.DEPARTMENT_FORBIDDEN);
+    }
+
+    @Test
+    void register_whenFileGroupUniqueConstraintViolated_throwsFileGroupAlreadyLinked() throws Exception {
+        when(commonCodeRepository.findByCodeGroupAndActiveTrueOrderBySortOrderAsc("DEPARTMENT"))
+                .thenReturn(List.of(buildCommonCodeFixture(11, "DEPARTMENT", "D200")));
+
+        FileGroup fileGroup = FileGroup.create();
+        ReflectionTestUtils.setField(fileGroup, "fileGroupId", 77);
+        when(fileGroupRepository.findById(77)).thenReturn(Optional.of(fileGroup));
+        StoredFile storedFile = StoredFile.builder()
+                .originalFileName("운영계획서.pdf").createdBy(100).build();
+        when(fileGroupService.getFiles(fileGroup)).thenReturn(List.of(storedFile));
+        // 애플리케이션 계층 검사는 통과(false)하지만, 그 직후의 실제 INSERT 시점에는 동시 요청으로
+        // 이미 다른 프로그램에 연결돼버린 레이스 케이스를 재현한다.
+        when(programRepository.existsByFileGroup_FileGroupId(77)).thenReturn(false);
+        when(programRepository.insertProgram(
+                any(), any(), any(), any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), any(), any(), any(), any()
+        )).thenThrow(new DataIntegrityViolationException(
+                "duplicate key value violates unique constraint \"uq_extracurricular_program_file_group_id\""));
+
+        Instant recruitmentStartsAt = Instant.now();
+        Instant recruitmentEndsAt = recruitmentStartsAt.plusSeconds(3600);
+        Instant operationStartsAt = recruitmentEndsAt;
+        Instant operationEndsAt = operationStartsAt.plusSeconds(3600);
+
+        ProgramRegisterRequestDTO request = new ProgramRegisterRequestDTO(
+                77, 1, 2, 3, null,
+                "프로그램명", "설명",
+                recruitmentStartsAt, recruitmentEndsAt, operationStartsAt, operationEndsAt,
+                10, null
+        );
+
+        assertThatThrownBy(() -> programService.register(request, 100, 11))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.PROGRAM_FILE_GROUP_ALREADY_LINKED);
     }
 
     @Test
@@ -315,6 +358,53 @@ class ProgramServiceTest {
         programService.update(1, request, 100, 11);
 
         assertThat(operatingUnitCaptor.getValue()).isEqualTo(11);
+    }
+
+    @Test
+    void update_whenFileGroupUniqueConstraintViolated_throwsFileGroupAlreadyLinked() throws Exception {
+        AppUser managerUser = mock(AppUser.class);
+        when(managerUser.getUserId()).thenReturn(100);
+
+        when(commonCodeRepository.findByCodeGroupAndActiveTrueOrderBySortOrderAsc("DEPARTMENT"))
+                .thenReturn(List.of(buildCommonCodeFixture(11, "DEPARTMENT", "D200")));
+
+        Instant now = Instant.now();
+        ExtracurricularProgram program = buildProgramFixture(
+                1, managerUser, now.plusSeconds(3600), ProgramStatus.DRAFT);
+        ReflectionTestUtils.setField(program, "operatingUnitCode", buildCommonCodeFixture(11, "DEPARTMENT", "D200"));
+        when(programRepository.findById(1)).thenReturn(Optional.of(program));
+
+        FileGroup fileGroup = FileGroup.create();
+        ReflectionTestUtils.setField(fileGroup, "fileGroupId", 77);
+        when(fileGroupRepository.findById(77)).thenReturn(Optional.of(fileGroup));
+        StoredFile storedFile = StoredFile.builder()
+                .originalFileName("운영계획서.pdf").createdBy(100).build();
+        when(fileGroupService.getFiles(fileGroup)).thenReturn(List.of(storedFile));
+        // register 테스트와 동일하게, 애플리케이션 계층 검사는 통과(false)하지만 UPDATE 시점에
+        // 동시 요청으로 이미 다른 프로그램에 연결돼버린 레이스 케이스를 재현한다.
+        when(programRepository.existsByFileGroup_FileGroupIdAndProgramIdNot(77, 1)).thenReturn(false);
+        when(programRepository.updateProgram(
+                any(), any(), any(), any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), any(), any(), any(), any()
+        )).thenThrow(new DataIntegrityViolationException(
+                "duplicate key value violates unique constraint \"uq_extracurricular_program_file_group_id\""));
+
+        Instant recruitmentStartsAt = now;
+        Instant recruitmentEndsAt = now.plusSeconds(1800);
+        Instant operationStartsAt = recruitmentEndsAt;
+        Instant operationEndsAt = operationStartsAt.plusSeconds(3600);
+
+        ProgramUpdateRequestDTO request = new ProgramUpdateRequestDTO(
+                77, 2, 3, null,
+                "수정된 프로그램명", "설명",
+                recruitmentStartsAt, recruitmentEndsAt, operationStartsAt, operationEndsAt,
+                20, null
+        );
+
+        assertThatThrownBy(() -> programService.update(1, request, 100, 11))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.PROGRAM_FILE_GROUP_ALREADY_LINKED);
     }
 
     @Test
