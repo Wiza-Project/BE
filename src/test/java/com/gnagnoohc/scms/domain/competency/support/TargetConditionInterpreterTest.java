@@ -170,6 +170,35 @@ class TargetConditionInterpreterTest {
                 .isEqualTo(ErrorCode.ASSESSMENT_TARGET_CONDITION_UNSUPPORTED);
     }
 
+    // 최상위가 object가 아니면 fieldNames()/get()이 각각 빈 iterator/null을 반환해 아래 검사를
+    // 그냥 통과해버린다 — 배열이 오면 조건 없음(=전체 학생 대상)으로 조용히 넓어지는 대신 실패시켜야 한다.
+    @Test
+    void toPredicate_whenTopLevelIsArray_throwsInvalidFormat() {
+        JsonNode condition = objectMapper.valueToTree(List.of(1, 2, 3));
+
+        assertThatThrownBy(() -> interpreter.toPredicate(condition))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.ASSESSMENT_TARGET_CONDITION_INVALID_FORMAT);
+    }
+
+    @Test
+    void toPredicate_whenTopLevelIsScalar_throwsInvalidFormat() {
+        JsonNode condition = objectMapper.valueToTree("grades");
+
+        assertThatThrownBy(() -> interpreter.toPredicate(condition))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.ASSESSMENT_TARGET_CONDITION_INVALID_FORMAT);
+    }
+
+    @Test
+    void isValidShape_whenTopLevelIsArray_returnsFalse() {
+        JsonNode condition = objectMapper.valueToTree(List.of(1, 2, 3));
+
+        assertThat(interpreter.isValidShape(condition)).isFalse();
+    }
+
     @Test
     void hasUnrecognizedKey_whenOnlyKnownKeys_returnsFalse() {
         JsonNode condition = objectMapper.valueToTree(Map.of("grades", List.of(1), "majorCodeIds", List.of(4000)));
