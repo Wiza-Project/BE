@@ -15,6 +15,8 @@ import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 public interface MileagePolicyRepository extends JpaRepository<MileagePolicy, Integer>,
@@ -69,4 +71,23 @@ public interface MileagePolicyRepository extends JpaRepository<MileagePolicy, In
     // 목록 조회 시 활동유형을 함께 페치해서 N+1 조회를 막는다.
     @EntityGraph(attributePaths = "activityType")
     Page<MileagePolicy> findAll(Specification<MileagePolicy> spec, Pageable pageable);
+
+    /** 학생 시뮬레이션에서 선택할 수 있는 현재 활성 마일리지 활동 정책을 조회한다. */
+    @Query("""
+            select p
+            from MileagePolicy p
+            join fetch p.activityType activityType
+            where p.academicYear = :academicYear
+              and p.semesterCode in :semesterCodes
+              and p.policyStatus = 'ACTIVE'
+              and activityType.active = true
+              and p.validFrom <= :asOfDate
+              and (p.validTo is null or p.validTo >= :asOfDate)
+            order by activityType.activityName asc, p.versionNo desc
+            """)
+    List<MileagePolicy> findSimulationPolicies(
+            @Param("academicYear") Integer academicYear,
+            @Param("semesterCodes") Collection<String> semesterCodes,
+            @Param("asOfDate") LocalDate asOfDate
+    );
 }
