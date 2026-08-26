@@ -130,11 +130,17 @@ public class CounselingPrivateRecordService {
         return CounselingPrivateRecordResponse.from(sessionId, record, canSaveDraft, canConfirm);
     }
 
+    /**
+     * 응답의 canSaveDraft 값. session.isPrivateDraftAllowed()는 회기 상태만 보므로, 배정이 이미
+     * 끝났는지(assignment.isActive())는 여기서 따로 확인한다 — 그래야 과거 담당자가 조회 화면에서
+     * "저장 가능"으로 잘못 표시되지 않는다.
+     */
     private boolean canSaveDraft(CounselingSession session, CounselingPrivateRecord record, Instant now) {
         CounselingAssignment assignment = session.getCounselingAssignment();
         return assignment.isActive() && session.isPrivateDraftAllowed(now) && (record == null || !record.isConfirmed());
     }
 
+    /** canSaveDraft와 같은 이유로 배정 활성 여부를 별도 확인하고, 이미 확정된 기록이면 false다. */
     private boolean canConfirm(CounselingSession session, CounselingPrivateRecord record, Instant now) {
         CounselingAssignment assignment = session.getCounselingAssignment();
         return assignment.isActive() && session.isPrivateConfirmAllowed(now) && record != null && !record.isConfirmed();
