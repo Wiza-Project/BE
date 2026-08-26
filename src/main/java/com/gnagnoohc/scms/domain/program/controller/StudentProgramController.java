@@ -1,5 +1,6 @@
 package com.gnagnoohc.scms.domain.program.controller;
 
+import com.gnagnoohc.scms.domain.program.dto.response.CompetencyOptionResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramDetailResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramListItemResponseDTO;
 import com.gnagnoohc.scms.domain.program.entity.ProgramStatus;
@@ -26,6 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 @Tag(name = "StudentProgram", description = "학생의 비교과 프로그램 목록 조회")
 @RestController
@@ -54,6 +56,12 @@ public class StudentProgramController {
             // 지금 로그인해서 이 요청을 보낸 학생의 id (인증 정보에서 옴). 카드별 "내 신청 상태"를 채우는 데 쓴다.
             @AuthenticationPrincipal AuthUser authUser) {
         return ApiResponse.ok(programService.list(status, keyword, competencyId, authUser.getId(), pageable));
+    }
+
+    @Operation(summary = "핵심역량 옵션 조회", description = "핵심역량 목록을 조회합니다")
+    @GetMapping("/competencies")
+    public ApiResponse<List<CompetencyOptionResponseDTO>> listCompetencyOptions() {
+        return ApiResponse.ok(programService.getCompetencyOptions());
     }
 
     @Operation(summary = "프로그램 상세 조회", description = "프로그램 기본정보, 회차 목록, 신청자 수를 조회합니다")
