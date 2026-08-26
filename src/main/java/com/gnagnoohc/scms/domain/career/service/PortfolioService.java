@@ -95,7 +95,9 @@ public class PortfolioService {
 
         CareerDocument saved;
         try {
-            saved = careerDocumentRepository.save(document);
+            // 버전 번호는 조회 후 계산되므로 동시 생성 시 유니크 충돌 가능성이 있다.
+            // saveAndFlush로 예외를 이 범위에서 받아 공통 비즈니스 오류로 변환한다.
+            saved = careerDocumentRepository.saveAndFlush(document);
         } catch (DataIntegrityViolationException e) {
             throw new BusinessException(ErrorCode.DOCUMENT_VERSION_CONFLICT);
         }

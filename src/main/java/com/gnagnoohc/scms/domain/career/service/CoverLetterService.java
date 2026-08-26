@@ -150,7 +150,10 @@ public class CoverLetterService {
 
     private CareerDocument saveOrThrowConflict(CareerDocument document) {
         try {
-            return careerDocumentRepository.save(document);
+            // save()만 호출하면 INSERT 및 유니크 제약 위반이 트랜잭션 커밋 시점까지
+            // 미뤄질 수 있다. 여기서 flush하여 동시 버전 생성 충돌을 J016으로 일관되게
+            // 변환한다.
+            return careerDocumentRepository.saveAndFlush(document);
         } catch (DataIntegrityViolationException e) {
             throw new BusinessException(ErrorCode.DOCUMENT_VERSION_CONFLICT);
         }
