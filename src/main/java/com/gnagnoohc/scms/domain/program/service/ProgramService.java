@@ -191,8 +191,13 @@ public class ProgramService {
      * 어떤 프로그램에 귀속될지 아직 정해지지 않은 시점(등록 전에도 호출 가능)의 업로드이므로
      * programId를 받지 않는다 — 여기서 반환한 fileGroupId를 register()/update() 요청의
      * fileGroupId 필드에 그대로 실어 보내면 된다.
+     * register()/update()와 마찬가지로 비교과운영부서(D200) 소속만 업로드할 수 있다.
      */
-    public ProgramFileUploadResponseDTO uploadOperationPlan(MultipartFile file, Integer uploaderId) {
+    public ProgramFileUploadResponseDTO uploadOperationPlan(MultipartFile file, Integer uploaderId,
+                                                              Integer departmentCodeId) {
+        if (!isOperatingDepartment(departmentCodeId)) {
+            throw new BusinessException(ErrorCode.DEPARTMENT_FORBIDDEN);
+        }
         fileUploadValidator.validate(file, OPERATION_PLAN_EXTENSIONS);
         FileGroup fileGroup = fileGroupService.createGroup();
         fileStorageService.store(file, fileGroup, uploaderId);

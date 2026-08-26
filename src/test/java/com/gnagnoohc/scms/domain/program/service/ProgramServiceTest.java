@@ -191,7 +191,10 @@ class ProgramServiceTest {
     }
 
     @Test
-    void uploadOperationPlan_withPdfFile_createsFileGroupAndStoresFile() {
+    void uploadOperationPlan_withPdfFile_createsFileGroupAndStoresFile() throws Exception {
+        when(commonCodeRepository.findByCodeGroupAndActiveTrueOrderBySortOrderAsc("DEPARTMENT"))
+                .thenReturn(List.of(buildCommonCodeFixture(11, "DEPARTMENT", "D200")));
+
         FileGroup fileGroup = FileGroup.create();
         ReflectionTestUtils.setField(fileGroup, "fileGroupId", 77);
         when(fileGroupService.createGroup()).thenReturn(fileGroup);
@@ -200,7 +203,7 @@ class ProgramServiceTest {
                 "file", "운영계획서.pdf", "application/pdf",
                 new byte[]{0x25, 0x50, 0x44, 0x46, '-', '1', '.', '4'}); // "%PDF-1.4"
 
-        ProgramFileUploadResponseDTO response = programService.uploadOperationPlan(file, 100);
+        ProgramFileUploadResponseDTO response = programService.uploadOperationPlan(file, 100, 11);
 
         assertThat(response.fileGroupId()).isEqualTo(77);
         assertThat(response.fileName()).isEqualTo("운영계획서.pdf");
@@ -208,15 +211,35 @@ class ProgramServiceTest {
     }
 
     @Test
-    void uploadOperationPlan_withNonPdfFile_throwsInvalidFileType() {
+    void uploadOperationPlan_withNonPdfFile_throwsInvalidFileType() throws Exception {
+        when(commonCodeRepository.findByCodeGroupAndActiveTrueOrderBySortOrderAsc("DEPARTMENT"))
+                .thenReturn(List.of(buildCommonCodeFixture(11, "DEPARTMENT", "D200")));
+
         MultipartFile file = new MockMultipartFile(
                 "file", "poster.jpg", "image/jpeg",
                 new byte[]{(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, 0, 0}); // JPEG magic bytes
 
-        assertThatThrownBy(() -> programService.uploadOperationPlan(file, 100))
+        assertThatThrownBy(() -> programService.uploadOperationPlan(file, 100, 11))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.INVALID_FILE_TYPE);
+
+        verifyNoInteractions(fileGroupService, fileStorageService);
+    }
+
+    @Test
+    void uploadOperationPlan_whenDepartmentIsNotOperatingDepartment_throwsDepartmentForbidden() throws Exception {
+        when(commonCodeRepository.findByCodeGroupAndActiveTrueOrderBySortOrderAsc("DEPARTMENT"))
+                .thenReturn(List.of(buildCommonCodeFixture(11, "DEPARTMENT", "D200")));
+
+        MultipartFile file = new MockMultipartFile(
+                "file", "운영계획서.pdf", "application/pdf",
+                new byte[]{0x25, 0x50, 0x44, 0x46, '-', '1', '.', '4'});
+
+        assertThatThrownBy(() -> programService.uploadOperationPlan(file, 100, 99))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.DEPARTMENT_FORBIDDEN);
 
         verifyNoInteractions(fileGroupService, fileStorageService);
     }

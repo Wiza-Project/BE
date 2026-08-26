@@ -82,7 +82,8 @@ public class ProgramController {
     public ApiResponse<ProgramFileUploadResponseDTO> uploadOperationPlan(
             @RequestParam("file") MultipartFile file,
             @AuthenticationPrincipal AuthUser authUser) {
-        return ApiResponse.ok(programService.uploadOperationPlan(file, authUser.getId()));
+        return ApiResponse.ok(programService.uploadOperationPlan(
+                file, authUser.getId(), authUser.getDepartmentCodeId()));
     }
 
     @Operation(summary = "핵심역량 옵션 조회", description = "프로그램 등록 폼에서 사용할 핵심역량 목록을 조회합니다")
