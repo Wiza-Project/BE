@@ -3,6 +3,8 @@ package com.gnagnoohc.scms.domain.career.repository;
 import com.gnagnoohc.scms.domain.career.entity.NcsStandard;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.Optional;
+
 /**
  * NCS 직무 표준 데이터 접근 계층 (Repository)
  *
@@ -15,4 +17,10 @@ import org.springframework.data.jpa.repository.JpaRepository;
  * @author YUN
  */
 public interface NcsStandardRepository extends JpaRepository<NcsStandard, Integer> {
+
+    /** 8자리 NCS 코드로 단건 조회 */
+    Optional<NcsStandard> findByNcsCode(String ncsCode);
+
+    /** 특정 코드 존재 여부 확인 */
+    boolean existsByNcsCode(String ncsCode);
 }
