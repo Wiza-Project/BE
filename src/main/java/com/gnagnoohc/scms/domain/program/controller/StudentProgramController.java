@@ -81,11 +81,13 @@ public class StudentProgramController {
                 : MediaType.APPLICATION_OCTET_STREAM_VALUE;
 
         // filename*(RFC 5987)에 원본 파일명을 UTF-8 퍼센트 인코딩해 넣고, filename*를 읽지 못하는
-        // 구형 클라이언트를 위해 filename에는 ASCII 고정값을 fallback으로 넣는다
-        // (운영계획서는 PDF 1개만 허용되므로 고정 파일명을 써도 정보 손실이 없다).
-        String encodedFileName = URLEncoder.encode(loadedFile.originalFileName(), StandardCharsets.UTF_8)
-                .replace("+", "%20");
-        String contentDisposition = "attachment; filename=\"operation-plan.pdf\"; filename*=UTF-8''" + encodedFileName;
+        // 구형 클라이언트를 위해 filename에는 원본 파일명에서 비ASCII 문자만 치환한 값을 fallback으로 넣는다.
+        String originalFileName = loadedFile.originalFileName();
+        String asciiFileName = originalFileName.replaceAll("[^\\x20-\\x7E]", "_").replace("\"", "'");
+        String encodedFileName = URLEncoder.encode(originalFileName, StandardCharsets.UTF_8)
+                .replace("+", "%20")
+                .replace("*", "%2A");
+        String contentDisposition = "attachment; filename=\"" + asciiFileName + "\"; filename*=UTF-8''" + encodedFileName;
 
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(contentType))

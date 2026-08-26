@@ -16,6 +16,13 @@ public record ProgramApplicationCancelResponseDTO(
         // 취소 사유. 학생이 입력하지 않았다면 null.
         String cancellationReason,
 
-        Instant canceledAt
+        Instant canceledAt,
+
+        // 취소 반영 직후 기준 잔여 정원(capacity - APPLIED/APPROVED 건수). 프론트가 재신청/대기 버튼을
+        // 프로그램 상세 재조회 없이 바로 판단할 수 있도록 내려준다.
+        Integer remainingCapacity,
+
+        // 이 프로그램의 모집 마감 시각. 프론트가 "신청 불가"(마감 지남) 여부를 판단하는 데 쓴다.
+        Instant recruitmentEndsAt
 ) {
 }
