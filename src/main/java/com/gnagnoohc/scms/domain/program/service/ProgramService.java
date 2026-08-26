@@ -1,6 +1,7 @@
 package com.gnagnoohc.scms.domain.program.service;
 
 import com.gnagnoohc.scms.domain.program.dto.response.CompetencyOptionResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramAdminDetailResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramAdminListItemResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramDetailResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramListItemResponseDTO;
@@ -10,6 +11,7 @@ import com.gnagnoohc.scms.domain.program.dto.request.ProgramUpdateRequestDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramSessionResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramUpdateResponseDTO;
 import com.gnagnoohc.scms.domain.program.entity.ExtracurricularProgram;
+import com.gnagnoohc.scms.domain.program.entity.ProgramApplication;
 import com.gnagnoohc.scms.domain.program.entity.ProgramStatus;
 import com.gnagnoohc.scms.domain.program.repository.CompetencyOptionRepository;
 import com.gnagnoohc.scms.domain.program.repository.ExtracurricularProgramRepository;
@@ -18,6 +20,7 @@ import com.gnagnoohc.scms.domain.program.repository.ProgramSessionRepository;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;
 import com.gnagnoohc.scms.global.common.repository.CommonCodeRepository;
 import com.gnagnoohc.scms.global.error.BusinessException;
+import com.gnagnoohc.scms.global.error.DbConstraintViolationMatcher;
 import com.gnagnoohc.scms.global.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -162,11 +165,15 @@ public class ProgramService {
      * ── "수정(Update)" 기능 ──────────────────────────────────────────────
      *
      * 프로그램 하나를 수정하는 메서드. 매개변수 3개의 의미:
-     *   programId     : 수정할 프로그램의 PK (URL 경로에서 옴)
-     *   request       : 수정할 내용이 담긴 요청 DTO (요청 바디에서 옴)
-     *   currentUserId : 지금 로그인해서 이 요청을 보낸 사용자의 id (인증 정보에서 옴, 클라이언트가 위조 불가)
+     *   programId        : 수정할 프로그램의 PK (URL 경로에서 옴)
+     *   request          : 수정할 내용이 담긴 요청 DTO (요청 바디에서 옴)
+     *   currentUserId    : 지금 로그인해서 이 요청을 보낸 사용자의 id (인증 정보에서 옴, 클라이언트가 위조 불가)
+     *   departmentCodeId : 로그인한 사용자가 소속된 부서의 CommonCode PK (인증 정보에서 옴, 클라이언트가 위조 불가)
+     *                    → 비교과운영부서(D200) 소속인지 검증하는 데만 쓰인다. 등록 이후 다른 부서로 옮겼다면
+     *                      본인이 등록한 프로그램이라도 더 이상 수정할 수 없어야 하므로, 소유자 확인과 별개로 매번 다시 검사한다.
      */
-    public ProgramUpdateResponseDTO update(Integer programId, ProgramUpdateRequestDTO request, Integer currentUserId) {
+    public ProgramUpdateResponseDTO update(Integer programId, ProgramUpdateRequestDTO request, Integer currentUserId,
+                                            Integer departmentCodeId) {
 
         /**
          * (a) 존재 확인 ------------------------------------------------------------
@@ -176,6 +183,14 @@ public class ProgramService {
          */
         ExtracurricularProgram program = programRepository.findById(programId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PROGRAM_NOT_FOUND));
+
+        /**
+         * (a-1) 부서 권한 확인 -----------------------------------------------------------
+         * register()의 (0)단계와 동일한 이유로, 지금도 비교과운영부서(D200) 소속인지 검증한다.
+         */
+        if (!isOperatingDepartment(departmentCodeId)) {
+            throw new BusinessException(ErrorCode.DEPARTMENT_FORBIDDEN);
+        }
 
         /**
          * (b) 소유자 확인 ------------------------------------------------------------
@@ -216,6 +231,16 @@ public class ProgramService {
         BigDecimal completionRate = request.completionRate() != null
                 ? request.completionRate() : DEFAULT_COMPLETION_RATE;
 
+        // 운영단위는 이 API로 변경할 수 없는 값이다.
+        // 요청 DTO에는 이 값을 받는 필드 자체가 없으므로, 항상 프로그램에 이미 저장된 값을 그대로 유지한다.
+        Integer operatingUnitCodeId = program.getOperatingUnitCode().getCodeId();
+
+        // 첨부파일은 별도 업로드 화면에서만 바뀌므로, 수정 폼이 파일을 다시 첨부하지 않아
+        // 요청에 안 담겨오면(null) 기존에 첨부돼 있던 파일을 그대로 유지한다(지우지 않는다).
+        Integer fileGroupId = request.fileGroupId() != null
+                ? request.fileGroupId()
+                : (program.getFileGroup() != null ? program.getFileGroup().getFileGroupId() : null);
+
         /**
          * (e) 실제 DB 반영 -------------------------------------------------------------
          * updatedRows는 이번 UPDATE 문으로 실제 몇 개의 row가 바뀌었는지를 담는다(보통 0 또는 1).
@@ -224,8 +249,8 @@ public class ProgramService {
         try {
             updatedRows = programRepository.updateProgram(
                     programId,
-                    request.fileGroupId(),
-                    request.operatingUnitCodeId(),
+                    fileGroupId,
+                    operatingUnitCodeId,
                     request.programTypeCodeId(),
                     request.competencyId(),
                     request.mileagePolicyId(),
@@ -287,11 +312,13 @@ public class ProgramService {
      */
     @Transactional(readOnly = true)
     public PageResponse<ProgramListItemResponseDTO> list(ProgramStatus status, String keyword, Integer competencyId,
-                                                           Pageable pageable) {
+                                                           Integer studentId, Pageable pageable) {
         Page<ExtracurricularProgram> page = programRepository.search(status, keyword, competencyId, pageable);
         Map<Integer, Long> applicantCounts = countApplicantsByProgram(page.getContent());
+        Map<Integer, String> myApplicationStatuses = findMyApplicationStatuses(page.getContent(), studentId);
         return PageResponse.from(page.map(program ->
-                ProgramListItemResponseDTO.from(program, applicantCounts.getOrDefault(program.getProgramId(), 0L))));
+                ProgramListItemResponseDTO.from(program, applicantCounts.getOrDefault(program.getProgramId(), 0L),
+                        myApplicationStatuses.get(program.getProgramId()))));
     }
 
     /**
@@ -306,8 +333,11 @@ public class ProgramService {
         Page<ExtracurricularProgram> page = programRepository.searchByManager(
                 managerUserId, status, keyword, competencyId, pageable);
         Map<Integer, Long> applicantCounts = countApplicantsByProgram(page.getContent());
+        // listMine()은 이미 managerUserId 조건으로 본인 소유만 조회하므로, 여기서는 모집 마감 시각만 비교하면 된다.
+        Instant now = Instant.now();
         return PageResponse.from(page.map(program -> ProgramAdminListItemResponseDTO.from(
-                program, applicantCounts.getOrDefault(program.getProgramId(), 0L))));
+                program, applicantCounts.getOrDefault(program.getProgramId(), 0L),
+                now.isBefore(program.getRecruitmentEndsAt()))));
     }
 
     /**
@@ -316,7 +346,7 @@ public class ProgramService {
      * 학생이 프로그램 상세 화면에서 볼 기본정보 전체 + 회차 목록 + 신청자 수를 한 번에 조립한다.
      */
     @Transactional(readOnly = true)
-    public ProgramDetailResponseDTO getDetail(Integer programId) {
+    public ProgramDetailResponseDTO getDetail(Integer programId, Integer studentId) {
         ExtracurricularProgram program = programRepository.findDetailById(programId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PROGRAM_NOT_FOUND));
 
@@ -329,7 +359,44 @@ public class ProgramService {
         long applicantCount = applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(
                 programId, List.of(ApplicationStatus.APPLIED.name(), ApplicationStatus.APPROVED.name()));
 
-        return ProgramDetailResponseDTO.from(program, applicantCount, sessions);
+        // CANCELLED는 apply()가 재신청 대상으로 취급하는 상태라, "신청 안 한 것"과 동일하게 null로 내려준다
+        // (findMyApplicationStatusesByProgramIds와 같은 이유 — 재신청 가능한 프로그램에서 버튼을 숨기면 안 됨).
+        String myApplicationStatus = applicationRepository
+                .findByProgram_ProgramIdAndStudent_UserId(programId, studentId)
+                .map(ProgramApplication::getApplicationStatus)
+                .filter(status -> !ApplicationStatus.CANCELLED.name().equals(status))
+                .orElse(null);
+
+        return ProgramDetailResponseDTO.from(program, applicantCount, sessions, myApplicationStatus);
+    }
+
+    /**
+     * ── "staff용 상세 조회(Detail)" 기능 ──────────────────────────────────────
+     *
+     * getDetail()과 거의 같지만, 등록자 본인만 조회 가능하도록 소유자 검증을 추가하고
+     * 수정/삭제 가능 여부(isEditable/isDeletable)를 함께 계산해 내려준다.
+     */
+    @Transactional(readOnly = true)
+    public ProgramAdminDetailResponseDTO getMyDetail(Integer programId, Integer currentUserId) {
+        ExtracurricularProgram program = programRepository.findDetailById(programId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PROGRAM_NOT_FOUND));
+
+        if (!program.getManagerUser().getUserId().equals(currentUserId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+
+        List<ProgramSessionResponseDTO> sessions = programSessionRepository
+                .findByProgram_ProgramIdOrderBySessionNoAsc(programId)
+                .stream()
+                .map(ProgramSessionResponseDTO::from)
+                .toList();
+
+        long applicantCount = applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(
+                programId, List.of(ApplicationStatus.APPLIED.name(), ApplicationStatus.APPROVED.name()));
+
+        boolean editable = Instant.now().isBefore(program.getRecruitmentEndsAt());
+
+        return ProgramAdminDetailResponseDTO.from(program, applicantCount, sessions, editable);
     }
 
     // 목록 페이지 한 번에 해당하는 프로그램들의 신청자 수를 한 번의 쿼리로 배치 조회한다(N+1 방지).
@@ -344,6 +411,18 @@ public class ProgramService {
                         ProgramApplicationRepository.ProgramApplicantCount::getCount));
     }
 
+    // 목록 페이지 한 번에 해당하는 프로그램들에 대한 로그인 학생 본인의 신청 상태를 한 번의 쿼리로 배치 조회한다(N+1 방지).
+    private Map<Integer, String> findMyApplicationStatuses(List<ExtracurricularProgram> programs, Integer studentId) {
+        if (programs.isEmpty()) {
+            return Map.of();
+        }
+        List<Integer> programIds = programs.stream().map(ExtracurricularProgram::getProgramId).toList();
+        return applicationRepository.findMyApplicationStatusesByProgramIds(studentId, programIds).stream()
+                .collect(Collectors.toMap(
+                        ProgramApplicationRepository.MyApplicationStatusProjection::getProgramId,
+                        ProgramApplicationRepository.MyApplicationStatusProjection::getStatus));
+    }
+
     // 프로그램 등록 폼의 핵심역량 드롭다운용 옵션 목록. 최상위(하위 역량 없음) + 활성 상태만 노출한다.
     public List<CompetencyOptionResponseDTO> getCompetencyOptions() {
         return competencyOptionRepository.findByParentCompetencyIsNullAndActiveTrueOrderByDisplayOrderAsc()
@@ -356,14 +435,24 @@ public class ProgramService {
      * ── "삭제(Delete)" 기능 ──────────────────────────────────────────────
      *
      * 프로그램 하나를 삭제하는 메서드. 매개변수 2개의 의미:
-     *   programId     : 삭제할 프로그램의 PK (URL 경로에서 옴)
-     *   currentUserId : 지금 로그인해서 이 요청을 보낸 사용자의 id (인증 정보에서 옴, 클라이언트가 위조 불가)
+     *   programId        : 삭제할 프로그램의 PK (URL 경로에서 옴)
+     *   currentUserId    : 지금 로그인해서 이 요청을 보낸 사용자의 id (인증 정보에서 옴, 클라이언트가 위조 불가)
+     *   departmentCodeId : 로그인한 사용자가 소속된 부서의 CommonCode PK (인증 정보에서 옴, 클라이언트가 위조 불가)
+     *                    → update()와 동일한 이유로, 비교과운영부서(D200) 소속인지 매번 다시 검증한다.
      */
-    public void delete(Integer programId, Integer currentUserId) {
+    public void delete(Integer programId, Integer currentUserId, Integer departmentCodeId) {
 
         // (a) 존재 확인 ------------------------------------------------------------
         ExtracurricularProgram program = programRepository.findById(programId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PROGRAM_NOT_FOUND));
+
+        /**
+         * (a-1) 부서 권한 확인 -----------------------------------------------------------
+         * update()의 (a-1)단계와 동일한 이유로, 지금도 비교과운영부서(D200) 소속인지 검증한다.
+         */
+        if (!isOperatingDepartment(departmentCodeId)) {
+            throw new BusinessException(ErrorCode.DEPARTMENT_FORBIDDEN);
+        }
 
         /**
          * (b) 소유자 확인 ------------------------------------------------------------
@@ -429,29 +518,23 @@ public class ProgramService {
     /**
      * FK 제약 위반 메시지에는 PostgreSQL이 항상 위반된 컬럼명을 "Key (컬럼명)=(값) is not present..." 형식으로 담아준다.
      * 제약 조건 이름(마이그레이션에서 어떻게 명명했는지)에 기대지 않고 컬럼명 문자열만으로 어떤 참조 값이 없는지 구분한다.
+     * (DbConstraintViolationMatcher가 원인 예외 메시지에서 토큰 포함 여부를 안전하게 검사해준다.)
      */
     private BusinessException resolveForeignKeyViolation(DataIntegrityViolationException e) {
-        /**
-         * e.getMostSpecificCause()는 스프링이 감싸놓은 예외 껍데기를 벗기고, 실제로 DB 드라이버가 던진
-         * 가장 안쪽의 원인 예외를 꺼내온다. 그 예외의 메시지 안에 "어떤 컬럼이 문제였는지"가 문자열로 들어있다.
-         * (참고: 이 메시지는 로그로만 쓰이고, 서버가 실제로 클라이언트에게 응답하는 건 아래 고정된 ErrorCode 메시지뿐이다.)
-         */
-        String detail = e.getMostSpecificCause().getMessage();
-
         // 메시지 안에 "operating_unit_code_id"라는 컬럼명이 들어있다면, 존재하지 않는 운영 단위 코드를 참조한 것.
-        if (detail.contains("operating_unit_code_id")) {
+        if (DbConstraintViolationMatcher.contains(e, "operating_unit_code_id")) {
             return new BusinessException(ErrorCode.OPERATING_UNIT_NOT_FOUND);
         }
         // "program_type_code_id"가 들어있다면, 존재하지 않는 프로그램 유형(분류) 코드를 참조한 것.
-        if (detail.contains("program_type_code_id")) {
+        if (DbConstraintViolationMatcher.contains(e, "program_type_code_id")) {
             return new BusinessException(ErrorCode.PROGRAM_CATEGORY_NOT_FOUND);
         }
         // "competency_id"가 들어있다면, 존재하지 않는 핵심역량을 참조한 것.
-        if (detail.contains("competency_id")) {
+        if (DbConstraintViolationMatcher.contains(e, "competency_id")) {
             return new BusinessException(ErrorCode.COMPETENCY_NOT_FOUND);
         }
         // "mileage_policy_id"가 들어있다면, 존재하지 않는 마일리지 정책을 참조한 것.
-        if (detail.contains("mileage_policy_id")) {
+        if (DbConstraintViolationMatcher.contains(e, "mileage_policy_id")) {
             return new BusinessException(ErrorCode.MILEAGE_POLICY_NOT_FOUND);
         }
         // 위 4개 컬럼 중 어디에도 해당하지 않는 예상치 못한 FK 위반이라면, 일반적인 "입력값 오류"로 처리한다.

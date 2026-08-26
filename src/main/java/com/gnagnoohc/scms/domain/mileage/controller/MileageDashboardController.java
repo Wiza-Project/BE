@@ -1,10 +1,13 @@
 package com.gnagnoohc.scms.domain.mileage.controller;
 
 import com.gnagnoohc.scms.domain.mileage.DTO.MileageDashboardResponse;
+import com.gnagnoohc.scms.domain.mileage.DTO.MileageGradeResponse;
 import com.gnagnoohc.scms.domain.mileage.service.MileageDashboardService;
+import com.gnagnoohc.scms.domain.mileage.service.MileageGradeService;
 import com.gnagnoohc.scms.global.common.dto.ApiResponse;
 import com.gnagnoohc.scms.global.security.AuthUser;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -20,6 +23,19 @@ import java.util.List;
 public class MileageDashboardController {
 
     private final MileageDashboardService mileageDashboardService;
+    private final MileageGradeService mileageGradeService;
+
+    /** 학생 본인의 누적 확정 마일리지 기준 현재 등급과 다음 등급을 조회한다. */
+    @PreAuthorize("hasRole('STUDENT')")
+    @GetMapping("/grade")
+    public ApiResponse<MileageGradeResponse> getGrade(
+            @AuthenticationPrincipal AuthUser authUser,
+            @RequestParam Integer academicYear,
+            @RequestParam String semesterCode
+    ) {
+        return ApiResponse.ok(mileageGradeService.getGrade(
+                authUser.getId(), academicYear, semesterCode));
+    }
 
     /** 선택 학기의 점수·정책 진행도·분포·최근 내역을 한 번에 조회한다. */
     @GetMapping("/dashboard")

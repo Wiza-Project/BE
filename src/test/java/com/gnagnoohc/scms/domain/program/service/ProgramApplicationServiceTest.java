@@ -9,12 +9,14 @@ import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplicationSurveyRe
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplyResponseDTO;
 import com.gnagnoohc.scms.domain.program.entity.ExtracurricularProgram;
 import com.gnagnoohc.scms.domain.program.entity.ProgramApplication;
+import com.gnagnoohc.scms.domain.program.event.WaitlistSlotOpenedEvent;
 import com.gnagnoohc.scms.domain.program.repository.ExtracurricularProgramRepository;
 import com.gnagnoohc.scms.domain.program.repository.ProgramApplicationRepository;
 import com.gnagnoohc.scms.domain.program.repository.ProgramAttendanceRepository;
 import com.gnagnoohc.scms.domain.program.repository.ProgramMileageTransactionRepository;
 import com.gnagnoohc.scms.domain.user.entity.AppUser;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;
+import com.gnagnoohc.scms.global.common.notification.NotificationSender;
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
 import org.junit.jupiter.api.Test;
@@ -22,6 +24,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -36,11 +39,16 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -59,6 +67,12 @@ class ProgramApplicationServiceTest {
     @Mock
     ProgramMileageTransactionRepository mileageTransactionRepository;
 
+    @Mock
+    NotificationSender notificationSender;
+
+    @Mock
+    ApplicationEventPublisher eventPublisher;
+
     @InjectMocks
     ProgramApplicationService programApplicationService;
 
@@ -69,8 +83,11 @@ class ProgramApplicationServiceTest {
                 1, now.minusSeconds(3600), now.plusSeconds(3600), 10);
 
         when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
-        when(applicationRepository.countByProgram_ProgramIdAndApplicationStatus(1, "APPLIED")).thenReturn(9L);
-        when(applicationRepository.insertApplication(eq(1), eq(100), eq("APPLIED"), eq(null), any()))
+        when(applicationRepository.findByProgram_ProgramIdAndStudent_UserIdForUpdate(1, 100))
+                .thenReturn(Optional.empty());
+        when(applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(1, List.of("APPLIED", "APPROVED")))
+                .thenReturn(9L);
+        when(applicationRepository.insertApplication(eq(1), eq(100), eq("APPLIED"), eq(null), eq(false), any()))
                 .thenReturn(1);
 
         ProgramApplyResponseDTO response = programApplicationService.apply(1, 100);
@@ -87,9 +104,12 @@ class ProgramApplicationServiceTest {
                 1, now.minusSeconds(3600), now.plusSeconds(3600), 10);
 
         when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
-        when(applicationRepository.countByProgram_ProgramIdAndApplicationStatus(1, "APPLIED")).thenReturn(10L);
+        when(applicationRepository.findByProgram_ProgramIdAndStudent_UserIdForUpdate(1, 100))
+                .thenReturn(Optional.empty());
+        when(applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(1, List.of("APPLIED", "APPROVED")))
+                .thenReturn(10L);
         when(applicationRepository.findMaxWaitlistOrderByProgramId(1)).thenReturn(2);
-        when(applicationRepository.insertApplication(eq(1), eq(100), eq("WAITLISTED"), eq(3), any()))
+        when(applicationRepository.insertApplication(eq(1), eq(100), eq("WAITLISTED"), eq(3), eq(false), any()))
                 .thenReturn(1);
 
         ProgramApplyResponseDTO response = programApplicationService.apply(1, 100);
@@ -134,9 +154,92 @@ class ProgramApplicationServiceTest {
                 1, now.minusSeconds(3600), now.plusSeconds(3600), 10);
 
         when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
-        when(applicationRepository.countByProgram_ProgramIdAndApplicationStatus(1, "APPLIED")).thenReturn(0L);
-        when(applicationRepository.insertApplication(anyInt(), anyInt(), eq("APPLIED"), eq(null), any()))
+        when(applicationRepository.findByProgram_ProgramIdAndStudent_UserIdForUpdate(1, 100))
+                .thenReturn(Optional.empty());
+        when(applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(1, List.of("APPLIED", "APPROVED")))
+                .thenReturn(0L);
+        when(applicationRepository.insertApplication(anyInt(), anyInt(), eq("APPLIED"), eq(null), anyBoolean(), any()))
                 .thenThrow(new DataIntegrityViolationException("duplicate"));
+
+        assertThatThrownBy(() -> programApplicationService.apply(1, 100))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.ALREADY_APPLIED);
+    }
+
+    @Test
+    void apply_whenActiveApplicationExists_throwsAlreadyAppliedWithoutInserting() throws Exception {
+        Instant now = Instant.now();
+        ExtracurricularProgram program = buildProgramFixture(
+                1, now.minusSeconds(3600), now.plusSeconds(3600), 10);
+        ProgramApplication existing = buildApplicationFixture(5, program, "APPLIED", 100);
+
+        when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
+        when(applicationRepository.findByProgram_ProgramIdAndStudent_UserIdForUpdate(1, 100))
+                .thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> programApplicationService.apply(1, 100))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.ALREADY_APPLIED);
+
+        verify(applicationRepository, never()).insertApplication(anyInt(), anyInt(), any(), any(), anyBoolean(), any());
+        verify(applicationRepository, never()).reviveApplication(anyInt(), any(), any(), any());
+    }
+
+    @Test
+    void apply_whenRejectedApplicationExists_throwsAlreadyApplied() throws Exception {
+        Instant now = Instant.now();
+        ExtracurricularProgram program = buildProgramFixture(
+                1, now.minusSeconds(3600), now.plusSeconds(3600), 10);
+        ProgramApplication existing = buildApplicationFixture(5, program, "REJECTED", 100);
+
+        when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
+        when(applicationRepository.findByProgram_ProgramIdAndStudent_UserIdForUpdate(1, 100))
+                .thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> programApplicationService.apply(1, 100))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.ALREADY_APPLIED);
+
+        verify(applicationRepository, never()).reviveApplication(anyInt(), any(), any(), any());
+    }
+
+    @Test
+    void apply_whenCancelledApplicationExists_revivesExistingRow() throws Exception {
+        Instant now = Instant.now();
+        ExtracurricularProgram program = buildProgramFixture(
+                1, now.minusSeconds(3600), now.plusSeconds(3600), 10);
+        ProgramApplication existing = buildApplicationFixture(5, program, "CANCELLED", 100);
+
+        when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
+        when(applicationRepository.findByProgram_ProgramIdAndStudent_UserIdForUpdate(1, 100))
+                .thenReturn(Optional.of(existing));
+        when(applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(1, List.of("APPLIED", "APPROVED")))
+                .thenReturn(0L);
+        when(applicationRepository.reviveApplication(eq(5), eq("APPLIED"), eq(null), any())).thenReturn(1);
+
+        ProgramApplyResponseDTO response = programApplicationService.apply(1, 100);
+
+        assertThat(response.applicationId()).isEqualTo(5);
+        assertThat(response.applicationStatus()).isEqualTo("APPLIED");
+        verify(applicationRepository, never()).insertApplication(anyInt(), anyInt(), any(), any(), anyBoolean(), any());
+    }
+
+    @Test
+    void apply_whenReviveRaceLost_throwsAlreadyApplied() throws Exception {
+        Instant now = Instant.now();
+        ExtracurricularProgram program = buildProgramFixture(
+                1, now.minusSeconds(3600), now.plusSeconds(3600), 10);
+        ProgramApplication existing = buildApplicationFixture(5, program, "CANCELLED", 100);
+
+        when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
+        when(applicationRepository.findByProgram_ProgramIdAndStudent_UserIdForUpdate(1, 100))
+                .thenReturn(Optional.of(existing));
+        when(applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(1, List.of("APPLIED", "APPROVED")))
+                .thenReturn(0L);
+        when(applicationRepository.reviveApplication(eq(5), eq("APPLIED"), eq(null), any())).thenReturn(0);
 
         assertThatThrownBy(() -> programApplicationService.apply(1, 100))
                 .isInstanceOf(BusinessException.class)
@@ -161,7 +264,8 @@ class ProgramApplicationServiceTest {
 
         when(applicationRepository.findByIdForUpdate(5)).thenReturn(Optional.of(application));
         when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
-        when(applicationRepository.countByProgram_ProgramIdAndApplicationStatus(1, "APPROVED")).thenReturn(9L);
+        when(applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(1, List.of("APPLIED", "APPROVED")))
+                .thenReturn(9L);
 
         ProgramApplicationDecisionResponseDTO response = programApplicationService.approve(1, 5, 200);
 
@@ -173,11 +277,12 @@ class ProgramApplicationServiceTest {
     @Test
     void approve_whenCapacityFull_throwsCapacityExceeded() throws Exception {
         ExtracurricularProgram program = buildProgramFixture(1, Instant.now(), Instant.now(), 10);
-        ProgramApplication application = buildApplicationFixture(5, program, "APPLIED");
+        ProgramApplication application = buildApplicationFixture(5, program, "WAITLISTED");
 
         when(applicationRepository.findByIdForUpdate(5)).thenReturn(Optional.of(application));
         when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
-        when(applicationRepository.countByProgram_ProgramIdAndApplicationStatus(1, "APPROVED")).thenReturn(10L);
+        when(applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(1, List.of("APPLIED", "APPROVED")))
+                .thenReturn(10L);
 
         assertThatThrownBy(() -> programApplicationService.approve(1, 5, 200))
                 .isInstanceOf(BusinessException.class)
@@ -186,10 +291,26 @@ class ProgramApplicationServiceTest {
     }
 
     @Test
+    void approve_whenPreviouslyApplied_skipsCapacityCheckEvenIfFull() throws Exception {
+        ExtracurricularProgram program = buildProgramFixture(1, Instant.now(), Instant.now(), 10);
+        ProgramApplication application = buildApplicationFixture(5, program, "APPLIED");
+
+        when(applicationRepository.findByIdForUpdate(5)).thenReturn(Optional.of(application));
+        when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
+
+        ProgramApplicationDecisionResponseDTO response = programApplicationService.approve(1, 5, 200);
+
+        assertThat(response.applicationStatus()).isEqualTo("APPROVED");
+        verify(applicationRepository, never())
+                .countByProgram_ProgramIdAndApplicationStatusIn(anyInt(), any());
+    }
+
+    @Test
     void approve_whenAlreadyProcessed_throwsAlreadyProcessed() throws Exception {
         ExtracurricularProgram program = buildProgramFixture(1, Instant.now(), Instant.now(), 10);
         ProgramApplication application = buildApplicationFixture(5, program, "APPROVED");
 
+        when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
         when(applicationRepository.findByIdForUpdate(5)).thenReturn(Optional.of(application));
 
         assertThatThrownBy(() -> programApplicationService.approve(1, 5, 200))
@@ -203,6 +324,7 @@ class ProgramApplicationServiceTest {
         ExtracurricularProgram program = buildProgramFixture(1, Instant.now(), Instant.now(), 10);
         ProgramApplication application = buildApplicationFixture(5, program, "APPLIED");
 
+        when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
         when(applicationRepository.findByIdForUpdate(5)).thenReturn(Optional.of(application));
 
         ProgramApplicationDecisionResponseDTO response =
@@ -211,10 +333,37 @@ class ProgramApplicationServiceTest {
         assertThat(response.applicationStatus()).isEqualTo("REJECTED");
         assertThat(response.applicationStatusLabel()).isEqualTo("반려");
         assertThat(response.decisionReason()).isEqualTo("정원 외 사유");
+        verify(eventPublisher).publishEvent(any(WaitlistSlotOpenedEvent.class));
     }
 
     @Test
-    void reject_whenApplicationNotFound_throwsApplicationNotFound() {
+    void reject_whenPreviouslyWaitlisted_doesNotPublishEvent() throws Exception {
+        ExtracurricularProgram program = buildProgramFixture(1, Instant.now(), Instant.now(), 10);
+        ProgramApplication application = buildApplicationFixture(5, program, "WAITLISTED");
+
+        when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
+        when(applicationRepository.findByIdForUpdate(5)).thenReturn(Optional.of(application));
+
+        programApplicationService.reject(1, 5, "정원 외 사유", 200);
+
+        verify(eventPublisher, never()).publishEvent(any(WaitlistSlotOpenedEvent.class));
+    }
+
+    @Test
+    void reject_whenProgramNotFound_throwsProgramNotFound() {
+        when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> programApplicationService.reject(1, 5, "사유", 200))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.PROGRAM_NOT_FOUND);
+    }
+
+    @Test
+    void reject_whenApplicationNotFound_throwsApplicationNotFound() throws Exception {
+        ExtracurricularProgram program = buildProgramFixture(1, Instant.now(), Instant.now(), 10);
+
+        when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
         when(applicationRepository.findByIdForUpdate(5)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> programApplicationService.reject(1, 5, "사유", 200))
@@ -223,11 +372,28 @@ class ProgramApplicationServiceTest {
                 .isEqualTo(ErrorCode.APPLICATION_NOT_FOUND);
     }
 
+    /**
+     * programId(999)와 applicationId(5)가 모두 잘못된 요청은, 프로그램 행을 먼저 잠그는 새 순서상
+     * 신청 행을 조회하기도 전에 PROGRAM_NOT_FOUND로 끝난다(이전에는 APPLICATION_NOT_FOUND였음 —
+     * cancel()과 같은 의도된 API 계약 변경).
+     */
+    @Test
+    void reject_whenProgramIdWrong_throwsProgramNotFound() {
+        when(programRepository.findByIdForUpdate(999)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> programApplicationService.reject(999, 5, "사유", 200))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.PROGRAM_NOT_FOUND);
+    }
+
     @Test
     void reject_whenApplicationBelongsToOtherProgram_throwsApplicationNotFound() throws Exception {
-        ExtracurricularProgram program = buildProgramFixture(1, Instant.now(), Instant.now(), 10);
-        ProgramApplication application = buildApplicationFixture(5, program, "APPLIED");
+        ExtracurricularProgram requestedProgram = buildProgramFixture(999, Instant.now(), Instant.now(), 10);
+        ExtracurricularProgram actualProgram = buildProgramFixture(1, Instant.now(), Instant.now(), 10);
+        ProgramApplication application = buildApplicationFixture(5, actualProgram, "APPLIED");
 
+        when(programRepository.findByIdForUpdate(999)).thenReturn(Optional.of(requestedProgram));
         when(applicationRepository.findByIdForUpdate(5)).thenReturn(Optional.of(application));
 
         assertThatThrownBy(() -> programApplicationService.reject(999, 5, "사유", 200))
@@ -243,6 +409,7 @@ class ProgramApplicationServiceTest {
                 1, now.minusSeconds(3600), now.plusSeconds(3600), 10);
         ProgramApplication application = buildApplicationFixture(5, program, "APPLIED", 100);
 
+        when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
         when(applicationRepository.findByIdForUpdate(5)).thenReturn(Optional.of(application));
         when(applicationRepository.updateCancellation(eq(5), eq("일정 변경"), any())).thenReturn(1);
 
@@ -252,6 +419,7 @@ class ProgramApplicationServiceTest {
         assertThat(response.applicationStatus()).isEqualTo("CANCELLED");
         assertThat(response.applicationStatusLabel()).isEqualTo("취소");
         assertThat(response.cancellationReason()).isEqualTo("일정 변경");
+        verify(eventPublisher).publishEvent(any(WaitlistSlotOpenedEvent.class));
     }
 
     @Test
@@ -261,6 +429,7 @@ class ProgramApplicationServiceTest {
                 1, now.minusSeconds(3600), now.plusSeconds(3600), 10);
         ProgramApplication application = buildApplicationFixture(5, program, "APPROVED", 100);
 
+        when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
         when(applicationRepository.findByIdForUpdate(5)).thenReturn(Optional.of(application));
         when(applicationRepository.updateCancellation(eq(5), eq(null), any())).thenReturn(1);
 
@@ -268,6 +437,7 @@ class ProgramApplicationServiceTest {
                 programApplicationService.cancel(1, 5, 100, null);
 
         assertThat(response.applicationStatus()).isEqualTo("CANCELLED");
+        verify(eventPublisher).publishEvent(any(WaitlistSlotOpenedEvent.class));
     }
 
     @Test
@@ -277,6 +447,7 @@ class ProgramApplicationServiceTest {
                 1, now.minusSeconds(7200), now.minusSeconds(3600), 10);
         ProgramApplication application = buildApplicationFixture(5, program, "APPLIED", 100);
 
+        when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
         when(applicationRepository.findByIdForUpdate(5)).thenReturn(Optional.of(application));
 
         assertThatThrownBy(() -> programApplicationService.cancel(1, 5, 100, null))
@@ -290,6 +461,7 @@ class ProgramApplicationServiceTest {
         ExtracurricularProgram program = buildProgramFixture(1, Instant.now(), Instant.now(), 10);
         ProgramApplication application = buildApplicationFixture(5, program, "REJECTED", 100);
 
+        when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
         when(applicationRepository.findByIdForUpdate(5)).thenReturn(Optional.of(application));
 
         assertThatThrownBy(() -> programApplicationService.cancel(1, 5, 100, null))
@@ -299,7 +471,20 @@ class ProgramApplicationServiceTest {
     }
 
     @Test
-    void cancel_whenApplicationNotFound_throwsApplicationNotFound() {
+    void cancel_whenProgramNotFound_throwsProgramNotFound() {
+        when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> programApplicationService.cancel(1, 5, 100, null))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.PROGRAM_NOT_FOUND);
+    }
+
+    @Test
+    void cancel_whenApplicationNotFound_throwsApplicationNotFound() throws Exception {
+        ExtracurricularProgram program = buildProgramFixture(1, Instant.now(), Instant.now(), 10);
+
+        when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
         when(applicationRepository.findByIdForUpdate(5)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> programApplicationService.cancel(1, 5, 100, null))
@@ -308,11 +493,28 @@ class ProgramApplicationServiceTest {
                 .isEqualTo(ErrorCode.APPLICATION_NOT_FOUND);
     }
 
+    /**
+     * programId(999)와 applicationId(5)가 모두 잘못된 요청은, 프로그램 행을 먼저 잠그는 새 순서상
+     * 신청 행을 조회하기도 전에 PROGRAM_NOT_FOUND로 끝난다(이전에는 APPLICATION_NOT_FOUND였음 —
+     * 의도된 API 계약 변경, reject()도 동일).
+     */
+    @Test
+    void cancel_whenProgramIdWrong_throwsProgramNotFound() {
+        when(programRepository.findByIdForUpdate(999)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> programApplicationService.cancel(999, 5, 100, null))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.PROGRAM_NOT_FOUND);
+    }
+
     @Test
     void cancel_whenApplicationBelongsToOtherProgram_throwsApplicationNotFound() throws Exception {
-        ExtracurricularProgram program = buildProgramFixture(1, Instant.now(), Instant.now(), 10);
-        ProgramApplication application = buildApplicationFixture(5, program, "APPLIED", 100);
+        ExtracurricularProgram requestedProgram = buildProgramFixture(999, Instant.now(), Instant.now(), 10);
+        ExtracurricularProgram actualProgram = buildProgramFixture(1, Instant.now(), Instant.now(), 10);
+        ProgramApplication application = buildApplicationFixture(5, actualProgram, "APPLIED", 100);
 
+        when(programRepository.findByIdForUpdate(999)).thenReturn(Optional.of(requestedProgram));
         when(applicationRepository.findByIdForUpdate(5)).thenReturn(Optional.of(application));
 
         assertThatThrownBy(() -> programApplicationService.cancel(999, 5, 100, null))
@@ -326,6 +528,7 @@ class ProgramApplicationServiceTest {
         ExtracurricularProgram program = buildProgramFixture(1, Instant.now(), Instant.now(), 10);
         ProgramApplication application = buildApplicationFixture(5, program, "APPLIED", 100);
 
+        when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
         when(applicationRepository.findByIdForUpdate(5)).thenReturn(Optional.of(application));
 
         assertThatThrownBy(() -> programApplicationService.cancel(1, 5, 999, null))
@@ -341,6 +544,7 @@ class ProgramApplicationServiceTest {
                 1, now.minusSeconds(3600), now.plusSeconds(3600), 10);
         ProgramApplication application = buildApplicationFixture(5, program, "APPLIED", 100);
 
+        when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
         when(applicationRepository.findByIdForUpdate(5)).thenReturn(Optional.of(application));
         when(applicationRepository.updateCancellation(eq(5), eq(null), any())).thenReturn(0);
 
@@ -348,6 +552,87 @@ class ProgramApplicationServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.APPLICATION_NOT_CANCELABLE);
+    }
+
+    /**
+     * notifyNextWaitlistedApplicant는 cancel()의 트랜잭션 커밋 이후(@TransactionalEventListener
+     * AFTER_COMMIT)에 실행되는 리스너라, cancel()을 거치지 않고 이벤트를 직접 넘겨 호출한다.
+     */
+    @Test
+    void notifyNextWaitlistedApplicant_whenSlotsOpen_sendsSlotCountToAllWaitlisted() throws Exception {
+        ExtracurricularProgram program = buildProgramFixture(1, Instant.now(), Instant.now(), 10);
+        ProgramApplication first = buildApplicationFixture(7, program, "WAITLISTED", 200);
+        ProgramApplication second = buildApplicationFixture(8, program, "WAITLISTED", 201);
+
+        when(programRepository.findById(1)).thenReturn(Optional.of(program));
+        when(applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(1, List.of("APPLIED", "APPROVED")))
+                .thenReturn(8L);
+        when(applicationRepository.findAllByProgram_ProgramIdAndApplicationStatusOrderByWaitlistOrderAsc(1, "WAITLISTED"))
+                .thenReturn(List.of(first, second));
+
+        programApplicationService.notifyNextWaitlistedApplicant(
+                new WaitlistSlotOpenedEvent(1, "테스트 프로그램"));
+
+        verify(notificationSender).send(argThat(request ->
+                request.recipientUserId().equals(200)
+                        && request.content().contains("테스트 프로그램")
+                        && request.content().contains("2자리")));
+        verify(notificationSender).send(argThat(request ->
+                request.recipientUserId().equals(201)
+                        && request.content().contains("2자리")));
+    }
+
+    @Test
+    void notifyNextWaitlistedApplicant_whenNoSlotsAvailable_sendsNothing() throws Exception {
+        ExtracurricularProgram program = buildProgramFixture(1, Instant.now(), Instant.now(), 10);
+
+        when(programRepository.findById(1)).thenReturn(Optional.of(program));
+        when(applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(1, List.of("APPLIED", "APPROVED")))
+                .thenReturn(10L);
+
+        programApplicationService.notifyNextWaitlistedApplicant(
+                new WaitlistSlotOpenedEvent(1, "테스트 프로그램"));
+
+        verify(notificationSender, never()).send(any());
+        verify(applicationRepository, never())
+                .findAllByProgram_ProgramIdAndApplicationStatusOrderByWaitlistOrderAsc(any(), any());
+    }
+
+    @Test
+    void notifyNextWaitlistedApplicant_whenNoWaitlistedApplicant_sendsNothing() throws Exception {
+        ExtracurricularProgram program = buildProgramFixture(1, Instant.now(), Instant.now(), 10);
+
+        when(programRepository.findById(1)).thenReturn(Optional.of(program));
+        when(applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(1, List.of("APPLIED", "APPROVED")))
+                .thenReturn(8L);
+        when(applicationRepository.findAllByProgram_ProgramIdAndApplicationStatusOrderByWaitlistOrderAsc(1, "WAITLISTED"))
+                .thenReturn(List.of());
+
+        programApplicationService.notifyNextWaitlistedApplicant(
+                new WaitlistSlotOpenedEvent(1, "테스트 프로그램"));
+
+        verify(notificationSender, never()).send(any());
+    }
+
+    @Test
+    void notifyNextWaitlistedApplicant_whenSendFailsForOne_swallowsExceptionAndNotifiesRest() throws Exception {
+        ExtracurricularProgram program = buildProgramFixture(1, Instant.now(), Instant.now(), 10);
+        ProgramApplication first = buildApplicationFixture(7, program, "WAITLISTED", 200);
+        ProgramApplication second = buildApplicationFixture(8, program, "WAITLISTED", 201);
+
+        when(programRepository.findById(1)).thenReturn(Optional.of(program));
+        when(applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(1, List.of("APPLIED", "APPROVED")))
+                .thenReturn(9L);
+        when(applicationRepository.findAllByProgram_ProgramIdAndApplicationStatusOrderByWaitlistOrderAsc(1, "WAITLISTED"))
+                .thenReturn(List.of(first, second));
+        doThrow(new RuntimeException("발송 실패"))
+                .when(notificationSender).send(argThat(request -> request.recipientUserId().equals(200)));
+
+        assertThatCode(() -> programApplicationService.notifyNextWaitlistedApplicant(
+                new WaitlistSlotOpenedEvent(1, "테스트 프로그램")))
+                .doesNotThrowAnyException();
+
+        verify(notificationSender).send(argThat(request -> request.recipientUserId().equals(201)));
     }
 
     @Test
@@ -488,13 +773,13 @@ class ProgramApplicationServiceTest {
     void bulkApprove_whenOneExceedsCapacity_returnsPartialSuccess() throws Exception {
         ExtracurricularProgram program = buildProgramFixture(1, Instant.now(), Instant.now(), 10);
         ProgramApplication succeeding = buildApplicationFixture(5, program, "WAITLISTED");
-        ProgramApplication failing = buildApplicationFixture(6, program, "APPLIED");
+        ProgramApplication failing = buildApplicationFixture(6, program, "WAITLISTED");
 
         when(applicationRepository.findByIdForUpdate(5)).thenReturn(Optional.of(succeeding));
         when(applicationRepository.findByIdForUpdate(6)).thenReturn(Optional.of(failing));
         when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
         // 첫 번째 건을 승인하는 순간 정원이 다 찼다고 가정 — 두 번째 건은 승인 시도 시 정원초과로 실패해야 한다.
-        when(applicationRepository.countByProgram_ProgramIdAndApplicationStatus(1, "APPROVED"))
+        when(applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(1, List.of("APPLIED", "APPROVED")))
                 .thenReturn(9L, 10L);
 
         ProgramApplicationBulkDecisionResponseDTO response =
@@ -513,6 +798,7 @@ class ProgramApplicationServiceTest {
         ProgramApplication first = buildApplicationFixture(5, program, "APPLIED");
         ProgramApplication second = buildApplicationFixture(6, program, "APPLIED");
 
+        when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
         when(applicationRepository.findByIdForUpdate(5)).thenReturn(Optional.of(first));
         when(applicationRepository.findByIdForUpdate(6)).thenReturn(Optional.of(second));
 
@@ -573,11 +859,11 @@ class ProgramApplicationServiceTest {
 
         Pageable pageable = PageRequest.of(0, 20);
         when(programRepository.existsById(1)).thenReturn(true);
-        when(applicationRepository.findAllByProgramIdAndStatus(1, null, pageable))
+        when(applicationRepository.findAllByProgramIdAndStatus(1, null, null, pageable))
                 .thenReturn(new PageImpl<>(List.of(application), pageable, 1));
 
         PageResponse<ProgramApplicationAdminListItemResponseDTO> response =
-                programApplicationService.listByProgram(1, null, pageable);
+                programApplicationService.listByProgram(1, null, null, pageable);
 
         assertThat(response.content()).hasSize(1);
         assertThat(response.content().get(0).studentName()).isEqualTo("홍길동");
@@ -585,10 +871,56 @@ class ProgramApplicationServiceTest {
     }
 
     @Test
+    void listByProgram_whenKeywordBlank_searchesWithoutKeyword() throws Exception {
+        ExtracurricularProgram program = buildProgramFixture(1, Instant.now(), Instant.now(), 10);
+        ProgramApplication application = buildApplicationFixture(5, program, "APPLIED", 100);
+        ReflectionTestUtils.setField(application.getStudent(), "userName", "홍길동");
+        ReflectionTestUtils.setField(application.getStudent(), "universityNo", "2021000123");
+
+        Pageable pageable = PageRequest.of(0, 20);
+        when(programRepository.existsById(1)).thenReturn(true);
+        when(applicationRepository.findAllByProgramIdAndStatus(1, null, null, pageable))
+                .thenReturn(new PageImpl<>(List.of(application), pageable, 1));
+
+        PageResponse<ProgramApplicationAdminListItemResponseDTO> response =
+                programApplicationService.listByProgram(1, null, "  ", pageable);
+
+        assertThat(response.content()).hasSize(1);
+    }
+
+    @Test
+    void listByProgram_whenKeywordGiven_passesTrimmedKeywordToRepository() throws Exception {
+        Pageable pageable = PageRequest.of(0, 20);
+        when(programRepository.existsById(1)).thenReturn(true);
+        when(applicationRepository.findAllByProgramIdAndStatus(1, null, "홍길동", pageable))
+                .thenReturn(new PageImpl<>(List.of(), pageable, 0));
+
+        PageResponse<ProgramApplicationAdminListItemResponseDTO> response =
+                programApplicationService.listByProgram(1, null, "  홍길동  ", pageable);
+
+        assertThat(response.content()).isEmpty();
+        verify(applicationRepository).findAllByProgramIdAndStatus(1, null, "홍길동", pageable);
+    }
+
+    @Test
+    void listByProgram_whenKeywordContainsLikeWildcards_escapesBeforePassingToRepository() throws Exception {
+        Pageable pageable = PageRequest.of(0, 20);
+        when(programRepository.existsById(1)).thenReturn(true);
+        when(applicationRepository.findAllByProgramIdAndStatus(1, null, "100!%!_!!off", pageable))
+                .thenReturn(new PageImpl<>(List.of(), pageable, 0));
+
+        PageResponse<ProgramApplicationAdminListItemResponseDTO> response =
+                programApplicationService.listByProgram(1, null, "100%_!off", pageable);
+
+        assertThat(response.content()).isEmpty();
+        verify(applicationRepository).findAllByProgramIdAndStatus(1, null, "100!%!_!!off", pageable);
+    }
+
+    @Test
     void listByProgram_whenProgramNotFound_throwsProgramNotFound() {
         when(programRepository.existsById(1)).thenReturn(false);
 
-        assertThatThrownBy(() -> programApplicationService.listByProgram(1, null, PageRequest.of(0, 20)))
+        assertThatThrownBy(() -> programApplicationService.listByProgram(1, null, null, PageRequest.of(0, 20)))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.PROGRAM_NOT_FOUND);

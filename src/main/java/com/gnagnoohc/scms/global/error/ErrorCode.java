@@ -26,6 +26,9 @@ public enum ErrorCode {
     RESOURCE_NOT_FOUND(HttpStatus.NOT_FOUND, "C002", "요청한 데이터를 찾을 수 없습니다."),
     METHOD_NOT_ALLOWED(HttpStatus.METHOD_NOT_ALLOWED, "C003", "허용되지 않은 요청 방식입니다."),
     FILE_UPLOAD_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "C004", "파일 업로드에 실패했습니다."),
+    INVALID_FILE_TYPE(HttpStatus.BAD_REQUEST, "C005", "허용되지 않은 파일 형식입니다."),
+    FILE_SIZE_EXCEEDED(HttpStatus.BAD_REQUEST, "C006", "파일 용량이 허용치를 초과했습니다."),
+    INVALID_FILE_NAME(HttpStatus.BAD_REQUEST, "C007", "파일명이 올바르지 않습니다."),
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "C999", "서버 오류가 발생했습니다."),
 
     // ── 인증/인가 ─────────────────────────────────────────────────
@@ -43,6 +46,14 @@ public enum ErrorCode {
     ACCOUNT_DORMANT(HttpStatus.FORBIDDEN, "U004", "장기간 로그인 이력이 없어 휴면 계정으로 전환되었습니다. 본인확인 후 휴면 해제가 필요합니다."),
     ACCOUNT_LOCKED(HttpStatus.FORBIDDEN, "U005", "잠금 처리된 계정입니다. 관리자에게 문의하세요."),
     ACCOUNT_WITHDRAWN(HttpStatus.FORBIDDEN, "U006", "탈퇴 처리된 계정입니다."),
+
+    // ── 동의(공통 모듈) ───────────────────────────────────────────
+    USER_CONSENT_NOT_FOUND(HttpStatus.NOT_FOUND, "U007", "동의 이력을 찾을 수 없습니다."),
+    CONSENT_ALREADY_WITHDRAWN(HttpStatus.CONFLICT, "U008", "이미 철회된 동의입니다."),
+    REQUIRED_CONSENT_NOT_AGREED(HttpStatus.FORBIDDEN, "U009", "필수 동의 항목에 동의해야 이용할 수 있는 기능입니다."),
+    CONSENT_VERSION_OUTDATED(HttpStatus.CONFLICT, "U010", "약관 또는 개인정보 처리방침이 개정되어 재동의가 필요합니다."),
+    INVALID_CONSENT_POLICY(HttpStatus.BAD_REQUEST, "U011", "만료되었거나 비활성화된 동의 정책입니다."),
+    CONSENT_SAVE_CONFLICT(HttpStatus.CONFLICT, "U012", "동의 처리가 동시에 요청되어 실패했습니다. 다시 시도해주세요."),
 
     // ── 비교과프로그램 ────────────────────────────────────────────
     PROGRAM_NOT_FOUND(HttpStatus.NOT_FOUND, "P001", "비교과 프로그램을 찾을 수 없습니다."),
@@ -90,17 +101,39 @@ public enum ErrorCode {
     ASSESSMENT_ROUND_NOT_EDITABLE(HttpStatus.BAD_REQUEST, "Q012", "이미 응시가 시작된 회차는 수정할 수 없습니다."),
     // 진단 동의 화면에서 사용할 유효한 ConsentPolicy(module_code=ASSESSMENT)가 시딩되지 않았을 때 사용하는 에러코드.
     CONSENT_POLICY_NOT_FOUND(HttpStatus.INTERNAL_SERVER_ERROR, "Q013", "진단 동의 정책을 찾을 수 없습니다."),
+    // 존재하지 않거나 본인(로그인한 학생) 소유가 아닌 attempt에 접근하려고 할 때 사용하는 에러코드(소유권 비노출을 위해 둘을 구분하지 않음).
+    ASSESSMENT_ATTEMPT_NOT_FOUND(HttpStatus.NOT_FOUND, "Q014", "응시 정보를 찾을 수 없습니다."),
+    // 해당 회차의 문항 구성에 포함되지 않은 questionId로 응답을 저장하려고 할 때 사용하는 에러코드.
+    QUESTION_NOT_IN_ROUND(HttpStatus.BAD_REQUEST, "Q015", "해당 회차에 속하지 않은 문항입니다."),
+    // 문항의 response_options에 정의되지 않은 값으로 응답을 저장하려고 할 때 사용하는 에러코드.
+    INVALID_RESPONSE_VALUE(HttpStatus.BAD_REQUEST, "Q016", "허용되지 않은 응답값입니다."),
+    // 같은 문항에 대한 최초 응답 저장이 동시에 들어와 유니크 제약(uq_assessment_response_attempt_question)에
+    // 걸렸을 때 사용하는 에러코드. 먼저 간 요청은 이미 저장 성공했으므로 클라이언트는 같은 요청을 재시도하면 된다.
+    RESPONSE_SAVE_CONFLICT(HttpStatus.CONFLICT, "Q017", "저장이 동시에 처리되어 실패했습니다. 다시 시도해주세요."),
+    // 아직 제출·채점되지 않은 attempt(assessment_score 미생성)로 결과 조회를 시도할 때 사용하는 에러코드.
+    RESULT_NOT_AVAILABLE(HttpStatus.BAD_REQUEST, "Q018", "아직 채점되지 않은 진단입니다."),
+    // target_condition에 grades/majorCodeIds 외의 키가 있을 때 사용. 조용히 무시하면 대상자 집계가 잘못된다.
+    ASSESSMENT_TARGET_CONDITION_UNSUPPORTED(HttpStatus.BAD_REQUEST, "Q019", "지원하지 않는 응시 대상 조건입니다."),
+    // grades/majorCodeIds 값이 배열이 아니거나 원소가 정수가 아닐 때 사용. Q019(인식 못 하는 키)와 달리 키는 맞음.
+    ASSESSMENT_TARGET_CONDITION_INVALID_FORMAT(HttpStatus.BAD_REQUEST, "Q020", "저장된 응시 대상 조건의 형식이 올바르지 않습니다. 회차 등록/수정 화면에서 대상 조건을 다시 확인해주세요."),
+
     // ── 상담 ──────────────────────────────────────────────────────
     COUNSELOR_NOT_FOUND(HttpStatus.NOT_FOUND, "S001", "상담사를 찾을 수 없습니다."),
     SCHEDULE_NOT_AVAILABLE(HttpStatus.CONFLICT, "S002", "이미 예약된 시간입니다."),
     RESERVATION_NOT_FOUND(HttpStatus.NOT_FOUND, "S003", "상담 예약을 찾을 수 없습니다."),
     CANNOT_CANCEL_CONFIRMED(HttpStatus.BAD_REQUEST, "S004", "확정된 상담은 취소할 수 없습니다."),
+    ALREADY_PROCESSED_RESERVATION(HttpStatus.CONFLICT, "S005", "이미 처리된 상담 예약입니다."),
 
     // ── 마일리지 ──────────────────────────────────────────────────
     MILEAGE_ITEM_NOT_FOUND(HttpStatus.NOT_FOUND, "M001", "마일리지 항목을 찾을 수 없습니다."),
     MILEAGE_ALREADY_CLAIMED(HttpStatus.CONFLICT, "M002", "이미 실적을 신청한 항목입니다."),
     INSUFFICIENT_MILEAGE(HttpStatus.BAD_REQUEST, "M003", "장학금 지급 기준 점수에 미달합니다."),
     MILEAGE_POLICY_NOT_FOUND(HttpStatus.NOT_FOUND, "M004", "마일리지 정책을 찾을 수 없습니다."),
+    // 같은 활동유형+학년도+학기+버전 조합으로 이미 정책이 존재할 때 사용하는 에러코드(uq_mileage_policy_activity_period_version).
+    MILEAGE_POLICY_DUPLICATE(HttpStatus.CONFLICT, "M005", "이미 동일한 조건의 마일리지 정책이 존재합니다."),
+    MILEAGE_POLICY_INVALID_PERIOD(HttpStatus.BAD_REQUEST, "M006", "적용 시작일은 종료일보다 빨라야 합니다."),
+    MILEAGE_ACTIVITY_TYPE_NOT_FOUND(HttpStatus.NOT_FOUND, "M007", "마일리지 활동 유형을 찾을 수 없습니다."),
+    MILEAGE_POLICY_VALID_TO_CONFLICT(HttpStatus.BAD_REQUEST, "M008", "validTo와 clearValidTo를 동시에 지정할 수 없습니다."),
 
     // ── 취창업 ────────────────────────────────────────────────────
     JOB_POSTING_NOT_FOUND(HttpStatus.NOT_FOUND, "J001", "구인공고를 찾을 수 없습니다."),
@@ -115,6 +148,11 @@ public enum ErrorCode {
     APPLICATION_PERIOD_EXPIRED(HttpStatus.BAD_REQUEST, "J010", "접수 마감 기간이 경과하여 지원 또는 취소할 수 없습니다."),
     JOB_POSTING_ALREADY_APPLIED(HttpStatus.CONFLICT, "J011", "이미 해당 채용공고에 지원 완료된 상태입니다."),
     JOB_POSTING_APPLICATION_NOT_FOUND(HttpStatus.NOT_FOUND, "J012", "채용 지원 이력을 찾을 수 없거나 이미 취소된 상태입니다."),
+    DUPLICATE_COMPANY_ACCOUNT_NO(HttpStatus.CONFLICT, "J013", "이미 등록된 사업자등록번호입니다."),
+    COVER_LETTER_NOT_FOUND(HttpStatus.NOT_FOUND, "J014", "자기소개서를 찾을 수 없습니다."),
+    COVER_LETTER_ALREADY_EXISTS(HttpStatus.CONFLICT, "J015", "이미 작성된 자기소개서가 있습니다. 버전 관리 기능을 이용해주세요."),
+    // 자기소개서/포트폴리오 버전 번호 채번이 동시 요청으로 유니크 제약(uq_career_document_student_type_version)에 걸렸을 때 사용하는 에러코드.
+    DOCUMENT_VERSION_CONFLICT(HttpStatus.CONFLICT, "J016", "저장이 동시에 처리되어 실패했습니다. 다시 시도해주세요."),
 
     // ── 알림 ──────────────────────────────────────────────────────
     NOTIFICATION_NOT_FOUND(HttpStatus.NOT_FOUND, "N001", "알림을 찾을 수 없습니다.");

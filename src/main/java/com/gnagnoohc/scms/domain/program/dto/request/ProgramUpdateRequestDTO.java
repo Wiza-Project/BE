@@ -18,16 +18,15 @@ import java.time.Instant;
  * PUT 방식이라 등록(register) 때처럼 전체 필드를 한 번에 다시 받는다(일부 필드만 보내는 PATCH 방식이 아님).
  *
  * 아래 필드에는 일부러 넣지 않은 값들이 있다.
- *   - programId(수정 대상 PK)  : 요청 바디가 아니라 URL 경로(/programs/{programId})로 받는다.
- *   - managerUserId(등록자)    : 이 API로 등록자(소유권)를 바꿀 수 없게 하기 위해 아예 요청 항목에서 뺐다.
- *   - programStatus            : 상태값은 별도의 "상태 변경" 기능에서 다루도록 하고, 이 수정 API에서는 손대지 않는다.
+ *   - programId(수정 대상 PK)      : 요청 바디가 아니라 URL 경로(/programs/{programId})로 받는다.
+ *   - managerUserId(등록자)        : 이 API로 등록자(소유권)를 바꿀 수 없게 하기 위해 아예 요청 항목에서 뺐다.
+ *   - operatingUnitCodeId(운영단위) : 이 API로는 운영단위를 바꿀 수 없게 하기 위해 아예 요청 항목에서 뺐다.
+ *                                    서비스는 항상 프로그램에 이미 저장된 값을 그대로 유지한다.
+ *   - programStatus                : 상태값은 별도의 "상태 변경" 기능에서 다루도록 하고, 이 수정 API에서는 손대지 않는다.
  */
 public record ProgramUpdateRequestDTO(
         // 첨부파일 그룹 id. 파일이 없을 수도 있으므로 @NotNull을 붙이지 않았다(선택값).
         Integer fileGroupId,
-
-        // 운영 단위 코드 id. 반드시 있어야 하는 값이라 @NotNull로 "값이 비어있으면 안 된다"고 검증한다.
-        @NotNull Integer operatingUnitCodeId,
 
         // 프로그램 유형(분류) 코드 id. 마찬가지로 필수값.
         @NotNull Integer programTypeCodeId,

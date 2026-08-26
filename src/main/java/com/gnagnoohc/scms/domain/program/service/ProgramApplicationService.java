@@ -9,36 +9,51 @@ import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplicationSurveyRe
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplyResponseDTO;
 import com.gnagnoohc.scms.domain.program.entity.ExtracurricularProgram;
 import com.gnagnoohc.scms.domain.program.entity.ProgramApplication;
+import com.gnagnoohc.scms.domain.program.event.WaitlistSlotOpenedEvent;
 import com.gnagnoohc.scms.domain.program.repository.ExtracurricularProgramRepository;
 import com.gnagnoohc.scms.domain.program.repository.ProgramApplicationRepository;
 import com.gnagnoohc.scms.domain.program.repository.ProgramAttendanceRepository;
 import com.gnagnoohc.scms.domain.program.repository.ProgramMileageTransactionRepository;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;
+import com.gnagnoohc.scms.global.common.notification.ModuleCode;
+import com.gnagnoohc.scms.global.common.notification.NotificationRequest;
+import com.gnagnoohc.scms.global.common.notification.NotificationSender;
+import com.gnagnoohc.scms.global.common.notification.NotificationType;
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
+import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 @Transactional
+@Slf4j
 public class ProgramApplicationService {
 
     private final ExtracurricularProgramRepository programRepository;
     private final ProgramApplicationRepository applicationRepository;
     private final ProgramAttendanceRepository attendanceRepository;
     private final ProgramMileageTransactionRepository mileageTransactionRepository;
+    private final NotificationSender notificationSender;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * 학생의 프로그램 참여 신청을 접수한다. 매개변수 2개의 의미:
@@ -66,16 +81,33 @@ public class ProgramApplicationService {
         }
 
         /**
-         * (c) 정원 확인 및 상태 결정 ----------------------------------------------------
-         * 정원 내 신청("APPLIED") 건수가 아직 정원(capacity)보다 적으면 정원 내 신청으로,
-         * 그렇지 않으면 대기 신청("WAITLISTED")으로 접수하고 다음 대기순번을 매긴다.
+         * (c) 기존 신청 이력 확인 --------------------------------------------------------
+         * program_id+student_id 조합은 uq_program_application_program_student 유니크 제약이 걸려있어
+         * 이 학생의 이 프로그램에 대한 신청 건은 항상 0건 또는 1건이다. 기존 건이 있는데 그 상태가
+         * CANCELLED(학생이 스스로 취소)가 아니면, 즉 APPLIED/WAITLISTED/APPROVED(진행 중)거나
+         * REJECTED(운영부서가 반려, 재신청 불가 정책)이면 재신청을 허용하지 않는다.
+         * CANCELLED인 경우에만 아래 (e)에서 기존 row를 새 신청으로 되살린다(INSERT 대신 UPDATE).
          */
-        long appliedCount = applicationRepository.countByProgram_ProgramIdAndApplicationStatus(
-                programId, ApplicationStatus.APPLIED.name());
+        Optional<ProgramApplication> existing =
+                applicationRepository.findByProgram_ProgramIdAndStudent_UserIdForUpdate(programId, studentId);
+        if (existing.isPresent() && !ApplicationStatus.CANCELLED.name().equals(existing.get().getApplicationStatus())) {
+            throw new BusinessException(ErrorCode.ALREADY_APPLIED);
+        }
+
+        /**
+         * (d) 정원 확인 및 상태 결정 ----------------------------------------------------
+         * 정원을 차지하는 상태는 APPLIED와 APPROVED 둘 다이므로(APPLIED가 승인되어도 슬롯은 그대로
+         * 점유된 채 유지됨), 둘을 합산한 건수가 아직 정원(capacity)보다 적으면 정원 내 신청으로,
+         * 그렇지 않으면 대기 신청("WAITLISTED")으로 접수하고 다음 대기순번을 매긴다.
+         * APPLIED만 세면, APPLIED 전원이 APPROVED로 전환된 직후 그 자리가 빈 것처럼 보여 새 신청자를
+         * 다시 APPLIED로 받아들여 정원을 초과시키는 버그가 있었다.
+         */
+        long occupiedCount = applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(
+                programId, List.of(ApplicationStatus.APPLIED.name(), ApplicationStatus.APPROVED.name()));
 
         ApplicationStatus status;
         Integer waitlistOrder;
-        if (appliedCount < program.getCapacity()) {
+        if (occupiedCount < program.getCapacity()) {
             status = ApplicationStatus.APPLIED;
             waitlistOrder = null;
         } else {
@@ -83,14 +115,25 @@ public class ProgramApplicationService {
             waitlistOrder = applicationRepository.findMaxWaitlistOrderByProgramId(programId) + 1;
         }
 
-        // (d) 실제 DB 반영 -------------------------------------------------------------
+        // (e) 실제 DB 반영 -------------------------------------------------------------
         Integer applicationId;
-        try {
-            applicationId = applicationRepository.insertApplication(
-                    programId, studentId, status.name(), waitlistOrder, now);
-        } catch (DataIntegrityViolationException e) {
-            // uq_program_application_program_student 유니크 제약 위반 = 이미 신청한 프로그램.
-            throw new BusinessException(ErrorCode.ALREADY_APPLIED);
+        if (existing.isPresent()) {
+            // 취소됐던 기존 row를 새 신청으로 되살린다. WHERE 절이 여전히 CANCELLED인지 재확인하므로,
+            // 0건이면 그 사이 다른 요청이 먼저 처리한 것이니 "이미 신청됨"으로 처리한다.
+            int updatedRows = applicationRepository.reviveApplication(
+                    existing.get().getApplicationId(), status.name(), waitlistOrder, now);
+            if (updatedRows == 0) {
+                throw new BusinessException(ErrorCode.ALREADY_APPLIED);
+            }
+            applicationId = existing.get().getApplicationId();
+        } else {
+            try {
+                applicationId = applicationRepository.insertApplication(
+                        programId, studentId, status.name(), waitlistOrder, false, now);
+            } catch (DataIntegrityViolationException e) {
+                // uq_program_application_program_student 유니크 제약 위반 = 이미 신청한 프로그램(동시 요청 경쟁).
+                throw new BusinessException(ErrorCode.ALREADY_APPLIED);
+            }
         }
 
         return new ProgramApplyResponseDTO(
@@ -102,28 +145,60 @@ public class ProgramApplicationService {
      * 신청 시점에 대기(WAITLISTED)로 분류됐던 건이라도, 다른 신청이 반려되어 자리가 나면 승인할 수 있다.
      */
     public ProgramApplicationDecisionResponseDTO approve(Integer programId, Integer applicationId, Integer staffId) {
-        ProgramApplication application = findApplicationForUpdate(programId, applicationId);
-
         /**
          * 프로그램 row에 락을 걸어, "현재 승인 건수 확인"과 "실제 승인 반영" 사이에
          * 다른 승인 요청이 끼어들어 정원을 초과하는 경쟁 조건을 막는다 (apply()와 동일한 이유).
+         * apply()가 프로그램 행 → 신청 행 순서로 잠그는 것과 반드시 같은 순서로 잠가야 한다 —
+         * 순서가 반대이면 동시에 실행되는 apply()와 approve()가 서로의 락을 기다리며 DB 데드락이 날 수 있다.
          */
         ExtracurricularProgram program = programRepository.findByIdForUpdate(programId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PROGRAM_NOT_FOUND));
 
-        long approvedCount = applicationRepository.countByProgram_ProgramIdAndApplicationStatus(
-                programId, ApplicationStatus.APPROVED.name());
-        if (approvedCount >= program.getCapacity()) {
-            throw new BusinessException(ErrorCode.PROGRAM_CAPACITY_EXCEEDED);
+        ProgramApplication application = findApplicationForUpdate(programId, applicationId);
+
+        /**
+         * APPLIED → APPROVED는 이미 점유하고 있던 슬롯을 유지하는 전이일 뿐이라 정원을 새로 차지하지
+         * 않으므로 재검사하지 않는다(재검사하면 이미 정원 내로 받아둔 신청조차 승인하지 못하는 버그가
+         * 된다). WAITLISTED → APPROVED만 새 슬롯을 점유하므로 그 경우에만, APPLIED와 APPROVED를
+         * 합산한 점유 건수로 정원을 검사한다(apply()와 동일한 집계 기준).
+         */
+        if (ApplicationStatus.WAITLISTED.name().equals(application.getApplicationStatus())) {
+            long occupiedCount = applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(
+                    programId, List.of(ApplicationStatus.APPLIED.name(), ApplicationStatus.APPROVED.name()));
+            if (occupiedCount >= program.getCapacity()) {
+                throw new BusinessException(ErrorCode.PROGRAM_CAPACITY_EXCEEDED);
+            }
         }
 
         return applyDecision(application, ApplicationStatus.APPROVED, null, staffId);
     }
 
-    // 운영부서가 신청 건을 반려한다. 반려 사유(reason)는 컨트롤러 단 @NotBlank 검증으로 항상 채워져 있다.
+    /**
+     * 운영부서가 신청 건을 반려한다. 반려 사유(reason)는 컨트롤러 단 @NotBlank 검증으로 항상 채워져 있다.
+     * approve()와 동일한 이유로 프로그램 행을 신청 행보다 먼저 잠근다 — apply()가 정원을 확인하는 사이
+     * reject()가 프로그램 행 락 없이 자리를 비우면, apply()가 그 빈 자리를 보지 못하고 대기자로
+     * 잘못 접수하는 경쟁 조건이 있었다.
+     */
     public ProgramApplicationDecisionResponseDTO reject(Integer programId, Integer applicationId, String reason, Integer staffId) {
+        programRepository.findByIdForUpdate(programId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PROGRAM_NOT_FOUND));
+
         ProgramApplication application = findApplicationForUpdate(programId, applicationId);
-        return applyDecision(application, ApplicationStatus.REJECTED, reason, staffId);
+        String previousStatus = application.getApplicationStatus();
+
+        ProgramApplicationDecisionResponseDTO response =
+                applyDecision(application, ApplicationStatus.REJECTED, reason, staffId);
+
+        /**
+         * APPLIED였던 건의 반려는 정원 슬롯을 하나 비운다(cancel()의 (g)단계와 같은 기준).
+         * WAITLISTED였던 건은 애초에 정원 밖이었으므로 반려돼도 새로 열리는 자리가 없어 발행하지 않는다.
+         */
+        if (ApplicationStatus.APPLIED.name().equals(previousStatus)) {
+            eventPublisher.publishEvent(
+                    new WaitlistSlotOpenedEvent(programId, application.getProgram().getProgramName()));
+        }
+
+        return response;
     }
 
     /**
@@ -164,12 +239,22 @@ public class ProgramApplicationService {
      */
     public ProgramApplicationCancelResponseDTO cancel(Integer programId, Integer applicationId, Integer studentId, String reason) {
 
-        // (a) 존재 확인 + 락 --------------------------------------------------------
+        /**
+         * (a) 프로그램 행 락 -----------------------------------------------------------
+         * apply()/approve()/reject()와 같은 이유로, 신청 행보다 프로그램 행을 먼저 잠가서 apply()의
+         * 정원 확인과 이 취소 사이의 경쟁 조건을 막는다. 이 때문에 programId와 applicationId가
+         * 모두 잘못된 요청은 (이전처럼 APPLICATION_NOT_FOUND가 아니라) PROGRAM_NOT_FOUND가 된다 —
+         * 프로그램 행 락이 신청 행 조회보다 먼저 실행되므로 의도된 API 계약 변경이다.
+         */
+        programRepository.findByIdForUpdate(programId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PROGRAM_NOT_FOUND));
+
+        // (b) 존재 확인 + 락 --------------------------------------------------------
         ProgramApplication application = applicationRepository.findByIdForUpdate(applicationId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.APPLICATION_NOT_FOUND));
 
         /**
-         * (b) 요청 경로의 programId, 로그인한 학생 본인 소유가 맞는지 확인 -----------------------
+         * (c) 요청 경로의 programId, 로그인한 학생 본인 소유가 맞는지 확인 -----------------------
          * 존재 여부를 굳이 구분해서 노출하지 않기 위해, 승인/반려의 programId 불일치 처리와 같은 방식으로
          * 두 경우 모두 APPLICATION_NOT_FOUND를 던진다.
          */
@@ -181,7 +266,7 @@ public class ProgramApplicationService {
         }
 
         /**
-         * (c) 이미 반려/취소된 건이 아닌지 확인 --------------------------------------------
+         * (d) 이미 반려/취소된 건이 아닌지 확인 --------------------------------------------
          * 취소는 APPLIED/WAITLISTED/APPROVED 상태에서만 가능하다 (REJECTED/CANCELLED는 이미 종결된 상태).
          */
         String currentStatus = application.getApplicationStatus();
@@ -192,7 +277,7 @@ public class ProgramApplicationService {
         }
 
         /**
-         * (d) 모집 기간이 끝나지 않았는지 확인 ------------------------------------------------
+         * (e) 모집 기간이 끝나지 않았는지 확인 ------------------------------------------------
          * apply()와 같은 이유로, programStatus 컬럼을 믿지 않고 지금 시각을 모집 종료 시각과 직접 비교한다.
          */
         Instant now = Instant.now();
@@ -201,14 +286,25 @@ public class ProgramApplicationService {
         }
 
         /**
-         * (e) 실제 DB 반영 -------------------------------------------------------------
-         * updateCancellation의 WHERE 절에도 (c)/(d)와 같은 조건이 걸려있어, 이 확인과 실제 UPDATE 사이의
+         * (f) 실제 DB 반영 -------------------------------------------------------------
+         * updateCancellation의 WHERE 절에도 (d)/(e)와 같은 조건이 걸려있어, 이 확인과 실제 UPDATE 사이의
          * 경쟁 조건으로 0개의 row만 바뀌었다면 역시 "지금은 취소할 수 없는 상태였다"는 뜻이다
          * (ProgramService.delete의 deletedRows == 0 처리와 동일한 이유).
          */
         int updatedRows = applicationRepository.updateCancellation(applicationId, reason, now);
         if (updatedRows == 0) {
             throw new BusinessException(ErrorCode.APPLICATION_NOT_CANCELABLE);
+        }
+
+        /**
+         * (g) 정원 슬롯이 실제로 비었다면 대기 1순위에게 알림 ------------------------------------
+         * WAITLISTED는 애초에 정원 외였으므로, 그 상태였던 신청이 취소된 경우는 자리 발생이 아니다.
+         * APPLIED/APPROVED만 정원을 차지하던 상태이므로 그 경우에만 대기자에게 알린다.
+         */
+        if (ApplicationStatus.APPLIED.name().equals(currentStatus)
+                || ApplicationStatus.APPROVED.name().equals(currentStatus)) {
+            eventPublisher.publishEvent(
+                    new WaitlistSlotOpenedEvent(programId, application.getProgram().getProgramName()));
         }
 
         return new ProgramApplicationCancelResponseDTO(
@@ -267,16 +363,27 @@ public class ProgramApplicationService {
      * 운영부서가 신청관리/이수판정 화면에서, 프로그램 하나의 전체 신청자를 조회한다(누가 신청했는지 이름/학번까지 필요하다는
      * 점이 listMyApplications와 다르다). 지금까지는 이 목록 자체를 내려주는 API가 없어서 스태프 화면에서 신청자 정보를
      * 아예 보여줄 수 없었다 — 승인/반려/일괄승인/일괄반려는 applicationId를 미리 알아야 호출할 수 있는데, 그 id 자체를
-     * 조회할 방법이 없었기 때문이다.
+     * 조회할 방법이 없었기 때문이다. keyword는 학생 이름/학번을 대상으로 부분 일치 검색한다.
      */
     @Transactional(readOnly = true)
     public PageResponse<ProgramApplicationAdminListItemResponseDTO> listByProgram(
-            Integer programId, String status, Pageable pageable) {
+            Integer programId, String status, String keyword, Pageable pageable) {
         if (!programRepository.existsById(programId)) {
             throw new BusinessException(ErrorCode.PROGRAM_NOT_FOUND);
         }
-        Page<ProgramApplication> applications = applicationRepository.findAllByProgramIdAndStatus(programId, status, pageable);
+        String normalizedKeyword = StringUtils.hasText(keyword) ? escapeLikeKeyword(keyword.trim()) : null;
+        Page<ProgramApplication> applications = applicationRepository.findAllByProgramIdAndStatus(
+                programId, status, normalizedKeyword, pageable);
         return PageResponse.from(applications.map(ProgramApplicationAdminListItemResponseDTO::from));
+    }
+
+    /**
+     * LIKE 패턴에서 특별한 의미를 갖는 문자(%, _)를 리터럴 문자로 취급되도록 이스케이프한다.
+     * 이스케이프 문자 자체(!)를 가장 먼저 이스케이프해야, 뒤이어 %/_ 앞에 붙이는 !가 원본 키워드의 !와 섞이지 않는다.
+     * findAllByProgramIdAndStatus의 JPQL LIKE 절에 걸린 ESCAPE '!'와 반드시 짝을 맞춰야 한다.
+     */
+    private static String escapeLikeKeyword(String keyword) {
+        return keyword.replace("!", "!!").replace("%", "!%").replace("_", "!_");
     }
 
     /**
@@ -365,5 +472,60 @@ public class ProgramApplicationService {
         return new ProgramApplicationDecisionResponseDTO(
                 application.getApplicationId(), application.getProgram().getProgramId(),
                 decision.name(), decision.getLabel(), reason, staffId, now);
+    }
+
+    /**
+     * 취소 또는 반려로 정원 슬롯이 비었을 때, cancel()/reject()의 트랜잭션이 커밋된 이후에(AFTER_COMMIT)
+     * 대기자 전원에게 "지금 몇 자리가 났는지"를 안내하는 알림을 보낸다. 커밋 전에 조회/발송하면 (1) 조회
+     * 실패가 아직 반영되지 않은 취소/반려 처리까지 롤백시키거나, (2) NotificationSender.send()가
+     * REQUIRES_NEW로 먼저 커밋해버려 이후 cancel()/reject() 트랜잭션이 실패했을 때 "취소/반려는 안
+     * 됐는데 알림만 나간" 상태가 남을 수 있다. 클래스 레벨 @Transactional의 프록시가 가로챌 수 있도록
+     * public이어야 한다. 알림 발송 실패는 이미 커밋된 취소/반려 처리에 영향을 줄 수 없지만, 예외가 이벤트 리스너 밖으로
+     * 전파되지 않도록 여기서 로그만 남기고 무시한다. AFTER_COMMIT 시점엔 원본 트랜잭션이 이미
+     * 끝났으므로 대기자 조회를 위해 REQUIRES_NEW로 새 트랜잭션을 연다(클래스 레벨 REQUIRED로는
+     * @TransactionalEventListener와 함께 쓸 수 없어 부팅 시 예외가 난다).
+     *
+     * 대기 1순위 한 명만 골라 알림을 보내던 이전 방식은, 취소 두 건이 거의 동시에 발생하면 두
+     * 리스너 실행이 동시에 같은 1순위를 읽어 중복 알림을 보내고 실제 2번째로 열린 자리는 아무에게도
+     * 안내되지 않는 경쟁 조건이 있었다. 그래서 "특정 한 명을 예약"하는 대신, 매번 그 시점의 열린
+     * 자리 수(capacity - 정원을 차지하는 APPLIED/APPROVED 건수)를 다시 계산해 대기자 전원에게
+     * 그 개수를 그대로 안내하는 방식으로 바꿨다 — 누구를 고를지 정하지 않으므로 동시 실행 자체가
+     * 문제가 되지 않는다. 이 개수는 안내용 스냅샷일 뿐이며, 실제 정원 검증은 approve()가 프로그램
+     * 행 락 + 승인 건수 확인으로 별도 보장한다.
+     */
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void notifyNextWaitlistedApplicant(WaitlistSlotOpenedEvent event) {
+        Optional<ExtracurricularProgram> program = programRepository.findById(event.programId());
+        if (program.isEmpty()) {
+            return;
+        }
+
+        long occupiedCount = applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(
+                event.programId(), List.of(ApplicationStatus.APPLIED.name(), ApplicationStatus.APPROVED.name()));
+        long availableSlots = program.get().getCapacity() - occupiedCount;
+        if (availableSlots <= 0) {
+            return;
+        }
+
+        List<ProgramApplication> waitlisted = applicationRepository
+                .findAllByProgram_ProgramIdAndApplicationStatusOrderByWaitlistOrderAsc(
+                        event.programId(), ApplicationStatus.WAITLISTED.name());
+
+        for (ProgramApplication applicant : waitlisted) {
+            try {
+                notificationSender.send(new NotificationRequest(
+                        applicant.getStudent().getUserId(),
+                        NotificationType.WAITLIST_SLOT_OPENED,
+                        ModuleCode.PROGRAM,
+                        "대기중인 프로그램에 자리가 났습니다",
+                        "'%s' 프로그램에 %d자리가 났습니다. 지원 확정을 원하시면 서둘러 확인해주세요."
+                                .formatted(event.programName(), availableSlots)
+                ));
+            } catch (Exception e) {
+                log.warn("대기자 자리 발생 알림 발송 실패 (applicationId={}, programId={})",
+                        applicant.getApplicationId(), event.programId(), e);
+            }
+        }
     }
 }

@@ -28,6 +28,9 @@ import org.hibernate.type.SqlTypes;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class CareerDocument extends BaseTimeEntity {
 
+    public static final String TYPE_COVER_LETTER = "COVER_LETTER";
+    public static final String TYPE_PORTFOLIO = "PORTFOLIO";
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "career_document_id", nullable = false)
@@ -59,4 +62,50 @@ public class CareerDocument extends BaseTimeEntity {
 
     @Column(name = "ai_assistance_used", nullable = false)
     private boolean aiAssistanceUsed = false;
+
+    private CareerDocument(AppUser student, FileGroup fileGroup, String documentType, Integer versionNo,
+                            String documentTitle, JsonNode contentData, boolean aiAssistanceUsed) {
+        this.student = student;
+        this.fileGroup = fileGroup;
+        this.documentType = documentType;
+        this.versionNo = versionNo;
+        this.documentTitle = documentTitle;
+        this.contentData = contentData;
+        this.aiAssistanceUsed = aiAssistanceUsed;
+    }
+
+    /** 자기소개서 신규 작성. versionNo는 학생·유형 기준 다음 버전 번호를 호출부에서 계산해 전달한다. */
+    public static CareerDocument createCoverLetter(AppUser student, Integer versionNo, String documentTitle,
+                                                     JsonNode contentData, boolean aiAssistanceUsed) {
+        return new CareerDocument(student, null, TYPE_COVER_LETTER, versionNo, documentTitle, contentData, aiAssistanceUsed);
+    }
+
+    /** 포트폴리오 항목 신규 생성. versionNo는 학생 기준 다음 항목 순번을 호출부에서 계산해 전달한다. */
+    public static CareerDocument createPortfolio(AppUser student, Integer versionNo, String documentTitle,
+                                                   JsonNode contentData, boolean aiAssistanceUsed) {
+        return new CareerDocument(student, null, TYPE_PORTFOLIO, versionNo, documentTitle, contentData, aiAssistanceUsed);
+    }
+
+    /** 문서 제목·본문·AI 활용 여부를 갱신한다 (Dirty Checking). */
+    public void updateContent(String documentTitle, JsonNode contentData, boolean aiAssistanceUsed) {
+        this.documentTitle = documentTitle;
+        this.contentData = contentData;
+        this.aiAssistanceUsed = aiAssistanceUsed;
+    }
+
+    /** 공개 여부를 변경한다. */
+    public void changeVisibility(boolean isPublic) {
+        this.publicDocument = isPublic;
+    }
+
+    /** 첨부파일 묶음을 연결한다. */
+    public void attachFileGroup(FileGroup fileGroup) {
+        this.fileGroup = fileGroup;
+    }
+
+    /** 현재 문서 내용을 그대로 스냅샷한 새 버전 row를 만들어 반환한다 (기존 row는 변경하지 않음). */
+    public CareerDocument createNextVersion(Integer nextVersionNo) {
+        return new CareerDocument(this.student, this.fileGroup, this.documentType, nextVersionNo,
+                this.documentTitle, this.contentData, this.aiAssistanceUsed);
+    }
 }

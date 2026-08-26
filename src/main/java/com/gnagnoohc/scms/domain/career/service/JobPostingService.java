@@ -6,6 +6,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gnagnoohc.scms.domain.career.dto.posting.*;
 import com.gnagnoohc.scms.domain.career.entity.CompanyAccount;
 import com.gnagnoohc.scms.domain.career.entity.JobPosting;
+import com.gnagnoohc.scms.domain.career.helper.CareerBindingHelper;
+import com.gnagnoohc.scms.domain.career.helper.CareerSecurityHelper;
 import com.gnagnoohc.scms.domain.career.repository.CompanyAccountRepository;
 import com.gnagnoohc.scms.domain.career.repository.JobPostingRepository;
 import com.gnagnoohc.scms.domain.user.entity.AppUser;
@@ -13,6 +15,7 @@ import com.gnagnoohc.scms.domain.user.repository.AppUserRepository;
 import com.gnagnoohc.scms.global.common.entity.CommonCode;
 import com.gnagnoohc.scms.global.common.repository.CommonCodeRepository;
 import com.gnagnoohc.scms.global.common.service.CommonCodeService;
+import com.gnagnoohc.scms.global.common.util.DateTimeUtils;
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -32,8 +35,8 @@ import java.util.Map;
  * 채용공고 핵심 비즈니스 로직 서비스
  *
  * <p><strong>[설계 원칙 및 사용자 역할별 라이프사이클 관리 기준]</strong></p>
- * <p>본 서비스는 학생의 채용공고 탐색 및 교직원의 구인 신청 검수/게시 라이프사이클을 총괄하며,
- * 비즈니스 정합성 검증, DTO-Entity 간 데이터 바인딩, JSON/시간대 변환을 전담합니다.</p>
+ * <p>학생의 채용공고 탐색 및 교직원의 구인 신청 검수/게시 라이프사이클을 총괄 &
+ * 비즈니스 정합성 검증, DTO-Entity 간 데이터 바인딩, JSON/시간대 변환 전담</p>
  *
  * <hr>
  * <h3>1. 사용자 역할별 접근 및 조회 분기 정책</h3>
@@ -65,7 +68,7 @@ import java.util.Map;
  * <ul>
  *   <li><b>기간 유효성 검증:</b> 공고 등록/수정 시 접수 시작일시가 종료일시보다 늦은 역전 현상 방지 (위반 시 {@code INVALID_APPLICATION_PERIOD} 발생)</li>
  *   <li><b>JSONB 타입 매핑:</b> 프론트엔드 통신용 {@code Map<String, Object>}과 DB PostgreSQL JSONB용 {@code JsonNode} 간 상호 변환을 내부 {@code ObjectMapper}로 안전하게 처리</li>
- *   <li><b>시간대 표준화:</b> DB 영속화 기준 UTC {@code Instant}와 API 응답 기준 KST (Asia/Seoul) {@code OffsetDateTime} 간 표준 변환 지원</li>
+ *   <li><b>DateTimeUtils 공통 유틸을 활용한 시간대 표준화:</b> DB 영속화 기준 UTC {@code Instant}와 API 응답 기준 KST (Asia/Seoul) {@code OffsetDateTime} 간 표준 변환 지원</li>
  * </ul>
  *
  * @author YUN
@@ -78,11 +81,8 @@ public class JobPostingService {
 
     private final JobPostingRepository jobPostingRepository;
     private final CompanyAccountRepository companyAccountRepository;
-    private final CommonCodeRepository commonCodeRepository;
-    // 공통코드 매핑용 서비스 주입
-    private final CommonCodeService commonCodeService;
-    // 사용자 정보 조회용 공통 AppUser 추가 (교직원 중에서도 취창업 부서 검증용)
-    private final AppUserRepository appUserRepository;
+    private final CareerBindingHelper careerBindingHelper;
+    private final CareerSecurityHelper careerSecurityHelper;
 
     // 빈 주입 의존성 경고 방지 및 독립적 JSON 직렬화/역직렬화를 위한 객체 생성
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -135,8 +135,8 @@ public class JobPostingService {
         CompanyAccount companyAccount = companyAccountRepository.findById(requestDTO.getCompanyAccountId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.COMPANY_ACCOUNT_NOT_FOUND));
 
-        CommonCode ncsCode = findCommonCodeOrNull(requestDTO.getNcsCodeId());
-        CommonCode regionCode = findCommonCodeOrNull(requestDTO.getRegionCodeId());
+        CommonCode ncsCode = careerBindingHelper.findValidCommonCodeOrNull(requestDTO.getNcsCodeId());
+        CommonCode regionCode = careerBindingHelper.findValidRegionCodeOrNull(requestDTO.getRegionCodeId());
 
         if (requestDTO.getApplicationStartsAt() != null && requestDTO.getApplicationStartsAt().isAfter(requestDTO.getApplicationEndsAt())) {
             throw new BusinessException(ErrorCode.INVALID_APPLICATION_PERIOD);
@@ -182,8 +182,8 @@ public class JobPostingService {
             throw new BusinessException(ErrorCode.INVALID_APPLICATION_PERIOD);
         }
 
-        CommonCode ncsCode = findCommonCodeOrNull(requestDTO.getNcsCodeId());
-        CommonCode regionCode = findCommonCodeOrNull(requestDTO.getRegionCodeId());
+        CommonCode ncsCode = careerBindingHelper.findValidCommonCodeOrNull(requestDTO.getNcsCodeId());
+        CommonCode regionCode = careerBindingHelper.findValidRegionCodeOrNull(requestDTO.getRegionCodeId());
 
         Instant startsAt = requestDTO.getApplicationStartsAt() != null ? requestDTO.getApplicationStartsAt().toInstant() : null;
         Instant endsAt = requestDTO.getApplicationEndsAt().toInstant();
@@ -216,8 +216,7 @@ public class JobPostingService {
      */
     @Transactional
     public void reviewJobPosting(Integer jobPostingId, Integer reviewerUserId, JobPostingReviewRequestDTO requestDTO) {
-        // TODO: 이후 실제 데이터 넣어서 처리 필요 - 부서 권한 검증: 취창업지원팀 교직원 또는 관리자 여부 확인
-        validateCareerStaff(reviewerUserId);
+        careerSecurityHelper.validateAndGetCareerStaff(reviewerUserId);
 
         JobPosting jobPosting = jobPostingRepository.findById(jobPostingId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.JOB_POSTING_NOT_FOUND));
@@ -237,20 +236,6 @@ public class JobPostingService {
     }
 
     /**
-     * 교직원 전용 채용공고 검수에사, 부서 권한 검증 헬퍼 메서드 추가
-     *
-     * 예시: user의 부서 정보나 권한을 확인하여 취창업 관련 부서/관리자가 아니면 거부
-     * if (!user.isCareerStaffOrAdmin()) { ... throw new BusinessException(ErrorCode.ACCESS_DENIED); }
-     */
-    private void validateCareerStaff(Integer userId) {
-        if (userId == null) {
-            throw new BusinessException(ErrorCode.UNAUTHORIZED);
-        }
-        AppUser user = appUserRepository.findById(userId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
-    }
-
-    /**
      * [교직원 전용] 채용공고 삭제
      *
      * @param jobPostingId 공고 식별자 (PK)
@@ -265,14 +250,6 @@ public class JobPostingService {
     }
 
     // --- Private 매핑 및 헬퍼 메서드 ---
-    private CommonCode findCommonCodeOrNull(Integer codeId) {
-        if (codeId == null) {
-            return null;
-        }
-        return commonCodeRepository.findById(codeId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "일치하는 공통코드 정보를 찾을 수 없습니다."));
-    }
-
     private JsonNode mapToJsonNode(Map<String, Object> map) {
         if (map == null) {
             return null;
@@ -287,6 +264,13 @@ public class JobPostingService {
         return objectMapper.convertValue(jsonNode, new TypeReference<Map<String, Object>>() {});
     }
 
+    /**
+     * 채용공고 엔티티를 클라이언트 목록/탐색용 요약 응답 DTO로 매핑 변환
+     * 일시 데이터는 공통 시간 유틸리티({@link DateTimeUtils})지정한 KST 오프셋 메소드를 호출-변환 처리
+     *
+     * @param jp 채용공고 엔티티
+     * @return 목록 표시용 채용공고 요약 Response DTO
+     */
     private JobPostingSummaryResponseDTO convertToSummaryDTO(JobPosting jp) {
         return JobPostingSummaryResponseDTO.builder()
                 .jobPostingId(jp.getJobPostingId())
@@ -297,8 +281,8 @@ public class JobPostingService {
                 .postingTitle(jp.getPostingTitle())
                 .employmentType(jp.getEmploymentType())
                 .salaryText(jp.getSalaryText())
-                .applicationStartsAt(toOffsetDateTime(jp.getApplicationStartsAt()))
-                .applicationEndsAt(toOffsetDateTime(jp.getApplicationEndsAt()))
+                .applicationStartsAt(DateTimeUtils.toKstOffsetDateTime(jp.getApplicationStartsAt()))
+                .applicationEndsAt(DateTimeUtils.toKstOffsetDateTime(jp.getApplicationEndsAt()))
                 .postingType(jp.getPostingType())
                 .reviewStatus(jp.getReviewStatus())
                 .postingStatus(jp.getPostingStatus())
@@ -306,6 +290,13 @@ public class JobPostingService {
                 .build();
     }
 
+    /**
+     * 채용공고 엔티티를 클라이언트 단건 상세 응답 DTO로 매핑 변환
+     * 일시 데이터는 공통 시간 유틸리티({@link DateTimeUtils})지정한 KST 오프셋 메소드를 호출-변환 처리
+     *
+     * @param jp 채용공고 엔티티 원장
+     * @return 채용공고 상세 Response DTO
+     */
     private JobPostingDetailResponseDTO convertToDetailDTO(JobPosting jp) {
         return JobPostingDetailResponseDTO.builder()
                 .jobPostingId(jp.getJobPostingId())
@@ -322,26 +313,19 @@ public class JobPostingService {
                 .employmentType(jp.getEmploymentType())
                 .salaryText(jp.getSalaryText())
                 .qualificationData(jsonNodeToMap(jp.getQualificationData()))
-                .applicationStartsAt(toOffsetDateTime(jp.getApplicationStartsAt()))
-                .applicationEndsAt(toOffsetDateTime(jp.getApplicationEndsAt()))
+                .applicationStartsAt(DateTimeUtils.toKstOffsetDateTime(jp.getApplicationStartsAt()))
+                .applicationEndsAt(DateTimeUtils.toKstOffsetDateTime(jp.getApplicationEndsAt()))
                 .postingType(jp.getPostingType())
                 .benefitType(jp.getBenefitType())
                 .reviewStatus(jp.getReviewStatus())
-                .reviewedAt(toOffsetDateTime(jp.getReviewedAt()))
+                .reviewedAt(DateTimeUtils.toKstOffsetDateTime(jp.getReviewedAt()))
                 .rejectionReason(jp.getRejectionReason())
                 .postingStatus(jp.getPostingStatus())
-                .submittedAt(toOffsetDateTime(jp.getSubmittedAt()))
-                .publishedAt(toOffsetDateTime(jp.getPublishedAt()))
-                .createdAt(toOffsetDateTime(jp.getCreatedAt()))
-                .updatedAt(toOffsetDateTime(jp.getUpdatedAt()))
+                .submittedAt(DateTimeUtils.toKstOffsetDateTime(jp.getSubmittedAt()))
+                .publishedAt(DateTimeUtils.toKstOffsetDateTime(jp.getPublishedAt()))
+                .createdAt(DateTimeUtils.toKstOffsetDateTime(jp.getCreatedAt()))
+                .updatedAt(DateTimeUtils.toKstOffsetDateTime(jp.getUpdatedAt()))
                 .isScrapped(false)
                 .build();
-    }
-
-    private OffsetDateTime toOffsetDateTime(Instant instant) {
-        if (instant == null) {
-            return null;
-        }
-        return instant.atZone(ZoneId.of("Asia/Seoul")).toOffsetDateTime();
     }
 }
