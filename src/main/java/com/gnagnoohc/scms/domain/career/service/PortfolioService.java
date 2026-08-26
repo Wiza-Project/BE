@@ -63,8 +63,8 @@ public class PortfolioService {
      * [학생] 본인의 포트폴리오 항목 목록을 최신 수정순으로 페이징 조회
      */
     public PageResponse<PortfolioSummaryResponseDTO> getMyPortfolios(Integer studentUserId, Pageable pageable) {
-        Page<CareerDocument> page = careerDocumentRepository
-                .findByStudent_UserIdAndDocumentType(studentUserId, CareerDocument.TYPE_PORTFOLIO, pageable);
+        Page<CareerDocumentRepository.PortfolioSummaryProjection> page = careerDocumentRepository
+                .findPortfolioSummaries(studentUserId, CareerDocument.TYPE_PORTFOLIO, pageable);
         return PageResponse.from(page.map(this::mapToSummaryDTO));
     }
 
@@ -220,17 +220,14 @@ public class PortfolioService {
                 .build();
     }
 
-    private PortfolioSummaryResponseDTO mapToSummaryDTO(CareerDocument document) {
-        // 목록 건마다 첨부파일을 조회하므로 N+1이 발생하지만, 학생 개인 포트폴리오 목록은 규모가 작아 허용한다.
-        int attachmentCount = document.getFileGroup() == null ? 0 : fileGroupService.getFiles(document.getFileGroup()).size();
-
+    private PortfolioSummaryResponseDTO mapToSummaryDTO(CareerDocumentRepository.PortfolioSummaryProjection projection) {
         return PortfolioSummaryResponseDTO.builder()
-                .careerDocumentId(document.getCareerDocumentId())
-                .documentTitle(document.getDocumentTitle())
-                .versionNo(document.getVersionNo())
-                .isPublic(document.isPublicDocument())
-                .attachmentCount(attachmentCount)
-                .updatedAt(DateTimeUtils.toKstOffsetDateTime(document.getUpdatedAt()))
+                .careerDocumentId(projection.getCareerDocumentId())
+                .documentTitle(projection.getDocumentTitle())
+                .versionNo(projection.getVersionNo())
+                .isPublic(projection.getIsPublic())
+                .attachmentCount(Math.toIntExact(projection.getAttachmentCount()))
+                .updatedAt(DateTimeUtils.toKstOffsetDateTime(projection.getUpdatedAt()))
                 .build();
     }
 }

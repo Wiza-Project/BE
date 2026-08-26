@@ -17,6 +17,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -35,7 +36,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
@@ -125,10 +125,12 @@ public class StudentPortfolioController {
             @PathVariable Integer storedFileId) {
         FileStorageService.LoadedFile loaded = portfolioService.downloadAttachment(authUser.getId(), careerDocumentId, storedFileId);
 
-        String encodedName = URLEncoder.encode(loaded.originalFileName(), StandardCharsets.UTF_8);
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(loaded.contentType()))
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + encodedName)
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
+                        .filename(loaded.originalFileName(), StandardCharsets.UTF_8)
+                        .build()
+                        .toString())
                 .body(loaded.resource());
     }
 }
