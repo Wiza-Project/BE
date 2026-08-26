@@ -29,6 +29,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -49,6 +50,8 @@ class MileageClaimReviewServiceTest {
     @Test
     void approve_usesPolicyPointsAndCreatesPostedTransaction() {
         ClaimFixture fixture = claimFixture(ExternalActivityClaim.REQUESTED_STATUS);
+        lenient().when(fixture.claim().getClaimStatus())
+                .thenReturn(ExternalActivityClaim.REQUESTED_STATUS, ExternalActivityClaim.APPROVED_STATUS);
         when(externalActivityClaimRepository.findByIdForUpdate(10))
                 .thenReturn(Optional.of(fixture.claim()));
         when(mileageTransactionRepository.findBySourceExternalClaim_ExternalClaimId(10))
@@ -95,6 +98,8 @@ class MileageClaimReviewServiceTest {
     @Test
     void cancel_createsNegativeReversalAndPreservesOriginalTransaction() {
         ClaimFixture fixture = claimFixture(ExternalActivityClaim.APPROVED_STATUS);
+        lenient().when(fixture.claim().getClaimStatus())
+                .thenReturn(ExternalActivityClaim.APPROVED_STATUS, ExternalActivityClaim.CANCELLED_STATUS);
         MileageTransaction original = mock(MileageTransaction.class);
         when(original.getMileageTransactionId()).thenReturn(30);
         when(original.getStudent()).thenReturn(fixture.student());
@@ -158,25 +163,25 @@ class MileageClaimReviewServiceTest {
         MileageActivityType activityType = mock(MileageActivityType.class);
         MileagePolicy policy = mock(MileagePolicy.class);
 
-        when(claim.getExternalClaimId()).thenReturn(10);
-        when(claim.getClaimStatus()).thenReturn(status);
-        when(claim.getStudent()).thenReturn(student);
-        when(claim.getFileGroup()).thenReturn(fileGroup);
-        when(claim.getActivityType()).thenReturn(activityType);
-        when(claim.getMileagePolicy()).thenReturn(policy);
-        when(claim.getActivityDate()).thenReturn(LocalDate.of(2026, 8, 25));
-        when(claim.getActivityName()).thenReturn("외부활동 실적");
+        lenient().when(claim.getExternalClaimId()).thenReturn(10);
+        lenient().when(claim.getClaimStatus()).thenReturn(status);
+        lenient().when(claim.getStudent()).thenReturn(student);
+        lenient().when(claim.getFileGroup()).thenReturn(fileGroup);
+        lenient().when(claim.getActivityType()).thenReturn(activityType);
+        lenient().when(claim.getMileagePolicy()).thenReturn(policy);
+        lenient().when(claim.getActivityDate()).thenReturn(LocalDate.of(2026, 8, 25));
+        lenient().when(claim.getActivityName()).thenReturn("외부활동 실적");
 
-        when(student.getUserId()).thenReturn(7);
-        when(activityType.getActivityTypeId()).thenReturn(3);
-        when(activityType.isActive()).thenReturn(true);
-        when(activityType.getCompetency()).thenReturn(mock(com.gnagnoohc.scms.domain.competency.entity.Competency.class));
-        when(policy.getActivityType()).thenReturn(activityType);
-        when(policy.getPolicyStatus()).thenReturn("ACTIVE");
-        when(policy.getValidFrom()).thenReturn(LocalDate.of(2026, 1, 1));
-        when(policy.getValidTo()).thenReturn(LocalDate.of(2026, 12, 31));
-        when(policy.getPoints()).thenReturn(new BigDecimal("10"));
-        when(policy.getMaximumPoints()).thenReturn(new BigDecimal("20"));
+        lenient().when(student.getUserId()).thenReturn(7);
+        lenient().when(activityType.getActivityTypeId()).thenReturn(3);
+        lenient().when(activityType.isActive()).thenReturn(true);
+        lenient().when(activityType.getCompetency()).thenReturn(mock(com.gnagnoohc.scms.domain.competency.entity.Competency.class));
+        lenient().when(policy.getActivityType()).thenReturn(activityType);
+        lenient().when(policy.getPolicyStatus()).thenReturn("ACTIVE");
+        lenient().when(policy.getValidFrom()).thenReturn(LocalDate.of(2026, 1, 1));
+        lenient().when(policy.getValidTo()).thenReturn(LocalDate.of(2026, 12, 31));
+        lenient().when(policy.getPoints()).thenReturn(new BigDecimal("10"));
+        lenient().when(policy.getMaximumPoints()).thenReturn(new BigDecimal("20"));
 
         return new ClaimFixture(claim, student);
     }
