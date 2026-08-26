@@ -78,6 +78,12 @@ public class TargetConditionInterpreter {
         if (targetCondition == null || targetCondition.isNull()) {
             return true;
         }
+        // 최상위가 object가 아니면(배열·스칼라 등) fieldNames()/get()이 각각 빈 iterator/null을
+        // 반환해 아래 검사를 전부 통과해버린다 — 등록 API는 DTO 타입(Map<String, Object>)이 막아
+        // 이 경로로 못 들어오지만, 이 해석기 자체가 그 게이트에만 기대면 안 되므로 여기서도 막는다.
+        if (!targetCondition.isObject()) {
+            return false;
+        }
         return isValidArrayOfIntegers(targetCondition.get(KEY_GRADES))
                 && isValidArrayOfIntegers(targetCondition.get(KEY_MAJOR_CODE_IDS));
     }
