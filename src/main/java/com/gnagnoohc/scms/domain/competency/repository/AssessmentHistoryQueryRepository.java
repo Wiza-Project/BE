@@ -48,7 +48,9 @@ public class AssessmentHistoryQueryRepository {
                 .where(condition)
                 .offset(pageable.getOffset())
                 .limit(pageable.getPageSize())
-                .orderBy(assessmentAttempt.submittedAt.desc())
+                // submittedAt만으로 정렬하면 동시각 제출이 페이지 경계에 걸렸을 때 조회할 때마다
+                // 순서가 흔들려 항목이 중복되거나 누락될 수 있어, attemptId를 보조 정렬키로 둔다.
+                .orderBy(assessmentAttempt.submittedAt.desc(), assessmentAttempt.attemptId.desc())
                 .fetch();
 
         JPAQuery<Long> countQuery = queryFactory
