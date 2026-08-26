@@ -320,7 +320,7 @@ public class ProgramApplicationService {
          */
         long occupiedCount = applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(
                 programId, List.of(ApplicationStatus.APPLIED.name(), ApplicationStatus.APPROVED.name()));
-        int remainingCapacity = (int) (application.getProgram().getCapacity() - occupiedCount);
+        int remainingCapacity = Math.max((int) (application.getProgram().getCapacity() - occupiedCount), 0);
 
         return new ProgramApplicationCancelResponseDTO(
                 applicationId, programId, ApplicationStatus.CANCELLED.name(), ApplicationStatus.CANCELLED.getLabel(),
