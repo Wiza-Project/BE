@@ -5,6 +5,7 @@ import com.gnagnoohc.scms.domain.counsel.entity.CounselingAssignment;
 import com.gnagnoohc.scms.domain.counsel.entity.CounselingPrivateRecord;
 import com.gnagnoohc.scms.domain.counsel.entity.CounselingSession;
 import com.gnagnoohc.scms.domain.counsel.repository.CounselUserRepository;
+import com.gnagnoohc.scms.domain.counsel.repository.CounselingAssignmentRepository;
 import com.gnagnoohc.scms.domain.counsel.repository.CounselingPrivateRecordRepository;
 import com.gnagnoohc.scms.domain.counsel.repository.CounselingSessionRepository;
 import com.gnagnoohc.scms.global.error.BusinessException;
@@ -27,6 +28,7 @@ public class CounselingPrivateRecordService {
 
     private final CounselUserRepository counselUserRepository;
     private final CounselingSessionRepository counselingSessionRepository;
+    private final CounselingAssignmentRepository counselingAssignmentRepository;
     private final CounselingPrivateRecordRepository counselingPrivateRecordRepository;
 
     /**
@@ -77,10 +79,17 @@ public class CounselingPrivateRecordService {
         ensureActiveCounselor(counselorId);
         CounselingSession session = counselingSessionRepository.findByIdForUpdate(sessionId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SESSION_NOT_FOUND));
-        if (!session.getCounselingAssignment().isOwnedBy(counselorId)) {
+        // 배정 종료(예약 취소)가 예약 행만 잠그고 이 회기 행과는 다른 행이라 직렬화되지 않는다.
+        // 배정 행도 잠가야 "활성 여부를 확인한 시점"이 커밋까지 유효함을 보장한다. session.getCounselingAssignment()의
+        // isOwnedBy/isActive를 먼저 호출하면 프록시가 초기화돼 이 잠금으로도 필드가 갱신되지 않을 수 있으므로,
+        // 이 잠금 조회가 배정에 대한 첫 접근이어야 한다(CounselingSessionService.complete()와 같은 패턴).
+        Integer assignmentId = session.getCounselingAssignment().getCounselingAssignmentId();
+        CounselingAssignment assignment = counselingAssignmentRepository.findByIdForUpdate(assignmentId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.SESSION_NOT_FOUND));
+        if (!assignment.isOwnedBy(counselorId)) {
             throw new BusinessException(ErrorCode.SESSION_NOT_FOUND);
         }
-        if (!session.getCounselingAssignment().isActive()) {
+        if (!assignment.isActive()) {
             throw new BusinessException(ErrorCode.PRIVATE_RECORD_STATE_NOT_ALLOWED);
         }
         Instant now = Instant.now();
