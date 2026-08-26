@@ -29,6 +29,18 @@ public interface ExtracurricularProgramRepository extends JpaRepository<Extracur
     Optional<ExtracurricularProgram> findByIdForUpdate(@Param("programId") Integer programId);
 
     /**
+     * ── 여기부터 "운영계획서 첨부파일 재사용 방지" 기능이 사용하는 조회 ──────────────
+     *
+     * register()/update()에서 클라이언트가 보낸 fileGroupId가 이미 다른 프로그램에 연결돼
+     * 있는지 확인하는 데 쓴다. register()는 아직 program_id가 없으므로 첫 번째 메서드를,
+     * update()는 "자기 자신과의 기존 연결"은 재사용으로 치지 않아야 하므로 programId를
+     * 제외하는 두 번째 메서드를 쓴다.
+     */
+    boolean existsByFileGroup_FileGroupId(Integer fileGroupId);
+
+    boolean existsByFileGroup_FileGroupIdAndProgramIdNot(Integer fileGroupId, Integer programId);
+
+    /**
      * ── 여기부터 "등록(Create)" 기능 ──────────────────────────────────────────────
      *
      * ExtracurricularProgram 엔티티는 protected 기본 생성자만 있고 빌더/setter가 없어서

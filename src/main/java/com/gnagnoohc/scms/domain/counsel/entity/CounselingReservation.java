@@ -25,6 +25,7 @@ public class CounselingReservation extends BaseTimeEntity {
     private static final String APPROVED_STATUS = "APPROVED";
     private static final String REJECTED_STATUS = "REJECTED";
     private static final String CANCELED_STATUS = "CANCELED";
+    private static final String IN_PROGRESS_STATUS = "IN_PROGRESS";
 
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "counseling_reservation_id", nullable = false) private Integer counselingReservationId;
@@ -115,6 +116,18 @@ public class CounselingReservation extends BaseTimeEntity {
         this.processedBy = processedBy;
         this.processedAt = now;
         this.decisionReason = decisionReason;
+    }
+
+    /**
+     * 회기 출결 완료(PRESENT)에서만 호출한다. 예약이 APPROVED면 실제 상담이 시작됐다는 뜻으로
+     * IN_PROGRESS로 바꾸고, 이미 IN_PROGRESS면 그대로 둔다(같은 배정의 두 번째 이후 회기가
+     * PRESENT로 완료돼도 재전이가 아니라 no-op). 그 외 상태(REJECTED/CANCELED 등)는 설계상
+     * 활성 배정이 있는 예약에서 도달하지 않으므로 여기서도 조용히 no-op으로 둔다.
+     */
+    public void markInProgressIfApproved() {
+        if (APPROVED_STATUS.equals(reservationStatus)) {
+            this.reservationStatus = IN_PROGRESS_STATUS;
+        }
     }
 
     /**

@@ -4,6 +4,7 @@ import com.gnagnoohc.scms.domain.competency.entity.Competency;
 import com.gnagnoohc.scms.domain.program.dto.request.ProgramRegisterRequestDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramAdminListItemResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramDetailResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramFileUploadResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramRegisterResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.request.ProgramUpdateRequestDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramUpdateResponseDTO;
@@ -17,7 +18,13 @@ import com.gnagnoohc.scms.domain.program.repository.ProgramApplicationRepository
 import com.gnagnoohc.scms.domain.program.repository.ProgramSessionRepository;
 import com.gnagnoohc.scms.domain.user.entity.AppUser;
 import com.gnagnoohc.scms.global.common.entity.CommonCode;
+import com.gnagnoohc.scms.global.common.entity.FileGroup;
+import com.gnagnoohc.scms.global.common.entity.StoredFile;
+import com.gnagnoohc.scms.global.common.helper.FileUploadValidator;
 import com.gnagnoohc.scms.global.common.repository.CommonCodeRepository;
+import com.gnagnoohc.scms.global.common.repository.FileGroupRepository;
+import com.gnagnoohc.scms.global.common.service.FileGroupService;
+import com.gnagnoohc.scms.global.common.service.FileStorageService;
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramListItemResponseDTO;
@@ -27,11 +34,15 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.lang.reflect.Constructor;
 import java.time.Instant;
@@ -44,6 +55,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -63,6 +75,18 @@ class ProgramServiceTest {
 
     @Mock
     ProgramApplicationRepository applicationRepository;
+
+    @Mock
+    FileGroupRepository fileGroupRepository;
+
+    @Mock
+    FileGroupService fileGroupService;
+
+    @Mock
+    FileStorageService fileStorageService;
+
+    @Spy
+    FileUploadValidator fileUploadValidator = new FileUploadValidator();
 
     @InjectMocks
     ProgramService programService;
@@ -172,6 +196,98 @@ class ProgramServiceTest {
     }
 
     @Test
+    void register_whenFileGroupUniqueConstraintViolated_throwsFileGroupAlreadyLinked() throws Exception {
+        when(commonCodeRepository.findByCodeGroupAndActiveTrueOrderBySortOrderAsc("DEPARTMENT"))
+                .thenReturn(List.of(buildCommonCodeFixture(11, "DEPARTMENT", "D200")));
+
+        FileGroup fileGroup = FileGroup.create();
+        ReflectionTestUtils.setField(fileGroup, "fileGroupId", 77);
+        when(fileGroupRepository.findById(77)).thenReturn(Optional.of(fileGroup));
+        StoredFile storedFile = StoredFile.builder()
+                .originalFileName("운영계획서.pdf").createdBy(100).build();
+        when(fileGroupService.getFiles(fileGroup)).thenReturn(List.of(storedFile));
+        // 애플리케이션 계층 검사는 통과(false)하지만, 그 직후의 실제 INSERT 시점에는 동시 요청으로
+        // 이미 다른 프로그램에 연결돼버린 레이스 케이스를 재현한다.
+        when(programRepository.existsByFileGroup_FileGroupId(77)).thenReturn(false);
+        when(programRepository.insertProgram(
+                any(), any(), any(), any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), any(), any(), any(), any()
+        )).thenThrow(new DataIntegrityViolationException(
+                "duplicate key value violates unique constraint \"uq_extracurricular_program_file_group_id\""));
+
+        Instant recruitmentStartsAt = Instant.now();
+        Instant recruitmentEndsAt = recruitmentStartsAt.plusSeconds(3600);
+        Instant operationStartsAt = recruitmentEndsAt;
+        Instant operationEndsAt = operationStartsAt.plusSeconds(3600);
+
+        ProgramRegisterRequestDTO request = new ProgramRegisterRequestDTO(
+                77, 1, 2, 3, null,
+                "프로그램명", "설명",
+                recruitmentStartsAt, recruitmentEndsAt, operationStartsAt, operationEndsAt,
+                10, null
+        );
+
+        assertThatThrownBy(() -> programService.register(request, 100, 11))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.PROGRAM_FILE_GROUP_ALREADY_LINKED);
+    }
+
+    @Test
+    void uploadOperationPlan_withPdfFile_createsFileGroupAndStoresFile() throws Exception {
+        when(commonCodeRepository.findByCodeGroupAndActiveTrueOrderBySortOrderAsc("DEPARTMENT"))
+                .thenReturn(List.of(buildCommonCodeFixture(11, "DEPARTMENT", "D200")));
+
+        FileGroup fileGroup = FileGroup.create();
+        ReflectionTestUtils.setField(fileGroup, "fileGroupId", 77);
+        when(fileGroupService.createGroup()).thenReturn(fileGroup);
+
+        MultipartFile file = new MockMultipartFile(
+                "file", "운영계획서.pdf", "application/pdf",
+                new byte[]{0x25, 0x50, 0x44, 0x46, '-', '1', '.', '4'}); // "%PDF-1.4"
+
+        ProgramFileUploadResponseDTO response = programService.uploadOperationPlan(file, 100, 11);
+
+        assertThat(response.fileGroupId()).isEqualTo(77);
+        assertThat(response.fileName()).isEqualTo("운영계획서.pdf");
+        verify(fileStorageService).store(file, fileGroup, 100);
+    }
+
+    @Test
+    void uploadOperationPlan_withNonPdfFile_throwsInvalidFileType() throws Exception {
+        when(commonCodeRepository.findByCodeGroupAndActiveTrueOrderBySortOrderAsc("DEPARTMENT"))
+                .thenReturn(List.of(buildCommonCodeFixture(11, "DEPARTMENT", "D200")));
+
+        MultipartFile file = new MockMultipartFile(
+                "file", "poster.jpg", "image/jpeg",
+                new byte[]{(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, 0, 0}); // JPEG magic bytes
+
+        assertThatThrownBy(() -> programService.uploadOperationPlan(file, 100, 11))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.INVALID_FILE_TYPE);
+
+        verifyNoInteractions(fileGroupService, fileStorageService);
+    }
+
+    @Test
+    void uploadOperationPlan_whenDepartmentIsNotOperatingDepartment_throwsDepartmentForbidden() throws Exception {
+        when(commonCodeRepository.findByCodeGroupAndActiveTrueOrderBySortOrderAsc("DEPARTMENT"))
+                .thenReturn(List.of(buildCommonCodeFixture(11, "DEPARTMENT", "D200")));
+
+        MultipartFile file = new MockMultipartFile(
+                "file", "운영계획서.pdf", "application/pdf",
+                new byte[]{0x25, 0x50, 0x44, 0x46, '-', '1', '.', '4'});
+
+        assertThatThrownBy(() -> programService.uploadOperationPlan(file, 100, 99))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.DEPARTMENT_FORBIDDEN);
+
+        verifyNoInteractions(fileGroupService, fileStorageService);
+    }
+
+    @Test
     void update_whenRecruitmentPeriodOngoing_succeeds_andResponseStatusLabelReflectsEntity() throws Exception {
         AppUser managerUser = mock(AppUser.class);
         when(managerUser.getUserId()).thenReturn(100);
@@ -242,6 +358,53 @@ class ProgramServiceTest {
         programService.update(1, request, 100, 11);
 
         assertThat(operatingUnitCaptor.getValue()).isEqualTo(11);
+    }
+
+    @Test
+    void update_whenFileGroupUniqueConstraintViolated_throwsFileGroupAlreadyLinked() throws Exception {
+        AppUser managerUser = mock(AppUser.class);
+        when(managerUser.getUserId()).thenReturn(100);
+
+        when(commonCodeRepository.findByCodeGroupAndActiveTrueOrderBySortOrderAsc("DEPARTMENT"))
+                .thenReturn(List.of(buildCommonCodeFixture(11, "DEPARTMENT", "D200")));
+
+        Instant now = Instant.now();
+        ExtracurricularProgram program = buildProgramFixture(
+                1, managerUser, now.plusSeconds(3600), ProgramStatus.DRAFT);
+        ReflectionTestUtils.setField(program, "operatingUnitCode", buildCommonCodeFixture(11, "DEPARTMENT", "D200"));
+        when(programRepository.findById(1)).thenReturn(Optional.of(program));
+
+        FileGroup fileGroup = FileGroup.create();
+        ReflectionTestUtils.setField(fileGroup, "fileGroupId", 77);
+        when(fileGroupRepository.findById(77)).thenReturn(Optional.of(fileGroup));
+        StoredFile storedFile = StoredFile.builder()
+                .originalFileName("운영계획서.pdf").createdBy(100).build();
+        when(fileGroupService.getFiles(fileGroup)).thenReturn(List.of(storedFile));
+        // register 테스트와 동일하게, 애플리케이션 계층 검사는 통과(false)하지만 UPDATE 시점에
+        // 동시 요청으로 이미 다른 프로그램에 연결돼버린 레이스 케이스를 재현한다.
+        when(programRepository.existsByFileGroup_FileGroupIdAndProgramIdNot(77, 1)).thenReturn(false);
+        when(programRepository.updateProgram(
+                any(), any(), any(), any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), any(), any(), any(), any()
+        )).thenThrow(new DataIntegrityViolationException(
+                "duplicate key value violates unique constraint \"uq_extracurricular_program_file_group_id\""));
+
+        Instant recruitmentStartsAt = now;
+        Instant recruitmentEndsAt = now.plusSeconds(1800);
+        Instant operationStartsAt = recruitmentEndsAt;
+        Instant operationEndsAt = operationStartsAt.plusSeconds(3600);
+
+        ProgramUpdateRequestDTO request = new ProgramUpdateRequestDTO(
+                77, 2, 3, null,
+                "수정된 프로그램명", "설명",
+                recruitmentStartsAt, recruitmentEndsAt, operationStartsAt, operationEndsAt,
+                20, null
+        );
+
+        assertThatThrownBy(() -> programService.update(1, request, 100, 11))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.PROGRAM_FILE_GROUP_ALREADY_LINKED);
     }
 
     @Test
@@ -476,6 +639,45 @@ class ProgramServiceTest {
         assertThat(response.remainingCapacity()).isEqualTo(7);
         assertThat(response.sessions()).hasSize(1);
         assertThat(response.myApplicationStatus()).isNull();
+        assertThat(response.fileName()).isNull();
+    }
+
+    @Test
+    void getDetail_whenFileGroupPresent_returnsFileName() throws Exception {
+        AppUser managerUser = mock(AppUser.class);
+        when(managerUser.getUserName()).thenReturn("담당자명");
+
+        CommonCode operatingUnitCode = buildCommonCodeFixture(11, "DEPARTMENT", "D200");
+        CommonCode programTypeCode = buildCommonCodeFixture(22, "PROGRAM_TYPE", "PT100");
+        Competency competency = buildCompetencyFixture(33, "리더십");
+
+        ExtracurricularProgram program = buildProgramFixture(
+                1, managerUser, Instant.now().plusSeconds(3600), ProgramStatus.DRAFT);
+        ReflectionTestUtils.setField(program, "programName", "프로그램명");
+        ReflectionTestUtils.setField(program, "capacity", 10);
+        ReflectionTestUtils.setField(program, "operatingUnitCode", operatingUnitCode);
+        ReflectionTestUtils.setField(program, "programTypeCode", programTypeCode);
+        ReflectionTestUtils.setField(program, "competency", competency);
+
+        FileGroup fileGroup = FileGroup.create();
+        ReflectionTestUtils.setField(fileGroup, "fileGroupId", 501);
+        ReflectionTestUtils.setField(program, "fileGroup", fileGroup);
+
+        StoredFile storedFile = StoredFile.builder().originalFileName("운영계획서.pdf").build();
+
+        when(programRepository.findDetailById(1)).thenReturn(Optional.of(program));
+        when(programSessionRepository.findByProgram_ProgramIdOrderBySessionNoAsc(1))
+                .thenReturn(List.of());
+        when(applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(eq(1), any()))
+                .thenReturn(0L);
+        when(applicationRepository.findByProgram_ProgramIdAndStudent_UserId(1, 100))
+                .thenReturn(Optional.empty());
+        when(fileGroupService.getFiles(fileGroup)).thenReturn(List.of(storedFile));
+
+        ProgramDetailResponseDTO response = programService.getDetail(1, 100);
+
+        assertThat(response.fileGroupId()).isEqualTo(501);
+        assertThat(response.fileName()).isEqualTo("운영계획서.pdf");
     }
 
     @Test
@@ -517,6 +719,72 @@ class ProgramServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.PROGRAM_NOT_FOUND);
+    }
+
+    @Test
+    void downloadOperationPlan_withFileGroup_returnsLoadedFile() throws Exception {
+        ExtracurricularProgram program = buildProgramFixture(
+                1, mock(AppUser.class), Instant.now().plusSeconds(3600), ProgramStatus.DRAFT);
+
+        FileGroup fileGroup = FileGroup.create();
+        ReflectionTestUtils.setField(fileGroup, "fileGroupId", 501);
+        ReflectionTestUtils.setField(program, "fileGroup", fileGroup);
+
+        StoredFile storedFile = StoredFile.builder().originalFileName("운영계획서.pdf").build();
+        ReflectionTestUtils.setField(storedFile, "storedFileId", 900);
+
+        FileStorageService.LoadedFile loadedFile =
+                new FileStorageService.LoadedFile(mock(org.springframework.core.io.Resource.class),
+                        "운영계획서.pdf", "application/pdf");
+
+        when(programRepository.findById(1)).thenReturn(Optional.of(program));
+        when(fileGroupService.getFiles(fileGroup)).thenReturn(List.of(storedFile));
+        when(fileStorageService.load(900)).thenReturn(loadedFile);
+
+        FileStorageService.LoadedFile result = programService.downloadOperationPlan(1);
+
+        assertThat(result).isSameAs(loadedFile);
+    }
+
+    @Test
+    void downloadOperationPlan_whenProgramNotFound_throwsProgramNotFound() {
+        when(programRepository.findById(999)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> programService.downloadOperationPlan(999))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.PROGRAM_NOT_FOUND);
+    }
+
+    @Test
+    void downloadOperationPlan_whenNoFileGroup_throwsResourceNotFound() throws Exception {
+        ExtracurricularProgram program = buildProgramFixture(
+                1, mock(AppUser.class), Instant.now().plusSeconds(3600), ProgramStatus.DRAFT);
+
+        when(programRepository.findById(1)).thenReturn(Optional.of(program));
+
+        assertThatThrownBy(() -> programService.downloadOperationPlan(1))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.RESOURCE_NOT_FOUND);
+    }
+
+    @Test
+    void downloadOperationPlan_whenNoStoredFile_throwsResourceNotFound() throws Exception {
+        ExtracurricularProgram program = buildProgramFixture(
+                1, mock(AppUser.class), Instant.now().plusSeconds(3600), ProgramStatus.DRAFT);
+
+        FileGroup fileGroup = FileGroup.create();
+        ReflectionTestUtils.setField(fileGroup, "fileGroupId", 501);
+        ReflectionTestUtils.setField(program, "fileGroup", fileGroup);
+
+        when(programRepository.findById(1)).thenReturn(Optional.of(program));
+        when(fileGroupService.getFiles(fileGroup)).thenReturn(List.of());
+
+        assertThatThrownBy(() -> programService.downloadOperationPlan(1))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.RESOURCE_NOT_FOUND);
     }
 
     /**
