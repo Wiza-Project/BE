@@ -21,6 +21,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -129,6 +130,24 @@ class AssessmentNonParticipantServiceTest {
         verify(notificationSender).send(argThat(r -> r.recipientUserId().equals(101)));
         verify(notificationSender, never()).send(argThat(r -> r.recipientUserId().equals(100)));
         verify(notificationSender, never()).send(argThat(r -> r.recipientUserId().equals(103)));
+    }
+
+    // Set.copyOf(List)는 원소에 null이 있으면 NPE를 던진다 — userIds에 null이 섞여 와도
+    // (예: [101, null]) 500 대신 그 원소만 무시하고 나머지 교집합은 정상 처리돼야 한다.
+    @Test
+    void notify_withUserIdsContainingNull_ignoresNullAndSendsToRestOfIntersection() {
+        AssessmentRound round = buildRound(null);
+        when(assessmentRoundRepository.findById(1)).thenReturn(Optional.of(round));
+        when(assessmentNonParticipantQueryRepository.findNonParticipantUserIds(1, null))
+                .thenReturn(List.of(100, 101));
+
+        AssessmentNonParticipantNotifyResponse response =
+                assessmentNonParticipantService.notify(1, Arrays.asList(101, null));
+
+        assertThat(response.sentUserIds()).containsExactly(101);
+        assertThat(response.failedCount()).isZero();
+        verify(notificationSender).send(argThat(r -> r.recipientUserId().equals(101)));
+        verify(notificationSender, never()).send(argThat(r -> r.recipientUserId().equals(100)));
     }
 
     @Test

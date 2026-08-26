@@ -22,7 +22,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -79,7 +81,11 @@ public class AssessmentNonParticipantService {
         if (requestedUserIds == null) {
             return nonParticipantUserIds;
         }
-        Set<Integer> requested = Set.copyOf(requestedUserIds);
+        // null 원소가 섞여 와도(예: [1, null, 3]) 어차피 실제 미응시자 집합엔 없는 값이라
+        // 교집합 전에 걸러내기만 하면 된다 — Set.copyOf는 null 원소가 있으면 NPE를 던진다.
+        Set<Integer> requested = requestedUserIds.stream()
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
         return nonParticipantUserIds.stream().filter(requested::contains).toList();
     }
 }
