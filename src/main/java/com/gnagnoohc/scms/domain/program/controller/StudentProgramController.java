@@ -1,24 +1,33 @@
 package com.gnagnoohc.scms.domain.program.controller;
 
+import com.gnagnoohc.scms.domain.program.dto.response.CompetencyOptionResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramDetailResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramListItemResponseDTO;
 import com.gnagnoohc.scms.domain.program.entity.ProgramStatus;
 import com.gnagnoohc.scms.domain.program.service.ProgramService;
 import com.gnagnoohc.scms.global.common.dto.ApiResponse;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;
+import com.gnagnoohc.scms.global.common.service.FileStorageService;
 import com.gnagnoohc.scms.global.security.AuthUser;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 @Tag(name = "StudentProgram", description = "학생의 비교과 프로그램 목록 조회")
 @RestController
@@ -49,10 +58,38 @@ public class StudentProgramController {
         return ApiResponse.ok(programService.list(status, keyword, competencyId, authUser.getId(), pageable));
     }
 
+    @Operation(summary = "핵심역량 옵션 조회", description = "핵심역량 목록을 조회합니다")
+    @GetMapping("/competencies")
+    public ApiResponse<List<CompetencyOptionResponseDTO>> listCompetencyOptions() {
+        return ApiResponse.ok(programService.getCompetencyOptions());
+    }
+
     @Operation(summary = "프로그램 상세 조회", description = "프로그램 기본정보, 회차 목록, 신청자 수를 조회합니다")
     @GetMapping("/{programId}")
     public ApiResponse<ProgramDetailResponseDTO> getDetail(@PathVariable Integer programId,
                                                              @AuthenticationPrincipal AuthUser authUser) {
         return ApiResponse.ok(programService.getDetail(programId, authUser.getId()));
+    }
+
+    @Operation(summary = "운영계획서 다운로드", description = "프로그램에 등록된 운영계획서 원본 파일을 내려받습니다")
+    @GetMapping("/{programId}/file")
+    public ResponseEntity<Resource> downloadFile(@PathVariable Integer programId,
+                                                  @AuthenticationPrincipal AuthUser authUser) {
+        FileStorageService.LoadedFile loadedFile = programService.downloadOperationPlan(programId);
+        String contentType = loadedFile.contentType() != null
+                ? loadedFile.contentType()
+                : MediaType.APPLICATION_OCTET_STREAM_VALUE;
+
+        // filename*(RFC 5987)에 원본 파일명을 UTF-8 퍼센트 인코딩해 넣고, filename*를 읽지 못하는
+        // 구형 클라이언트를 위해 filename에는 ASCII 고정값을 fallback으로 넣는다
+        // (운영계획서는 PDF 1개만 허용되므로 고정 파일명을 써도 정보 손실이 없다).
+        String encodedFileName = URLEncoder.encode(loadedFile.originalFileName(), StandardCharsets.UTF_8)
+                .replace("+", "%20");
+        String contentDisposition = "attachment; filename=\"operation-plan.pdf\"; filename*=UTF-8''" + encodedFileName;
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(contentType))
+                .header("Content-Disposition", contentDisposition)
+                .body(loadedFile.resource());
     }
 }
