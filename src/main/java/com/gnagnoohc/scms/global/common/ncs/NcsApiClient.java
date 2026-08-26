@@ -128,28 +128,25 @@ public class NcsApiClient {
         log.info("[NCS] 트리 순회 시작 - 대분류 {}건", largeCategories.size());
 
         for (NcsLclasItem lclas : largeCategories) {
-            try {
-                log.info("[NCS] 대분류 [{}]{} 순회 시작", lclas.code(), lclas.name());
+            log.info("[NCS] 대분류 [{}]{} 순회 시작", lclas.code(), lclas.name());
 
-                List<NcsSubItem> mediumList = fetchMediumCategories(lclas.code());
-                log.info("[NCS] 대분류 [{}] 중분류 조회 완료 - {}건", lclas.code(), mediumList.size());
+            List<NcsSubItem> mediumList = fetchMediumCategories(lclas.code());
+            log.info("[NCS] 대분류 [{}] 중분류 조회 완료 - {}건", lclas.code(), mediumList.size());
 
-                for (NcsSubItem mclas : mediumList) {
-                    List<NcsSubItem> smallList = fetchSmallCategories(lclas.code(), mclas.mediumCategoryCode());
-                    log.debug("[NCS]   중분류 [{}] 소분류 조회 완료 - {}건", mclas.mediumCategoryCode(), smallList.size());
 
-                    for (NcsSubItem sclas : smallList) {
-                        List<NcsSubItem> subItems = fetchSubcategoriesBySmallCategory(
-                                lclas.code(), mclas.mediumCategoryCode(), sclas.smallCategoryCode());
-                        log.debug("[NCS]     소분류 [{}] 세분류(직무) 조회 완료 - {}건",
-                                sclas.smallCategoryCode(), subItems.size());
-                        allSubItems.addAll(subItems);
-                    }
+            for (NcsSubItem mclas : mediumList) {
+                List<NcsSubItem> smallList = fetchSmallCategories(lclas.code(), mclas.mediumCategoryCode());
+                log.debug("[NCS]   중분류 [{}] 소분류 조회 완료 - {}건", mclas.mediumCategoryCode(), smallList.size());
+
+                for (NcsSubItem sclas : smallList) {
+                    List<NcsSubItem> subItems = fetchSubcategoriesBySmallCategory(
+                            lclas.code(), mclas.mediumCategoryCode(), sclas.smallCategoryCode());
+                    log.debug("[NCS]     소분류 [{}] 세분류(직무) 조회 완료 - {}건",
+                            sclas.smallCategoryCode(), subItems.size());
+                    allSubItems.addAll(subItems);
                 }
-                log.info("[NCS] 대분류 [{}]{} 순회 완료 (누적 세분류 {}건)", lclas.code(), lclas.name(), allSubItems.size());
-            } catch (Exception e) {
-                log.error("[NCS] 대분류({}) 하위 세분류 탐색 실패", lclas.code(), e);
             }
+            log.info("[NCS] 대분류 [{}]{} 순회 완료 (누적 세분류 {}건)", lclas.code(), lclas.name(), allSubItems.size());
         }
         log.info("[NCS] 트리 순회 완료 - 총 세분류(직무) {}건 수집", allSubItems.size());
         return allSubItems;
