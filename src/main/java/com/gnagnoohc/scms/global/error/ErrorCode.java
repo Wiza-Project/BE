@@ -144,6 +144,10 @@ public enum ErrorCode {
     JOB_POSTING_ALREADY_APPLIED(HttpStatus.CONFLICT, "J011", "이미 해당 채용공고에 지원 완료된 상태입니다."),
     JOB_POSTING_APPLICATION_NOT_FOUND(HttpStatus.NOT_FOUND, "J012", "채용 지원 이력을 찾을 수 없거나 이미 취소된 상태입니다."),
     DUPLICATE_COMPANY_ACCOUNT_NO(HttpStatus.CONFLICT, "J013", "이미 등록된 사업자등록번호입니다."),
+    COVER_LETTER_NOT_FOUND(HttpStatus.NOT_FOUND, "J014", "자기소개서를 찾을 수 없습니다."),
+    COVER_LETTER_ALREADY_EXISTS(HttpStatus.CONFLICT, "J015", "이미 작성된 자기소개서가 있습니다. 버전 관리 기능을 이용해주세요."),
+    // 자기소개서/포트폴리오 버전 번호 채번이 동시 요청으로 유니크 제약(uq_career_document_student_type_version)에 걸렸을 때 사용하는 에러코드.
+    DOCUMENT_VERSION_CONFLICT(HttpStatus.CONFLICT, "J016", "저장이 동시에 처리되어 실패했습니다. 다시 시도해주세요."),
 
     // ── 알림 ──────────────────────────────────────────────────────
     NOTIFICATION_NOT_FOUND(HttpStatus.NOT_FOUND, "N001", "알림을 찾을 수 없습니다.");
