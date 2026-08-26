@@ -56,4 +56,14 @@ public class CounselingAssignment {
         }
         this.endedAt = now;
     }
+
+    /** 종료(endedAt) 처리되지 않은 배정인지 여부. 회기 생성·완료·취소는 활성 배정에서만 허용한다. */
+    public boolean isActive() {
+        return endedAt == null;
+    }
+
+    /** 회기·배정 API에서 요청자 본인이 이 배정의 담당 상담사인지 확인할 때 쓴다. */
+    public boolean isOwnedBy(Integer counselorId) {
+        return counselor.getUserId().equals(counselorId);
+    }
 }
