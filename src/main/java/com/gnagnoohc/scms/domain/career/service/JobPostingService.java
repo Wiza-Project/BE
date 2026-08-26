@@ -7,6 +7,7 @@ import com.gnagnoohc.scms.domain.career.dto.posting.*;
 import com.gnagnoohc.scms.domain.career.entity.CompanyAccount;
 import com.gnagnoohc.scms.domain.career.entity.JobPosting;
 import com.gnagnoohc.scms.domain.career.helper.CareerBindingHelper;
+import com.gnagnoohc.scms.domain.career.helper.CareerSecurityHelper;
 import com.gnagnoohc.scms.domain.career.repository.CompanyAccountRepository;
 import com.gnagnoohc.scms.domain.career.repository.JobPostingRepository;
 import com.gnagnoohc.scms.domain.user.entity.AppUser;
@@ -78,15 +79,10 @@ import java.util.Map;
 @Transactional(readOnly = true)
 public class JobPostingService {
 
-    // 취창업지원과
-    private static final String CAREER_EMPLOYMENT_DEPT = "D400";
-
     private final JobPostingRepository jobPostingRepository;
     private final CompanyAccountRepository companyAccountRepository;
-    // 도메인 바인딩 헬퍼 주입
     private final CareerBindingHelper careerBindingHelper;
-    // 사용자 정보 조회용 공통 AppUser 추가 (교직원 중에서도 취창업 부서 검증용)
-    private final AppUserRepository appUserRepository;
+    private final CareerSecurityHelper careerSecurityHelper;
 
     // 빈 주입 의존성 경고 방지 및 독립적 JSON 직렬화/역직렬화를 위한 객체 생성
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -220,8 +216,7 @@ public class JobPostingService {
      */
     @Transactional
     public void reviewJobPosting(Integer jobPostingId, Integer reviewerUserId, JobPostingReviewRequestDTO requestDTO) {
-        // TODO: 이후 실제 데이터 넣어서 처리 필요 - 부서 권한 검증: 취창업지원팀 교직원 또는 관리자 여부 확인
-        validateCareerStaff(reviewerUserId);
+        careerSecurityHelper.validateAndGetCareerStaff(reviewerUserId);
 
         JobPosting jobPosting = jobPostingRepository.findById(jobPostingId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.JOB_POSTING_NOT_FOUND));
@@ -238,39 +233,6 @@ public class JobPostingService {
 
         jobPosting.review(targetStatus, requestDTO.getRejectionReason(), reviewerUserId);
         log.info("[JobPostingService] 채용공고 검수 처리 완료. ID: {}, 상태: {}, 검수자 ID: {}", jobPostingId, targetStatus, reviewerUserId);
-    }
-
-    /**
-     * 교직원 전용 채용공고 검수 과정 - 부서 권한 검증 헬퍼 메서드 추가
-     *
-     * <p>TODO: 공통 도메인 담당자가 AppUser 엔티티에 편의 메서드(isDepartmentMatching, isAdmin 등)를 추가하면 도메인 메서드 호출 방식으로 리팩터링 진행 예정 + 확인 후 취창업부서 한정 채용공고 신규등록-검토 등으로 취창업도메인 공통헬퍼메소드 추가 예정</p>
-     *
-     * D400 취창업지원과 부서 한정으로 허가
-     * user의 부서 정보나 권한을 확인하여 취창업 관련 부서/관리자가 아니면 거부
-     * if (!user.isCareerStaffOrAdmin()) { ... throw new BusinessException(ErrorCode.ACCESS_DENIED); }
-     *
-     * @param userId 검수자 사용자 식별자 (PK)
-     * @throws BusinessException 미로그인({@link ErrorCode#UNAUTHORIZED}), 사용자 미존재({@link ErrorCode#USER_NOT_FOUND}), 부서 권한 부족({@link ErrorCode#DEPARTMENT_FORBIDDEN})
-     */
-    private void validateCareerStaff(Integer userId) {
-        if (userId == null) {
-            throw new BusinessException(ErrorCode.UNAUTHORIZED);
-        }
-
-        AppUser user = appUserRepository.findById(userId)
-            .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
-
-        // 취창업지원과(D400) 소속 여부 직접 판별
-        boolean isCareerStaff = user.getDepartmentCode() != null
-                && CAREER_EMPLOYMENT_DEPT.equals(user.getDepartmentCode().getCode());
-
-        // 시스템 관리자(ADMIN) 여부 판별
-        boolean isAdmin = "ADMIN".equalsIgnoreCase(user.getUserType());
-
-        // 취창업지원과 소속도 아니고 관리자도 아닌 경우 인가 거부
-        if (!isCareerStaff && !isAdmin) {
-            throw new BusinessException(ErrorCode.DEPARTMENT_FORBIDDEN);
-        }
     }
 
     /**
