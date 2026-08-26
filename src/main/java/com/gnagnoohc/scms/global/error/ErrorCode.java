@@ -82,6 +82,10 @@ public enum ErrorCode {
     APPLICATION_ALREADY_CANCELED(HttpStatus.CONFLICT, "P017", "이미 취소되었거나 반려된 신청입니다."),
     // 승인(APPROVED)되지 않은 신청 건으로 만족도 설문을 제출하려고 할 때 사용하는 에러코드.
     SURVEY_NOT_AVAILABLE(HttpStatus.BAD_REQUEST, "P019", "승인된 신청 건만 만족도 설문을 제출할 수 있습니다."),
+    // register()/update() 요청에 존재하지 않는 fileGroupId가 담겨왔을 때 사용하는 에러코드.
+    PROGRAM_FILE_GROUP_NOT_FOUND(HttpStatus.NOT_FOUND, "P020", "첨부파일을 찾을 수 없습니다."),
+    // 이미 다른 프로그램에 연결된 fileGroupId를 재사용하려고 할 때 사용하는 에러코드.
+    PROGRAM_FILE_GROUP_ALREADY_LINKED(HttpStatus.CONFLICT, "P021", "이미 다른 프로그램에 연결된 첨부파일입니다."),
 
     // ── 핵심역량/진단 ─────────────────────────────────────────────
     COMPETENCY_NOT_FOUND(HttpStatus.NOT_FOUND, "Q001", "핵심역량 정보를 찾을 수 없습니다."),
@@ -112,12 +116,20 @@ public enum ErrorCode {
     RESPONSE_SAVE_CONFLICT(HttpStatus.CONFLICT, "Q017", "저장이 동시에 처리되어 실패했습니다. 다시 시도해주세요."),
     // 아직 제출·채점되지 않은 attempt(assessment_score 미생성)로 결과 조회를 시도할 때 사용하는 에러코드.
     RESULT_NOT_AVAILABLE(HttpStatus.BAD_REQUEST, "Q018", "아직 채점되지 않은 진단입니다."),
+    // target_condition에 grades/majorCodeIds 외의 키가 있을 때 사용. 조용히 무시하면 대상자 집계가 잘못된다.
+    ASSESSMENT_TARGET_CONDITION_UNSUPPORTED(HttpStatus.BAD_REQUEST, "Q019", "지원하지 않는 응시 대상 조건입니다."),
+    // grades/majorCodeIds 값이 배열이 아니거나 원소가 정수가 아닐 때 사용. Q019(인식 못 하는 키)와 달리 키는 맞음.
+    ASSESSMENT_TARGET_CONDITION_INVALID_FORMAT(HttpStatus.BAD_REQUEST, "Q020", "저장된 응시 대상 조건의 형식이 올바르지 않습니다. 회차 등록/수정 화면에서 대상 조건을 다시 확인해주세요."),
+
     // ── 상담 ──────────────────────────────────────────────────────
     COUNSELOR_NOT_FOUND(HttpStatus.NOT_FOUND, "S001", "상담사를 찾을 수 없습니다."),
     SCHEDULE_NOT_AVAILABLE(HttpStatus.CONFLICT, "S002", "이미 예약된 시간입니다."),
     RESERVATION_NOT_FOUND(HttpStatus.NOT_FOUND, "S003", "상담 예약을 찾을 수 없습니다."),
     CANNOT_CANCEL_CONFIRMED(HttpStatus.BAD_REQUEST, "S004", "확정된 상담은 취소할 수 없습니다."),
     ALREADY_PROCESSED_RESERVATION(HttpStatus.CONFLICT, "S005", "이미 처리된 상담 예약입니다."),
+    ASSIGNMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "S006", "상담사 배정을 찾을 수 없습니다."),
+    SESSION_NOT_FOUND(HttpStatus.NOT_FOUND, "S007", "상담 회기를 찾을 수 없습니다."),
+    SESSION_STATE_NOT_ALLOWED(HttpStatus.CONFLICT, "S008", "허용되지 않은 회기 상태입니다."),
 
     // ── 마일리지 ──────────────────────────────────────────────────
     MILEAGE_ITEM_NOT_FOUND(HttpStatus.NOT_FOUND, "M001", "마일리지 항목을 찾을 수 없습니다."),
@@ -144,6 +156,10 @@ public enum ErrorCode {
     JOB_POSTING_ALREADY_APPLIED(HttpStatus.CONFLICT, "J011", "이미 해당 채용공고에 지원 완료된 상태입니다."),
     JOB_POSTING_APPLICATION_NOT_FOUND(HttpStatus.NOT_FOUND, "J012", "채용 지원 이력을 찾을 수 없거나 이미 취소된 상태입니다."),
     DUPLICATE_COMPANY_ACCOUNT_NO(HttpStatus.CONFLICT, "J013", "이미 등록된 사업자등록번호입니다."),
+    COVER_LETTER_NOT_FOUND(HttpStatus.NOT_FOUND, "J014", "자기소개서를 찾을 수 없습니다."),
+    COVER_LETTER_ALREADY_EXISTS(HttpStatus.CONFLICT, "J015", "이미 작성된 자기소개서가 있습니다. 버전 관리 기능을 이용해주세요."),
+    // 자기소개서/포트폴리오 버전 번호 채번이 동시 요청으로 유니크 제약(uq_career_document_student_type_version)에 걸렸을 때 사용하는 에러코드.
+    DOCUMENT_VERSION_CONFLICT(HttpStatus.CONFLICT, "J016", "저장이 동시에 처리되어 실패했습니다. 다시 시도해주세요."),
 
     // ── 알림 ──────────────────────────────────────────────────────
     NOTIFICATION_NOT_FOUND(HttpStatus.NOT_FOUND, "N001", "알림을 찾을 수 없습니다.");

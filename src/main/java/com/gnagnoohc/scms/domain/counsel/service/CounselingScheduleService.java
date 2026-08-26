@@ -9,6 +9,7 @@ import com.gnagnoohc.scms.domain.counsel.entity.CounselingType;
 import com.gnagnoohc.scms.domain.counsel.repository.CounselUserRepository;
 import com.gnagnoohc.scms.domain.counsel.repository.CounselingReservationRepository;
 import com.gnagnoohc.scms.domain.counsel.repository.CounselingScheduleRepository;
+import com.gnagnoohc.scms.domain.counsel.repository.CounselingSessionRepository;
 import com.gnagnoohc.scms.domain.counsel.repository.CounselingTypeRepository;
 import com.gnagnoohc.scms.domain.user.entity.AppUser;
 import com.gnagnoohc.scms.global.error.BusinessException;
@@ -36,6 +37,7 @@ public class CounselingScheduleService {
     private final CounselingTypeRepository counselingTypeRepository;
     private final CounselingScheduleRepository counselingScheduleRepository;
     private final CounselingReservationRepository counselingReservationRepository;
+    private final CounselingSessionRepository counselingSessionRepository;
 
     /**
      * 활성 학생만 예약 가능한 일정을 조회할 수 있으며 조회 중에는 일정 행을 잠그지 않는다.
@@ -83,6 +85,7 @@ public class CounselingScheduleService {
         AppUser counselor = getActiveCounselorForUpdate(counselorId);
         validateRequest(request, Instant.now());
         ensureNoOverlap(counselorId, request.startsAt(), request.endsAt());
+        ensureNoSessionOverlap(counselorId, request.startsAt(), request.endsAt());
 
         CounselingSchedule schedule = CounselingSchedule.create(
                 counselingType,
@@ -129,6 +132,7 @@ public class CounselingScheduleService {
         )) {
             throw new BusinessException(ErrorCode.SCHEDULE_NOT_AVAILABLE);
         }
+        ensureNoSessionOverlap(counselorId, request.startsAt(), request.endsAt());
 
         schedule.update(
                 counselingType,
@@ -207,6 +211,17 @@ public class CounselingScheduleService {
     private void ensureNoOverlap(Integer counselorId, Instant startsAt, Instant endsAt) {
         if (counselingScheduleRepository
                 .existsOverlappingSchedule(counselorId, startsAt, endsAt)) {
+            throw new BusinessException(ErrorCode.SCHEDULE_NOT_AVAILABLE);
+        }
+    }
+
+    /**
+     * 상담 회기 관리 설계(3.2): 같은 상담사의 CANCELED가 아닌 상담 회기와도 반열린 구간으로
+     * 겹칠 수 없다. 일정 등록·수정 모두 사용자 행을 먼저 잠근 뒤 호출되므로 회기 생성과 직렬화된다.
+     */
+    private void ensureNoSessionOverlap(Integer counselorId, Instant startsAt, Instant endsAt) {
+        if (counselingSessionRepository
+                .existsOverlappingSessionForCounselor(counselorId, startsAt, endsAt)) {
             throw new BusinessException(ErrorCode.SCHEDULE_NOT_AVAILABLE);
         }
     }

@@ -17,6 +17,7 @@ public record ProgramDetailResponseDTO(
         String competencyName,
         String managerUserName,
         Integer fileGroupId,
+        String fileName,
         Integer mileagePolicyId,
         BigDecimal mileagePoints,
         String programStatus,
@@ -36,7 +37,7 @@ public record ProgramDetailResponseDTO(
 ) {
     public static ProgramDetailResponseDTO from(ExtracurricularProgram program, long applicantCount,
                                                  List<ProgramSessionResponseDTO> sessions,
-                                                 String myApplicationStatus) {
+                                                 String myApplicationStatus, String fileName) {
         return new ProgramDetailResponseDTO(
                 program.getProgramId(),
                 program.getProgramName(),
@@ -46,6 +47,7 @@ public record ProgramDetailResponseDTO(
                 program.getCompetency().getCompetencyName(),
                 program.getManagerUser().getUserName(),
                 program.getFileGroup() != null ? program.getFileGroup().getFileGroupId() : null,
+                fileName,
                 program.getMileagePolicy() != null ? program.getMileagePolicy().getMileagePolicyId() : null,
                 program.getMileagePolicy() != null ? program.getMileagePolicy().getPoints() : null,
                 program.getProgramStatus().name(),

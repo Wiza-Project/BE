@@ -12,7 +12,10 @@ import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 import java.time.Instant;
 
-@Entity @Getter @Table(name = "extracurricular_program")
+@Entity @Getter
+@Table(name = "extracurricular_program", uniqueConstraints = @UniqueConstraint(
+        name = "uq_extracurricular_program_file_group_id",
+        columnNames = "file_group_id"))
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ExtracurricularProgram extends BaseTimeEntity {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)

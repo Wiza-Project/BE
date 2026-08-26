@@ -5,11 +5,12 @@ import com.gnagnoohc.scms.domain.competency.dto.AssessmentRoundResponse;
 import com.gnagnoohc.scms.domain.competency.entity.AssessmentRound;
 import com.gnagnoohc.scms.domain.competency.repository.AssessmentAttemptRepository;
 import com.gnagnoohc.scms.domain.competency.repository.AssessmentRoundRepository;
+import com.gnagnoohc.scms.domain.competency.support.TargetConditionInterpreter;
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -17,6 +18,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import java.lang.reflect.Field;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -37,8 +39,16 @@ class AssessmentRoundServiceTest {
     @Mock
     AssessmentAttemptRepository assessmentAttemptRepository;
 
-    @InjectMocks
+    // TargetConditionInterpreter는 의존성 없는 순수 컴포넌트라 목(mock) 대신 실제 인스턴스를 쓴다 —
+    // isValidShape()를 목으로 두면 boolean 기본값(false)이 반환돼 targetCondition을 넘기는
+    // 기존 테스트가 전부 INVALID_INPUT으로 깨지기 때문에, 매 테스트마다 스텁하는 대신 실제 판정 로직을 쓴다.
     AssessmentRoundService assessmentRoundService;
+
+    @BeforeEach
+    void setUp() {
+        assessmentRoundService = new AssessmentRoundService(
+                assessmentRoundRepository, assessmentAttemptRepository, new TargetConditionInterpreter());
+    }
 
     // 테스트에서 IDENTITY 채번 없이도 assessmentRoundId를 세팅하기 위한 리플렉션 헬퍼(엔티티에 세터가 없으므로)
     private static void setRoundId(AssessmentRound round, Integer roundId) {
@@ -65,13 +75,75 @@ class AssessmentRoundServiceTest {
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
         AssessmentRoundResponse response = assessmentRoundService.registerRound(
-                buildRequest(startsAt, endsAt, Map.of("grade", 3)), 1);
+                buildRequest(startsAt, endsAt, Map.of("grades", List.of(3))), 1);
 
         assertThat(response.assessmentName()).isEqualTo("2026학년도 1학기 사전진단");
         assertThat(response.academicYear()).isEqualTo(2026);
         assertThat(response.assessmentType()).isEqualTo("PRE");
         assertThat(response.roundStatus()).isEqualTo("DRAFT");
-        assertThat(response.targetCondition()).containsEntry("grade", 3);
+        assertThat(response.targetCondition()).containsEntry("grades", List.of(3));
+    }
+
+    @Test
+    void registerRound_whenTargetConditionGradesNotArray_throwsInvalidInput() {
+        Instant startsAt = Instant.now();
+        Instant endsAt = startsAt.plus(7, ChronoUnit.DAYS);
+
+        assertThatThrownBy(() -> assessmentRoundService.registerRound(
+                buildRequest(startsAt, endsAt, Map.of("grades", 3)), 1))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.INVALID_INPUT);
+
+        verify(assessmentRoundRepository, never()).save(any());
+    }
+
+    // 이 학교는 단과대가 없어 colleges 같은 인식 못 하는 키가 저장되는 걸 등록 시점부터 막는다
+    // (TargetConditionInterpreter.hasUnrecognizedKey와 동일한 판정 재사용).
+    @Test
+    void registerRound_whenTargetConditionHasUnrecognizedKey_throwsInvalidInput() {
+        Instant startsAt = Instant.now();
+        Instant endsAt = startsAt.plus(7, ChronoUnit.DAYS);
+
+        assertThatThrownBy(() -> assessmentRoundService.registerRound(
+                buildRequest(startsAt, endsAt, Map.of("colleges", List.of("공과대학"))), 1))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.INVALID_INPUT);
+
+        verify(assessmentRoundRepository, never()).save(any());
+    }
+
+    // asInt()는 true→1처럼 정수가 아닌 값도 그럴듯한 숫자로 조용히 바꿔버리므로, 배열 안 원소
+    // 타입까지 등록 시점에 막아야 한다(재검토 스레드 4번 근거).
+    @Test
+    void registerRound_whenTargetConditionGradeElementNotIntegral_throwsInvalidInput() {
+        Instant startsAt = Instant.now();
+        Instant endsAt = startsAt.plus(7, ChronoUnit.DAYS);
+
+        assertThatThrownBy(() -> assessmentRoundService.registerRound(
+                buildRequest(startsAt, endsAt, Map.of("grades", List.of(true))), 1))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.INVALID_INPUT);
+
+        verify(assessmentRoundRepository, never()).save(any());
+    }
+
+    // 4294971296(2^32+4000)은 isIntegralNumber()는 통과하지만 int로 캐스팅하면 4000으로
+    // 오버플로우된다 — 존재하는 학과 코드ID로 조용히 둔갑하지 않도록 등록 시점에 막는다.
+    @Test
+    void registerRound_whenTargetConditionMajorCodeIdExceedsIntRange_throwsInvalidInput() {
+        Instant startsAt = Instant.now();
+        Instant endsAt = startsAt.plus(7, ChronoUnit.DAYS);
+
+        assertThatThrownBy(() -> assessmentRoundService.registerRound(
+                buildRequest(startsAt, endsAt, Map.of("majorCodeIds", List.of(4294971296L))), 1))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.INVALID_INPUT);
+
+        verify(assessmentRoundRepository, never()).save(any());
     }
 
     @Test
@@ -166,10 +238,30 @@ class AssessmentRoundServiceTest {
 
         Instant newEndsAt = endsAt.plus(3, ChronoUnit.DAYS);
         AssessmentRoundResponse response = assessmentRoundService.updateRound(
-                100, buildRequest(startsAt, newEndsAt, Map.of("major", "컴퓨터공학과")));
+                100, buildRequest(startsAt, newEndsAt, Map.of("majorCodeIds", List.of(8000))));
 
         assertThat(response.endsAt()).isEqualTo(newEndsAt);
-        assertThat(response.targetCondition()).containsEntry("major", "컴퓨터공학과");
+        assertThat(response.targetCondition()).containsEntry("majorCodeIds", List.of(8000));
+    }
+
+    @Test
+    void updateRound_whenTargetConditionMajorCodeIdsNotArray_throwsInvalidInput() {
+        Instant startsAt = Instant.now();
+        Instant endsAt = startsAt.plus(7, ChronoUnit.DAYS);
+        AssessmentRound round = AssessmentRound.create("초안", 2026, "SPRING", "PRE", startsAt, endsAt, null, 1);
+        setRoundId(round, 100);
+
+        when(assessmentRoundRepository.findById(100)).thenReturn(Optional.of(round));
+        when(assessmentAttemptRepository.existsByAssessmentRound_AssessmentRoundIdAndStartedAtIsNotNull(100))
+                .thenReturn(false);
+
+        assertThatThrownBy(() -> assessmentRoundService.updateRound(
+                100, buildRequest(startsAt, endsAt, Map.of("majorCodeIds", 8000))))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.INVALID_INPUT);
+
+        verify(assessmentRoundRepository, never()).saveAndFlush(any());
     }
 
     // update()는 관리 중인 엔티티만 변경하므로 saveAndFlush에서 유니크 제약 위반을 재현.
