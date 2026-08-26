@@ -6,6 +6,7 @@ import com.gnagnoohc.scms.domain.program.dto.response.ProgramAdminListItemRespon
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramDetailResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramListItemResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.request.ProgramRegisterRequestDTO;
+import com.gnagnoohc.scms.domain.program.dto.request.ProgramSessionRegisterRequestDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramRegisterResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.request.ProgramUpdateRequestDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramSessionResponseDTO;
@@ -105,6 +106,17 @@ public class ProgramService {
                 request.operationStartsAt(), request.operationEndsAt());
 
         /**
+         * (a-1-1) 회차 최소 1개 검증 ----------------------------------------------------
+         * 프론트의 "회차관리" 탭에서 최소 1회차를 입력하지 않으면 등록 자체를 막는다. 프론트에서
+         * 버튼/화면으로 막더라도 우회 가능하므로 백엔드가 반드시 재검증한다(다른 검증들과 동일한 이유).
+         * DB에 아무것도 쓰기 전(첨부파일 검증/INSERT 이전)에 가장 먼저 확인해, 회차 없이 등록을 시도했을 때
+         * 불필요한 부수효과 없이 곧바로 막는다.
+         */
+        if (request.sessions() == null || request.sessions().isEmpty()) {
+            throw new BusinessException(ErrorCode.PROGRAM_SESSION_REQUIRED);
+        }
+
+        /**
          * (a-2) 첨부파일 검증 ----------------------------------------------------------
          * 클라이언트가 보낸 fileGroupId를 검증 없이 그대로 저장하면, 업로더 본인이 아닌 그룹이나
          * 이미 다른 프로그램에 연결된 그룹을 임의로 지정해 연결할 수 있다. 아래에서 소유권/단일PDF/재사용을 검증한다.
@@ -159,6 +171,24 @@ public class ProgramService {
              * 위반된 컬럼을 구분해 어떤 참조 값이 없는지에 맞는 404 에러로 바꿔서 응답한다.
              */
             throw resolveForeignKeyViolation(e);
+        }
+
+        /**
+         * (d) 회차 일괄 생성 -----------------------------------------------------------
+         * 위 (a-1-1)에서 이미 1개 이상임을 확인했으므로, 요청에 담긴 회차를 그대로 순회하며 생성한다.
+         * ProgramSessionService.registerSession()과 동일한 리포지토리 메서드를 재사용한다.
+         * createdBy는 등록 담당자(managerUserId), 생성 시각은 프로그램 생성에 쓴 now를 그대로 재사용한다.
+         */
+        for (ProgramSessionRegisterRequestDTO session : request.sessions()) {
+            try {
+                programSessionRepository.insertSession(
+                        programId, session.sessionNo(), session.sessionName(),
+                        session.startsAt(), session.endsAt(), session.location(),
+                        managerUserId, now);
+            } catch (DataIntegrityViolationException e) {
+                // uq_program_session_program_no 위반 = 요청 안에서 같은 회차번호가 중복된 경우.
+                throw new BusinessException(ErrorCode.DUPLICATE_SESSION_NO);
+            }
         }
 
         // 등록에 성공했으니, 방금 저장한 값들을 그대로 담아 응답 DTO를 만들어 돌려준다.

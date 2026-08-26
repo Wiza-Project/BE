@@ -2,6 +2,7 @@ package com.gnagnoohc.scms.domain.program.service;
 
 import com.gnagnoohc.scms.domain.competency.entity.Competency;
 import com.gnagnoohc.scms.domain.program.dto.request.ProgramRegisterRequestDTO;
+import com.gnagnoohc.scms.domain.program.dto.request.ProgramSessionRegisterRequestDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramAdminListItemResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramDetailResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramFileUploadResponseDTO;
@@ -54,6 +55,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -111,7 +113,8 @@ class ProgramServiceTest {
                 null, 1, 2, 3, null,
                 "프로그램명", "설명",
                 recruitmentStartsAt, recruitmentEndsAt, operationStartsAt, operationEndsAt,
-                10, null
+                10, null,
+                List.of(new ProgramSessionRegisterRequestDTO(1, null, operationStartsAt, operationEndsAt, "세미나실"))
         );
 
         ProgramRegisterResponseDTO response = programService.register(request, 100, 11);
@@ -134,7 +137,7 @@ class ProgramServiceTest {
                 null, 1, 2, 3, null,
                 "프로그램명", "설명",
                 recruitmentStartsAt, recruitmentEndsAt, operationStartsAt, operationEndsAt,
-                10, null
+                10, null, null
         );
 
         assertThatThrownBy(() -> programService.register(request, 100, 99))
@@ -154,7 +157,7 @@ class ProgramServiceTest {
                 null, 1, 2, 3, null,
                 "프로그램명", "설명",
                 recruitmentStartsAt, recruitmentEndsAt, operationStartsAt, operationEndsAt,
-                10, null
+                10, null, null
         );
 
         assertThatThrownBy(() -> programService.register(request, 100, null))
@@ -192,13 +195,118 @@ class ProgramServiceTest {
                 77, 1, 2, 3, null,
                 "프로그램명", "설명",
                 recruitmentStartsAt, recruitmentEndsAt, operationStartsAt, operationEndsAt,
-                10, null
+                10, null,
+                List.of(new ProgramSessionRegisterRequestDTO(1, null, operationStartsAt, operationEndsAt, "세미나실"))
         );
 
         assertThatThrownBy(() -> programService.register(request, 100, 11))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.PROGRAM_FILE_GROUP_ALREADY_LINKED);
+    }
+
+    @Test
+    void register_withSessions_createsAllSessions() throws Exception {
+        when(commonCodeRepository.findByCodeGroupAndActiveTrueOrderBySortOrderAsc("DEPARTMENT"))
+                .thenReturn(List.of(buildCommonCodeFixture(11, "DEPARTMENT", "D200")));
+
+        when(programRepository.insertProgram(
+                any(), any(), any(), any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), any(), any(), any(), any()
+        )).thenReturn(1);
+
+        Instant recruitmentStartsAt = Instant.now();
+        Instant recruitmentEndsAt = recruitmentStartsAt.plusSeconds(3600);
+        Instant operationStartsAt = recruitmentEndsAt;
+        Instant operationEndsAt = operationStartsAt.plusSeconds(3600);
+
+        ProgramSessionRegisterRequestDTO session1 = new ProgramSessionRegisterRequestDTO(
+                1, "1주차", operationStartsAt, operationEndsAt, "학생회관 3층 세미나실");
+        ProgramSessionRegisterRequestDTO session2 = new ProgramSessionRegisterRequestDTO(
+                2, "2주차", operationStartsAt, operationEndsAt, "학생회관 4층 세미나실");
+
+        ProgramRegisterRequestDTO request = new ProgramRegisterRequestDTO(
+                null, 1, 2, 3, null,
+                "프로그램명", "설명",
+                recruitmentStartsAt, recruitmentEndsAt, operationStartsAt, operationEndsAt,
+                10, null,
+                List.of(session1, session2)
+        );
+
+        programService.register(request, 100, 11);
+
+        verify(programSessionRepository).insertSession(
+                eq(1), eq(1), eq("1주차"), eq(operationStartsAt), eq(operationEndsAt),
+                eq("학생회관 3층 세미나실"), eq(100), any());
+        verify(programSessionRepository).insertSession(
+                eq(1), eq(2), eq("2주차"), eq(operationStartsAt), eq(operationEndsAt),
+                eq("학생회관 4층 세미나실"), eq(100), any());
+    }
+
+    @Test
+    void register_whenSessionsEmpty_throwsProgramSessionRequired() throws Exception {
+        when(commonCodeRepository.findByCodeGroupAndActiveTrueOrderBySortOrderAsc("DEPARTMENT"))
+                .thenReturn(List.of(buildCommonCodeFixture(11, "DEPARTMENT", "D200")));
+
+        Instant recruitmentStartsAt = Instant.now();
+        Instant recruitmentEndsAt = recruitmentStartsAt.plusSeconds(3600);
+        Instant operationStartsAt = recruitmentEndsAt;
+        Instant operationEndsAt = operationStartsAt.plusSeconds(3600);
+
+        ProgramRegisterRequestDTO request = new ProgramRegisterRequestDTO(
+                null, 1, 2, 3, null,
+                "프로그램명", "설명",
+                recruitmentStartsAt, recruitmentEndsAt, operationStartsAt, operationEndsAt,
+                10, null,
+                List.of()
+        );
+
+        assertThatThrownBy(() -> programService.register(request, 100, 11))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.PROGRAM_SESSION_REQUIRED);
+
+        verify(programRepository, never()).insertProgram(
+                any(), any(), any(), any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void register_whenSessionNoDuplicated_throwsDuplicateSessionNo() throws Exception {
+        when(commonCodeRepository.findByCodeGroupAndActiveTrueOrderBySortOrderAsc("DEPARTMENT"))
+                .thenReturn(List.of(buildCommonCodeFixture(11, "DEPARTMENT", "D200")));
+
+        when(programRepository.insertProgram(
+                any(), any(), any(), any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), any(), any(), any(), any()
+        )).thenReturn(1);
+        // 회차 목록에 몇 개가 담기든 insertSession 자체가 유니크 제약 위반을 던지는 상황을 재현한다
+        // (실제로는 요청 안의 회차번호가 중복될 때 벌어지는 상황이지만, 여기서는 그 결과인 예외 변환 로직만 검증한다).
+        when(programSessionRepository.insertSession(
+                any(), any(), any(), any(), any(), any(), any(), any()
+        )).thenThrow(new DataIntegrityViolationException(
+                "duplicate key value violates unique constraint \"uq_program_session_program_no\""));
+
+        Instant recruitmentStartsAt = Instant.now();
+        Instant recruitmentEndsAt = recruitmentStartsAt.plusSeconds(3600);
+        Instant operationStartsAt = recruitmentEndsAt;
+        Instant operationEndsAt = operationStartsAt.plusSeconds(3600);
+
+        ProgramSessionRegisterRequestDTO session1 = new ProgramSessionRegisterRequestDTO(
+                1, null, operationStartsAt, operationEndsAt, "세미나실");
+
+        ProgramRegisterRequestDTO request = new ProgramRegisterRequestDTO(
+                null, 1, 2, 3, null,
+                "프로그램명", "설명",
+                recruitmentStartsAt, recruitmentEndsAt, operationStartsAt, operationEndsAt,
+                10, null,
+                List.of(session1)
+        );
+
+        assertThatThrownBy(() -> programService.register(request, 100, 11))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.DUPLICATE_SESSION_NO);
     }
 
     @Test
