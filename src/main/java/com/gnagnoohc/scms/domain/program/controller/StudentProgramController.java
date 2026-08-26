@@ -85,7 +85,8 @@ public class StudentProgramController {
         String originalFileName = loadedFile.originalFileName();
         String asciiFileName = originalFileName.replaceAll("[^\\x20-\\x7E]", "_").replace("\"", "'");
         String encodedFileName = URLEncoder.encode(originalFileName, StandardCharsets.UTF_8)
-                .replace("+", "%20");
+                .replace("+", "%20")
+                .replace("*", "%2A");
         String contentDisposition = "attachment; filename=\"" + asciiFileName + "\"; filename*=UTF-8''" + encodedFileName;
 
         return ResponseEntity.ok()

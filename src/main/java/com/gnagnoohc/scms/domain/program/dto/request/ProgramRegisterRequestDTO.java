@@ -75,6 +75,6 @@ public record ProgramRegisterRequestDTO(
          * (@NotEmpty 위반은 여러 필드 오류가 한 문자열로 합쳐진 범용 400으로 내려가 구분이 어렵다).
          * 원소 각각의 형식(회차번호/기간 등)은 @Valid로 ProgramSessionRegisterRequestDTO의 제약을 그대로 적용받는다.
          */
-        @Valid List<ProgramSessionRegisterRequestDTO> sessions
+        @Valid List<@NotNull ProgramSessionRegisterRequestDTO> sessions
 ) {
 }

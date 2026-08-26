@@ -45,7 +45,9 @@ public class ProgramSessionAdminController {
     public ApiResponse<ProgramSessionResponseDTO> updateSession(
             @PathVariable Integer programId,
             @PathVariable Integer sessionId,
-            @Valid @RequestBody ProgramSessionUpdateRequestDTO request) {
-        return ApiResponse.ok(programSessionService.updateSession(programId, sessionId, request));
+            @Valid @RequestBody ProgramSessionUpdateRequestDTO request,
+            @AuthenticationPrincipal AuthUser authUser) {
+        return ApiResponse.ok(programSessionService.updateSession(
+                programId, sessionId, request, authUser.getId(), authUser.getDepartmentCodeId()));
     }
 }
