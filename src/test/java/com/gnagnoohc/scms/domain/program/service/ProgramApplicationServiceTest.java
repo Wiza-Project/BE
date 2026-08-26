@@ -31,6 +31,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.PlatformTransactionManager;
 
 import java.lang.reflect.Constructor;
 import java.math.BigDecimal;
@@ -72,6 +73,9 @@ class ProgramApplicationServiceTest {
 
     @Mock
     ApplicationEventPublisher eventPublisher;
+
+    @Mock
+    PlatformTransactionManager transactionManager;
 
     @InjectMocks
     ProgramApplicationService programApplicationService;
@@ -412,6 +416,8 @@ class ProgramApplicationServiceTest {
         when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
         when(applicationRepository.findByIdForUpdate(5)).thenReturn(Optional.of(application));
         when(applicationRepository.updateCancellation(eq(5), eq("일정 변경"), any())).thenReturn(1);
+        when(applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(eq(1), any()))
+                .thenReturn(4L);
 
         ProgramApplicationCancelResponseDTO response =
                 programApplicationService.cancel(1, 5, 100, "일정 변경");
@@ -419,7 +425,30 @@ class ProgramApplicationServiceTest {
         assertThat(response.applicationStatus()).isEqualTo("CANCELLED");
         assertThat(response.applicationStatusLabel()).isEqualTo("취소");
         assertThat(response.cancellationReason()).isEqualTo("일정 변경");
+        assertThat(response.remainingCapacity()).isEqualTo(6);
+        assertThat(response.recruitmentEndsAt()).isEqualTo(program.getRecruitmentEndsAt());
         verify(eventPublisher).publishEvent(any(WaitlistSlotOpenedEvent.class));
+    }
+
+    @Test
+    void cancel_whenOccupiedCountExceedsCapacity_clampsRemainingCapacityToZero() throws Exception {
+        // 정원(capacity)이 이미 신청된 인원(occupiedCount)보다 작게 수정된 뒤 취소된 경우,
+        // remainingCapacity는 음수가 아니라 0으로 내려가야 한다.
+        Instant now = Instant.now();
+        ExtracurricularProgram program = buildProgramFixture(
+                1, now.minusSeconds(3600), now.plusSeconds(3600), 3);
+        ProgramApplication application = buildApplicationFixture(5, program, "APPLIED", 100);
+
+        when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
+        when(applicationRepository.findByIdForUpdate(5)).thenReturn(Optional.of(application));
+        when(applicationRepository.updateCancellation(eq(5), eq("일정 변경"), any())).thenReturn(1);
+        when(applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(eq(1), any()))
+                .thenReturn(5L);
+
+        ProgramApplicationCancelResponseDTO response =
+                programApplicationService.cancel(1, 5, 100, "일정 변경");
+
+        assertThat(response.remainingCapacity()).isZero();
     }
 
     @Test
@@ -555,11 +584,11 @@ class ProgramApplicationServiceTest {
     }
 
     /**
-     * notifyNextWaitlistedApplicant는 cancel()의 트랜잭션 커밋 이후(@TransactionalEventListener
+     * notifyAllWaitlistedApplicantsOfOpenSlots는 cancel()의 트랜잭션 커밋 이후(@TransactionalEventListener
      * AFTER_COMMIT)에 실행되는 리스너라, cancel()을 거치지 않고 이벤트를 직접 넘겨 호출한다.
      */
     @Test
-    void notifyNextWaitlistedApplicant_whenSlotsOpen_sendsSlotCountToAllWaitlisted() throws Exception {
+    void notifyAllWaitlistedApplicantsOfOpenSlots_whenSlotsOpen_sendsSlotCountToAllWaitlisted() throws Exception {
         ExtracurricularProgram program = buildProgramFixture(1, Instant.now(), Instant.now(), 10);
         ProgramApplication first = buildApplicationFixture(7, program, "WAITLISTED", 200);
         ProgramApplication second = buildApplicationFixture(8, program, "WAITLISTED", 201);
@@ -570,7 +599,7 @@ class ProgramApplicationServiceTest {
         when(applicationRepository.findAllByProgram_ProgramIdAndApplicationStatusOrderByWaitlistOrderAsc(1, "WAITLISTED"))
                 .thenReturn(List.of(first, second));
 
-        programApplicationService.notifyNextWaitlistedApplicant(
+        programApplicationService.notifyAllWaitlistedApplicantsOfOpenSlots(
                 new WaitlistSlotOpenedEvent(1, "테스트 프로그램"));
 
         verify(notificationSender).send(argThat(request ->
@@ -583,14 +612,14 @@ class ProgramApplicationServiceTest {
     }
 
     @Test
-    void notifyNextWaitlistedApplicant_whenNoSlotsAvailable_sendsNothing() throws Exception {
+    void notifyAllWaitlistedApplicantsOfOpenSlots_whenNoSlotsAvailable_sendsNothing() throws Exception {
         ExtracurricularProgram program = buildProgramFixture(1, Instant.now(), Instant.now(), 10);
 
         when(programRepository.findById(1)).thenReturn(Optional.of(program));
         when(applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(1, List.of("APPLIED", "APPROVED")))
                 .thenReturn(10L);
 
-        programApplicationService.notifyNextWaitlistedApplicant(
+        programApplicationService.notifyAllWaitlistedApplicantsOfOpenSlots(
                 new WaitlistSlotOpenedEvent(1, "테스트 프로그램"));
 
         verify(notificationSender, never()).send(any());
@@ -599,7 +628,7 @@ class ProgramApplicationServiceTest {
     }
 
     @Test
-    void notifyNextWaitlistedApplicant_whenNoWaitlistedApplicant_sendsNothing() throws Exception {
+    void notifyAllWaitlistedApplicantsOfOpenSlots_whenNoWaitlistedApplicant_sendsNothing() throws Exception {
         ExtracurricularProgram program = buildProgramFixture(1, Instant.now(), Instant.now(), 10);
 
         when(programRepository.findById(1)).thenReturn(Optional.of(program));
@@ -608,14 +637,14 @@ class ProgramApplicationServiceTest {
         when(applicationRepository.findAllByProgram_ProgramIdAndApplicationStatusOrderByWaitlistOrderAsc(1, "WAITLISTED"))
                 .thenReturn(List.of());
 
-        programApplicationService.notifyNextWaitlistedApplicant(
+        programApplicationService.notifyAllWaitlistedApplicantsOfOpenSlots(
                 new WaitlistSlotOpenedEvent(1, "테스트 프로그램"));
 
         verify(notificationSender, never()).send(any());
     }
 
     @Test
-    void notifyNextWaitlistedApplicant_whenSendFailsForOne_swallowsExceptionAndNotifiesRest() throws Exception {
+    void notifyAllWaitlistedApplicantsOfOpenSlots_whenSendFailsForOne_swallowsExceptionAndNotifiesRest() throws Exception {
         ExtracurricularProgram program = buildProgramFixture(1, Instant.now(), Instant.now(), 10);
         ProgramApplication first = buildApplicationFixture(7, program, "WAITLISTED", 200);
         ProgramApplication second = buildApplicationFixture(8, program, "WAITLISTED", 201);
@@ -628,7 +657,7 @@ class ProgramApplicationServiceTest {
         doThrow(new RuntimeException("발송 실패"))
                 .when(notificationSender).send(argThat(request -> request.recipientUserId().equals(200)));
 
-        assertThatCode(() -> programApplicationService.notifyNextWaitlistedApplicant(
+        assertThatCode(() -> programApplicationService.notifyAllWaitlistedApplicantsOfOpenSlots(
                 new WaitlistSlotOpenedEvent(1, "테스트 프로그램")))
                 .doesNotThrowAnyException();
 

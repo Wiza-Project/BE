@@ -2,6 +2,7 @@ package com.gnagnoohc.scms.domain.program.repository;
 
 import com.gnagnoohc.scms.domain.program.entity.ProgramSession;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -40,4 +41,23 @@ public interface ProgramSessionRepository extends JpaRepository<ProgramSession, 
     List<ProgramSession> findByProgram_ProgramIdOrderBySessionNoAsc(Integer programId);
 
     Optional<ProgramSession> findByProgramSessionIdAndProgram_ProgramId(Integer programSessionId, Integer programId);
+
+    /**
+     * insertSession과 같은 이유(엔티티에 setter/빌더 없음)로 native UPDATE로 우회한다.
+     * WHERE 절에 program_id도 함께 걸어, 다른 프로그램 소속 회차를 실수로 건드리지 않게 한다.
+     */
+    @Modifying(clearAutomatically = true)
+    @Query(value = """
+        UPDATE program_session
+        SET session_no = :sessionNo, session_name = :sessionName,
+            starts_at = :startsAt, ends_at = :endsAt, location = :location
+        WHERE program_session_id = :sessionId AND program_id = :programId
+        """, nativeQuery = true)
+    int updateSession(@Param("sessionId") Integer sessionId,
+                       @Param("programId") Integer programId,
+                       @Param("sessionNo") Integer sessionNo,
+                       @Param("sessionName") String sessionName,
+                       @Param("startsAt") Instant startsAt,
+                       @Param("endsAt") Instant endsAt,
+                       @Param("location") String location);
 }

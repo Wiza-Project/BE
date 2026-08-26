@@ -11,7 +11,7 @@ import jakarta.validation.constraints.Positive;
 public record CounselingReservationRequest(
         @NotNull @Positive Integer counselingTypeId,
         @Positive Integer scheduleId,
-        @Positive Integer consentId,
+        @NotNull @Positive Integer consentId,
         @NotBlank String requestContent
 ) {
 }

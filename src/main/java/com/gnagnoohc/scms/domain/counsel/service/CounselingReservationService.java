@@ -11,12 +11,14 @@ import com.gnagnoohc.scms.domain.counsel.entity.CounselingSchedule;
 import com.gnagnoohc.scms.domain.counsel.entity.CounselingType;
 import com.gnagnoohc.scms.domain.counsel.repository.CounselUserRepository;
 import com.gnagnoohc.scms.domain.counsel.repository.CounselingAssignmentRepository;
-import com.gnagnoohc.scms.domain.counsel.repository.CounselingConsentRepository;
 import com.gnagnoohc.scms.domain.counsel.repository.CounselingReservationRepository;
 import com.gnagnoohc.scms.domain.counsel.repository.CounselingScheduleRepository;
 import com.gnagnoohc.scms.domain.counsel.repository.CounselingTypeRepository;
 import com.gnagnoohc.scms.domain.user.entity.AppUser;
 import com.gnagnoohc.scms.domain.user.entity.UserConsent;
+import com.gnagnoohc.scms.domain.user.service.consent.ConsentModuleCode;
+import com.gnagnoohc.scms.domain.user.service.consent.ConsentType;
+import com.gnagnoohc.scms.domain.user.service.consent.ConsentVerifier;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
@@ -44,12 +46,16 @@ public class CounselingReservationService {
     private final CounselingTypeRepository counselingTypeRepository;
     private final CounselingScheduleRepository counselingScheduleRepository;
     private final CounselingReservationRepository counselingReservationRepository;
-    private final CounselingConsentRepository counselingConsentRepository;
     private final CounselingAssignmentRepository counselingAssignmentRepository;
+    private final ConsentVerifier consentVerifier;
 
     /**
      * 학생 행을 먼저 잠가 같은 학생의 서로 다른 일정 예약도 순서대로 검증한다.
      * 직접 예약은 이어서 일정 행을 잠가 정원과 마감 조건을 최종 확인한다.
+     * 동의 검증은 상담 도메인 자체 리포지토리가 아니라 user 도메인의 공통 ConsentVerifier로 처리한다.
+     * 동의 소유권·모듈(COUNSELING)·유형(PERSONAL_INFO)·철회 여부·정책 유효기간을 한 곳에서 검사하게 해,
+     * 도메인마다 같은 검증을 다시 구현하다 조건을 하나 빠뜨리는 실수를 막기 위해서다.
+     * consentId는 DTO에서 @NotNull로 강제되므로 여기서 null 여부를 따로 분기하지 않는다.
      */
     @Transactional
     public CounselingReservationResponse create(
@@ -59,7 +65,16 @@ public class CounselingReservationService {
         Instant now = Instant.now();
         AppUser student = getActiveStudentForUpdate(studentId);
         CounselingType counselingType = getActiveCounselingType(request.counselingTypeId());
-        UserConsent userConsent = getValidConsent(request.consentId(), studentId, now);
+        // 실패 시 다른 학생의 동의인지, 철회됐는지, 만료됐는지를 구분해 알려주지 않고
+        // 전부 동일한 FORBIDDEN(A004)으로 응답한다. 이유를 세분화해 알려주면 존재하지 않는 동의 ID로
+        // 시도해보며 다른 학생의 동의 이력 존재 여부를 추측하는 데 악용될 수 있기 때문이다.
+        UserConsent userConsent = consentVerifier.requireOwnedValidConsent(
+                request.consentId(),
+                studentId,
+                ConsentModuleCode.COUNSELING,
+                ConsentType.PERSONAL_INFO,
+                now
+        );
         CounselingSchedule counselingSchedule = getScheduleForReservation(
                 request.scheduleId(),
                 counselingType,
@@ -206,15 +221,6 @@ public class CounselingReservationService {
         return counselingTypeRepository
                 .findByCounselingTypeIdAndActiveTrue(counselingTypeId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
-    }
-
-    private UserConsent getValidConsent(Integer consentId, Integer studentId, Instant now) {
-        if (consentId == null) {
-            return null;
-        }
-        return counselingConsentRepository.findValidByIdAndStudentId(consentId, studentId, now)
-                // 다른 학생의 동의나 철회 이력의 존재는 공개하지 않는다.
-                .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
     }
 
     /**

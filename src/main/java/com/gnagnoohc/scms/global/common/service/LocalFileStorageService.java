@@ -12,6 +12,8 @@ import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -82,7 +84,14 @@ public class LocalFileStorageService implements FileStorageService {
                 .createdBy(uploaderId)
                 .build();
 
-        return storedFileRepository.save(storedFile);
+        try {
+            StoredFile saved = storedFileRepository.save(storedFile);
+            deletePhysicalFileWhenTransactionRollsBack(targetPath, storageKey);
+            return saved;
+        } catch (RuntimeException e) {
+            deletePhysicalFile(targetPath, storageKey);
+            throw e;
+        }
     }
 
     @Override
@@ -117,14 +126,44 @@ public class LocalFileStorageService implements FileStorageService {
     @Transactional
     public void delete(StoredFile storedFile) {
         Path path = resolveWithinRoot(storedFile.getStorageKey());
+        storedFileRepository.delete(storedFile);
+        deletePhysicalFileAfterTransactionCommits(path, storedFile.getStorageKey());
+    }
+
+    private void deletePhysicalFileWhenTransactionRollsBack(Path path, String storageKey) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+                if (status == STATUS_ROLLED_BACK) {
+                    deletePhysicalFile(path, storageKey);
+                }
+            }
+        });
+    }
+
+    private void deletePhysicalFileAfterTransactionCommits(Path path, String storageKey) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            deletePhysicalFile(path, storageKey);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                deletePhysicalFile(path, storageKey);
+            }
+        });
+    }
+
+    private void deletePhysicalFile(Path path, String storageKey) {
         try {
             Files.deleteIfExists(path);
         } catch (IOException e) {
-            // 디스크 파일 삭제가 실패해도 메타데이터는 지운다 — 고아 파일은 남지만 운영 중 예외로
-            // 인해 삭제 자체가 막히는 것보다 낫다. 로그로 남겨 별도 정리할 수 있게 한다.
-            log.warn("파일 삭제 실패 - storageKey={}", storedFile.getStorageKey(), e);
+            // 메타데이터 삭제는 이미 커밋됐으므로 파일은 orphan 정리 작업으로 재시도할 수 있다.
+            log.warn("파일 물리 삭제 실패 - storageKey={}", storageKey, e);
         }
-        storedFileRepository.delete(storedFile);
     }
 
     /** storageKey는 서버가 UUID로 직접 생성하므로 이론상 벗어날 수 없지만, 방어적으로 한 번 더 막아둔다. */

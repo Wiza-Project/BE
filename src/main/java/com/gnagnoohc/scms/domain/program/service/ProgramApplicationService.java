@@ -28,10 +28,13 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
@@ -54,6 +57,7 @@ public class ProgramApplicationService {
     private final ProgramMileageTransactionRepository mileageTransactionRepository;
     private final NotificationSender notificationSender;
     private final ApplicationEventPublisher eventPublisher;
+    private final PlatformTransactionManager transactionManager;
 
     /**
      * 학생의 프로그램 참여 신청을 접수한다. 매개변수 2개의 의미:
@@ -126,6 +130,8 @@ public class ProgramApplicationService {
                 throw new BusinessException(ErrorCode.ALREADY_APPLIED);
             }
             applicationId = existing.get().getApplicationId();
+            // 이전 사이클(취소 전)에 기록된 출결이 남아있다면, 새 사이클의 이수 판정에 섞이지 않도록 지운다.
+            attendanceRepository.deleteByApplication_ApplicationId(applicationId);
         } else {
             try {
                 applicationId = applicationRepository.insertApplication(
@@ -307,9 +313,18 @@ public class ProgramApplicationService {
                     new WaitlistSlotOpenedEvent(programId, application.getProgram().getProgramName()));
         }
 
+        /**
+         * (h) 취소 직후 기준 잔여 정원 계산 --------------------------------------------------
+         * (f)의 UPDATE가 이미 반영된 뒤라 이 신청 건은 더 이상 APPLIED/APPROVED로 집계되지 않으므로,
+         * 이전 상태가 무엇이었든 다시 세기만 하면 취소 반영 직후의 정확한 점유 건수를 얻는다.
+         */
+        long occupiedCount = applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(
+                programId, List.of(ApplicationStatus.APPLIED.name(), ApplicationStatus.APPROVED.name()));
+        int remainingCapacity = Math.max((int) (application.getProgram().getCapacity() - occupiedCount), 0);
+
         return new ProgramApplicationCancelResponseDTO(
                 applicationId, programId, ApplicationStatus.CANCELLED.name(), ApplicationStatus.CANCELLED.getLabel(),
-                reason, now);
+                reason, now, remainingCapacity, application.getProgram().getRecruitmentEndsAt());
     }
 
     /**
@@ -324,8 +339,28 @@ public class ProgramApplicationService {
         Map<Integer, ProgramAttendanceRepository.AttendanceCountProjection> attendanceByApplication =
                 summarizeAttendance(applicationIds);
         Map<Integer, BigDecimal> earnedPointsByApplication = summarizeEarnedMileage(applicationIds);
+        Map<Integer, Long> occupiedCountByProgram = summarizeOccupiedCount(applications.getContent());
         return PageResponse.from(applications.map(a -> toSummary(
-                a, attendanceByApplication.get(a.getApplicationId()), earnedPointsByApplication.get(a.getApplicationId()))));
+                a, attendanceByApplication.get(a.getApplicationId()), earnedPointsByApplication.get(a.getApplicationId()),
+                occupiedCountByProgram.getOrDefault(a.getProgram().getProgramId(), 0L))));
+    }
+
+    /**
+     * 신청 내역 목록 한 페이지에 등장하는 프로그램들의 현재 점유 건수(APPLIED/APPROVED)를 한 번의
+     * GROUP BY 쿼리로 배치 조회한다(summarizeAttendance/summarizeEarnedMileage와 같은 이유의 N+1 방지).
+     * 같은 프로그램에 여러 신청 건이 나타날 수는 없지만(uq_program_application_program_student), 페이지 안에
+     * 서로 다른 프로그램 여러 개가 섞여 있을 수 있어 programId 목록으로 한 번에 조회한다.
+     */
+    private Map<Integer, Long> summarizeOccupiedCount(List<ProgramApplication> applications) {
+        List<Integer> programIds = applications.stream()
+                .map(a -> a.getProgram().getProgramId()).distinct().toList();
+        if (programIds.isEmpty()) {
+            return Map.of();
+        }
+        return applicationRepository.countActiveApplicantsByProgramIds(programIds).stream()
+                .collect(Collectors.toMap(
+                        ProgramApplicationRepository.ProgramApplicantCount::getProgramId,
+                        ProgramApplicationRepository.ProgramApplicantCount::getCount));
     }
 
     /**
@@ -420,20 +455,23 @@ public class ProgramApplicationService {
     private ProgramApplicationSummaryResponseDTO toSummary(
             ProgramApplication a,
             ProgramAttendanceRepository.AttendanceCountProjection attendance,
-            BigDecimal earnedMileagePoints) {
+            BigDecimal earnedMileagePoints,
+            long occupiedCount) {
         ApplicationStatus status = ApplicationStatus.valueOf(a.getApplicationStatus());
         int totalAttendanceCount = attendance != null ? attendance.getTotalCount().intValue() : 0;
         int presentAttendanceCount = attendance != null ? attendance.getPresentCount().intValue() : 0;
         Double attendanceRate = totalAttendanceCount > 0
                 ? presentAttendanceCount * 100.0 / totalAttendanceCount
                 : null;
+        int remainingCapacity = Math.max(a.getProgram().getCapacity() - (int) occupiedCount, 0);
         return new ProgramApplicationSummaryResponseDTO(
                 a.getApplicationId(), a.getProgram().getProgramId(), a.getProgram().getProgramName(),
                 a.getApplicationStatus(), status.getLabel(), a.getWaitlistOrder(),
                 a.getCreatedAt(), a.getProcessedAt(), a.getDecisionReason(),
                 a.getCanceledAt(), a.getCancellationReason(),
                 a.getCompletionStatus(), a.getCertificateNo(), a.getCertificateIssuedAt(),
-                totalAttendanceCount, presentAttendanceCount, attendanceRate, earnedMileagePoints);
+                totalAttendanceCount, presentAttendanceCount, attendanceRate, earnedMileagePoints,
+                remainingCapacity, a.getProgram().getRecruitmentEndsAt());
     }
 
     /**
@@ -479,11 +517,15 @@ public class ProgramApplicationService {
      * 대기자 전원에게 "지금 몇 자리가 났는지"를 안내하는 알림을 보낸다. 커밋 전에 조회/발송하면 (1) 조회
      * 실패가 아직 반영되지 않은 취소/반려 처리까지 롤백시키거나, (2) NotificationSender.send()가
      * REQUIRES_NEW로 먼저 커밋해버려 이후 cancel()/reject() 트랜잭션이 실패했을 때 "취소/반려는 안
-     * 됐는데 알림만 나간" 상태가 남을 수 있다. 클래스 레벨 @Transactional의 프록시가 가로챌 수 있도록
-     * public이어야 한다. 알림 발송 실패는 이미 커밋된 취소/반려 처리에 영향을 줄 수 없지만, 예외가 이벤트 리스너 밖으로
-     * 전파되지 않도록 여기서 로그만 남기고 무시한다. AFTER_COMMIT 시점엔 원본 트랜잭션이 이미
-     * 끝났으므로 대기자 조회를 위해 REQUIRES_NEW로 새 트랜잭션을 연다(클래스 레벨 REQUIRED로는
-     * @TransactionalEventListener와 함께 쓸 수 없어 부팅 시 예외가 난다).
+     * 됐는데 알림만 나간" 상태가 남을 수 있다. AFTER_COMMIT 시점엔 원본 트랜잭션이 이미 끝났으므로
+     * 대기자 조회는 TransactionTemplate으로 REQUIRES_NEW 트랜잭션을 열어 collectWaitlistNotificationTargets()
+     * 안에서만 수행한다(같은 클래스 안에서 이 메서드를 그냥 호출하면 프록시를 안 거쳐서 @Transactional이
+     * 안 먹으므로, 애노테이션 대신 TransactionTemplate으로 직접 트랜잭션 경계를 만든다). 조회 트랜잭션이
+     * 끝난 뒤(커밋 완료 후)에만 notificationSender.send()를 반복 호출한다 — 발송은 조회와 다른 관심사이고,
+     * 지금은 NotificationSenderImpl이 DB 저장만 해서 빠르지만 나중에 실제 채널(SMS/카카오톡/이메일)이
+     * 붙으면 느려질 수 있는 외부 I/O이므로, 그 시간만큼 트랜잭션(과 그 밑의 DB 커넥션)을 붙잡고 있을 이유가
+     * 없다. 알림 발송 실패는 이미 커밋된 취소/반려 처리에 영향을 줄 수 없지만, 예외가 이벤트 리스너 밖으로
+     * 전파되지 않도록 여기서 로그만 남기고 무시한다.
      *
      * 대기 1순위 한 명만 골라 알림을 보내던 이전 방식은, 취소 두 건이 거의 동시에 발생하면 두
      * 리스너 실행이 동시에 같은 1순위를 읽어 중복 알림을 보내고 실제 2번째로 열린 자리는 아무에게도
@@ -492,40 +534,72 @@ public class ProgramApplicationService {
      * 그 개수를 그대로 안내하는 방식으로 바꿨다 — 누구를 고를지 정하지 않으므로 동시 실행 자체가
      * 문제가 되지 않는다. 이 개수는 안내용 스냅샷일 뿐이며, 실제 정원 검증은 approve()가 프로그램
      * 행 락 + 승인 건수 확인으로 별도 보장한다.
+     *
+     * 클래스 레벨 @Transactional(기본 REQUIRED)이 이 메서드에도 그대로 적용되면 Spring이 부팅 시점에
+     * "@TransactionalEventListener 메서드는 @Transactional을 REQUIRES_NEW 또는 NOT_SUPPORTED로만 쓸 수
+     * 있다"며 예외를 던진다 — 실제 트랜잭션 경계는 아래 TransactionTemplate으로 직접 관리하므로,
+     * 이 메서드 자체는 어떤 트랜잭션에도 참여하지 않도록 NOT_SUPPORTED로 명시적으로 뺀다.
      */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void notifyNextWaitlistedApplicant(WaitlistSlotOpenedEvent event) {
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public void notifyAllWaitlistedApplicantsOfOpenSlots(WaitlistSlotOpenedEvent event) {
+        TransactionTemplate requiresNewTransaction = new TransactionTemplate(transactionManager);
+        requiresNewTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+
+        WaitlistNotificationTargets targets =
+                requiresNewTransaction.execute(status -> collectWaitlistNotificationTargets(event));
+        if (targets == null) {
+            return;
+        }
+
+        for (WaitlistNotificationTarget target : targets.targets()) {
+            try {
+                notificationSender.send(new NotificationRequest(
+                        target.studentUserId(),
+                        NotificationType.WAITLIST_SLOT_OPENED,
+                        ModuleCode.PROGRAM,
+                        "대기중인 프로그램에 자리가 났습니다",
+                        "'%s' 프로그램에 %d자리가 났습니다. 지원 확정을 원하시면 서둘러 확인해주세요."
+                                .formatted(event.programName(), targets.availableSlots())
+                ));
+            } catch (Exception e) {
+                log.warn("대기자 자리 발생 알림 발송 실패 (applicationId={}, programId={})",
+                        target.applicationId(), event.programId(), e);
+            }
+        }
+    }
+
+    /**
+     * notifyAllWaitlistedApplicantsOfOpenSlots가 REQUIRES_NEW 트랜잭션 안에서만 실행하는 조회 부분.
+     * 트랜잭션 밖(발송 시점)에서 지연 로딩 예외 없이 쓸 수 있도록, 엔티티가 아니라 필요한 값(studentUserId 등)만
+     * 뽑아서 반환한다.
+     */
+    private WaitlistNotificationTargets collectWaitlistNotificationTargets(WaitlistSlotOpenedEvent event) {
         Optional<ExtracurricularProgram> program = programRepository.findById(event.programId());
         if (program.isEmpty()) {
-            return;
+            return null;
         }
 
         long occupiedCount = applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(
                 event.programId(), List.of(ApplicationStatus.APPLIED.name(), ApplicationStatus.APPROVED.name()));
         long availableSlots = program.get().getCapacity() - occupiedCount;
         if (availableSlots <= 0) {
-            return;
+            return null;
         }
 
-        List<ProgramApplication> waitlisted = applicationRepository
+        List<WaitlistNotificationTarget> targets = applicationRepository
                 .findAllByProgram_ProgramIdAndApplicationStatusOrderByWaitlistOrderAsc(
-                        event.programId(), ApplicationStatus.WAITLISTED.name());
+                        event.programId(), ApplicationStatus.WAITLISTED.name())
+                .stream()
+                .map(applicant -> new WaitlistNotificationTarget(
+                        applicant.getApplicationId(), applicant.getStudent().getUserId()))
+                .toList();
+        return new WaitlistNotificationTargets(targets, availableSlots);
+    }
 
-        for (ProgramApplication applicant : waitlisted) {
-            try {
-                notificationSender.send(new NotificationRequest(
-                        applicant.getStudent().getUserId(),
-                        NotificationType.WAITLIST_SLOT_OPENED,
-                        ModuleCode.PROGRAM,
-                        "대기중인 프로그램에 자리가 났습니다",
-                        "'%s' 프로그램에 %d자리가 났습니다. 지원 확정을 원하시면 서둘러 확인해주세요."
-                                .formatted(event.programName(), availableSlots)
-                ));
-            } catch (Exception e) {
-                log.warn("대기자 자리 발생 알림 발송 실패 (applicationId={}, programId={})",
-                        applicant.getApplicationId(), event.programId(), e);
-            }
-        }
+    private record WaitlistNotificationTarget(Integer applicationId, Integer studentUserId) {
+    }
+
+    private record WaitlistNotificationTargets(List<WaitlistNotificationTarget> targets, long availableSlots) {
     }
 }

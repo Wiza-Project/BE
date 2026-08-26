@@ -55,4 +55,49 @@ public class MileageTransaction extends BaseCreatedAtEntity {
         transaction.postedAt = postedAt;
         return transaction;
     }
+
+    /** 외부활동 신청을 승인할 때 정책에 등록된 점수로 적립 원장을 생성한다. */
+    public static MileageTransaction earnFromExternalClaim(
+            ExternalActivityClaim claim,
+            Instant postedAt,
+            Integer processedBy
+    ) {
+        MileagePolicy policy = claim.getMileagePolicy();
+
+        MileageTransaction transaction = new MileageTransaction();
+        transaction.student = claim.getStudent();
+        transaction.mileagePolicy = policy;
+        transaction.competency = claim.getActivityType().getCompetency();
+        transaction.sourceExternalClaim = claim;
+        transaction.transactionType = "EARN";
+        transaction.points = policy.getPoints();
+        transaction.transactionStatus = "POSTED";
+        transaction.requestedBy = claim.getStudent().getUserId();
+        transaction.processedBy = processedBy;
+        transaction.transactionReason = "외부활동 마일리지 심사 승인 자동 적립";
+        transaction.postedAt = postedAt;
+        return transaction;
+    }
+
+    /** 승인된 외부활동 원장을 취소할 때 원거래를 보존하고 반대 부호의 역분개를 생성한다. */
+    public static MileageTransaction reverseExternalClaim(
+            MileageTransaction original,
+            Integer processedBy,
+            String reason,
+            Instant postedAt
+    ) {
+        MileageTransaction transaction = new MileageTransaction();
+        transaction.student = original.getStudent();
+        transaction.mileagePolicy = original.getMileagePolicy();
+        transaction.competency = original.getCompetency();
+        transaction.reversalOfTransaction = original;
+        transaction.transactionType = "REVERSE";
+        transaction.points = original.getPoints().negate();
+        transaction.transactionStatus = "POSTED";
+        transaction.requestedBy = original.getRequestedBy();
+        transaction.processedBy = processedBy;
+        transaction.transactionReason = reason.trim();
+        transaction.postedAt = postedAt;
+        return transaction;
+    }
 }

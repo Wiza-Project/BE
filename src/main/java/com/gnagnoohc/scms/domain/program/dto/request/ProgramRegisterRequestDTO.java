@@ -1,5 +1,6 @@
 package com.gnagnoohc.scms.domain.program.dto.request;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
@@ -11,6 +12,7 @@ import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 // 날짜+시간+시간대를 함께 표현하는 타입(모집/운영 시작·종료 시각에 사용).
 import java.time.Instant;
+import java.util.List;
 
 /**
  * 비교과프로그램 "등록" 요청 DTO. record 키워드로 만들면 필드값이 바뀌지 않는(불변) 데이터 객체가 자동으로 생성된다.
@@ -25,11 +27,11 @@ public record ProgramRegisterRequestDTO(
         // 첨부파일 그룹 id. 포스터 등 이미지가 없을 수도 있으므로 @NotNull을 붙이지 않았다(선택값).
         Integer fileGroupId,
 
-        // 운영 단위 코드 id. 요청에 안 담겨오면(null) 서비스에서 기본값("비교과운영부서")으로 채운다.
-        Integer operatingUnitCodeId,
+        // 운영 단위(부서) 코드 id. 프론트가 드롭다운으로 선택해서 보내야 하는 필수값.
+        @NotNull Integer operatingUnitCodeId,
 
-        // 프로그램 유형(분류) 코드 id. 요청에 안 담겨오면(null) 서비스에서 기본값("학습")으로 채운다.
-        Integer programTypeCodeId,
+        // 프로그램 유형(분류) 코드 id. 프론트가 드롭다운으로 선택해서 보내야 하는 필수값.
+        @NotNull Integer programTypeCodeId,
 
         // 이 프로그램과 연결된 핵심역량 id. 필수값.
         @NotNull Integer competencyId,
@@ -65,6 +67,14 @@ public record ProgramRegisterRequestDTO(
         @NotNull @Positive Integer capacity,
 
         // 이수 기준 출석률(%). 0~100 사이 값만 허용. 요청에 안 담겨오면(null) 서비스에서 기본값(80)으로 채운다.
-        @DecimalMin("0") @DecimalMax("100") BigDecimal completionRate
+        @DecimalMin("0") @DecimalMax("100") BigDecimal completionRate,
+
+        /**
+         * 이 프로그램의 회차 목록. "최소 1개 이상"은 여기서 @NotEmpty로 막지 않고 서비스 계층(ProgramService.register())에서
+         * 전용 에러 코드(PROGRAM_SESSION_REQUIRED)로 검증한다 — 프론트가 이 케이스만 구분해 안내 모달을 띄워야 하기 때문
+         * (@NotEmpty 위반은 여러 필드 오류가 한 문자열로 합쳐진 범용 400으로 내려가 구분이 어렵다).
+         * 원소 각각의 형식(회차번호/기간 등)은 @Valid로 ProgramSessionRegisterRequestDTO의 제약을 그대로 적용받는다.
+         */
+        @Valid List<@NotNull ProgramSessionRegisterRequestDTO> sessions
 ) {
 }

@@ -51,6 +51,13 @@ public record ProgramApplicationSummaryResponseDTO(
         Double attendanceRate,
 
         // 이 신청 건으로 실제 확정(POSTED) 적립된 마일리지 점수. 아직 적립되지 않았으면 null.
-        BigDecimal earnedMileagePoints
+        BigDecimal earnedMileagePoints,
+
+        // 조회 시점 기준 이 프로그램의 잔여 정원(capacity - APPLIED/APPROVED 건수, 0 미만이면 0).
+        // 취소 후 재방문 시에도 프론트가 재신청/대기/신청불가 버튼을 판단할 수 있도록 목록 조회에도 함께 내려준다.
+        int remainingCapacity,
+
+        // 이 프로그램의 모집 마감 시각. 프론트가 "신청 불가"(마감 지남) 여부를 판단하는 데 사용한다.
+        Instant recruitmentEndsAt
 ) {
 }

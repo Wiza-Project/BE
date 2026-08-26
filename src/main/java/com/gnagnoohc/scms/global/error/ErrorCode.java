@@ -82,6 +82,13 @@ public enum ErrorCode {
     APPLICATION_ALREADY_CANCELED(HttpStatus.CONFLICT, "P017", "이미 취소되었거나 반려된 신청입니다."),
     // 승인(APPROVED)되지 않은 신청 건으로 만족도 설문을 제출하려고 할 때 사용하는 에러코드.
     SURVEY_NOT_AVAILABLE(HttpStatus.BAD_REQUEST, "P019", "승인된 신청 건만 만족도 설문을 제출할 수 있습니다."),
+    // register()/update() 요청에 존재하지 않는 fileGroupId가 담겨왔을 때 사용하는 에러코드.
+    PROGRAM_FILE_GROUP_NOT_FOUND(HttpStatus.NOT_FOUND, "P020", "첨부파일을 찾을 수 없습니다."),
+    // 이미 다른 프로그램에 연결된 fileGroupId를 재사용하려고 할 때 사용하는 에러코드.
+    PROGRAM_FILE_GROUP_ALREADY_LINKED(HttpStatus.CONFLICT, "P021", "이미 다른 프로그램에 연결된 첨부파일입니다."),
+    // register() 요청에 회차(sessions)가 하나도 담겨오지 않았을 때 사용하는 에러코드.
+    // 프론트가 이 케이스만 구분해 "회차 관리" 탭으로 안내하는 모달을 띄워야 해서 전용 코드로 분리했다.
+    PROGRAM_SESSION_REQUIRED(HttpStatus.BAD_REQUEST, "P022", "회차는 최소 1개 이상 등록해야 합니다."),
 
     // ── 핵심역량/진단 ─────────────────────────────────────────────
     COMPETENCY_NOT_FOUND(HttpStatus.NOT_FOUND, "Q001", "핵심역량 정보를 찾을 수 없습니다."),
@@ -99,8 +106,6 @@ public enum ErrorCode {
     INVALID_ASSESSMENT_PERIOD(HttpStatus.BAD_REQUEST, "Q011", "응시 시작일은 종료일보다 빨라야 합니다."),
     // 이미 응시(문항 응답)가 시작된 회차를 수정하려고 할 때 사용하는 에러코드.
     ASSESSMENT_ROUND_NOT_EDITABLE(HttpStatus.BAD_REQUEST, "Q012", "이미 응시가 시작된 회차는 수정할 수 없습니다."),
-    // 진단 동의 화면에서 사용할 유효한 ConsentPolicy(module_code=ASSESSMENT)가 시딩되지 않았을 때 사용하는 에러코드.
-    CONSENT_POLICY_NOT_FOUND(HttpStatus.INTERNAL_SERVER_ERROR, "Q013", "진단 동의 정책을 찾을 수 없습니다."),
     // 존재하지 않거나 본인(로그인한 학생) 소유가 아닌 attempt에 접근하려고 할 때 사용하는 에러코드(소유권 비노출을 위해 둘을 구분하지 않음).
     ASSESSMENT_ATTEMPT_NOT_FOUND(HttpStatus.NOT_FOUND, "Q014", "응시 정보를 찾을 수 없습니다."),
     // 해당 회차의 문항 구성에 포함되지 않은 questionId로 응답을 저장하려고 할 때 사용하는 에러코드.
@@ -123,6 +128,9 @@ public enum ErrorCode {
     RESERVATION_NOT_FOUND(HttpStatus.NOT_FOUND, "S003", "상담 예약을 찾을 수 없습니다."),
     CANNOT_CANCEL_CONFIRMED(HttpStatus.BAD_REQUEST, "S004", "확정된 상담은 취소할 수 없습니다."),
     ALREADY_PROCESSED_RESERVATION(HttpStatus.CONFLICT, "S005", "이미 처리된 상담 예약입니다."),
+    ASSIGNMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "S006", "상담사 배정을 찾을 수 없습니다."),
+    SESSION_NOT_FOUND(HttpStatus.NOT_FOUND, "S007", "상담 회기를 찾을 수 없습니다."),
+    SESSION_STATE_NOT_ALLOWED(HttpStatus.CONFLICT, "S008", "허용되지 않은 회기 상태입니다."),
 
     // ── 마일리지 ──────────────────────────────────────────────────
     MILEAGE_ITEM_NOT_FOUND(HttpStatus.NOT_FOUND, "M001", "마일리지 항목을 찾을 수 없습니다."),

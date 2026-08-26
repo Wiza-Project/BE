@@ -2,11 +2,13 @@ package com.gnagnoohc.scms.domain.counsel.dto;
 
 import com.gnagnoohc.scms.domain.counsel.entity.CounselingAssignment;
 import com.gnagnoohc.scms.domain.counsel.entity.CounselingReservation;
+import com.gnagnoohc.scms.domain.counsel.entity.CounselingSession;
 
 import java.time.Instant;
 
 /**
- * 승인 처리 결과다. 예약 상태와 함께, 승인과 동시에 생성된 최초 활성 배정 정보를 같이 보여준다.
+ * 승인 처리 결과다. 예약 상태, 승인과 동시에 생성된 최초 활성 배정, 그리고 함께 생성된 1회기 정보를
+ * 같이 보여준다(체크리스트 7번 확장: consultation-domain-api.md "예약 승인 시 1회기 자동 생성 확장").
  */
 public record CounselorReservationDecisionResponse(
         Integer reservationId,
@@ -14,11 +16,18 @@ public record CounselorReservationDecisionResponse(
         Instant processedAt,
         Integer counselingAssignmentId,
         Integer counselorId,
-        Instant assignedAt
+        Instant assignedAt,
+        Integer counselingSessionId,
+        Integer sessionNo,
+        Instant sessionStartsAt,
+        Instant sessionEndsAt,
+        String attendanceStatus,
+        String sessionStatus
 ) {
     public static CounselorReservationDecisionResponse from(
             CounselingReservation reservation,
-            CounselingAssignment assignment
+            CounselingAssignment assignment,
+            CounselingSession session
     ) {
         return new CounselorReservationDecisionResponse(
                 reservation.getCounselingReservationId(),
@@ -26,7 +35,13 @@ public record CounselorReservationDecisionResponse(
                 reservation.getProcessedAt(),
                 assignment.getCounselingAssignmentId(),
                 assignment.getCounselor().getUserId(),
-                assignment.getAssignedAt()
+                assignment.getAssignedAt(),
+                session.getCounselingSessionId(),
+                session.getSessionNo(),
+                session.getStartsAt(),
+                session.getEndsAt(),
+                session.getAttendanceStatus(),
+                session.getSessionStatus()
         );
     }
 }
