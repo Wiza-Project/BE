@@ -416,6 +416,8 @@ class ProgramApplicationServiceTest {
         when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
         when(applicationRepository.findByIdForUpdate(5)).thenReturn(Optional.of(application));
         when(applicationRepository.updateCancellation(eq(5), eq("일정 변경"), any())).thenReturn(1);
+        when(applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(eq(1), any()))
+                .thenReturn(4L);
 
         ProgramApplicationCancelResponseDTO response =
                 programApplicationService.cancel(1, 5, 100, "일정 변경");
@@ -423,7 +425,30 @@ class ProgramApplicationServiceTest {
         assertThat(response.applicationStatus()).isEqualTo("CANCELLED");
         assertThat(response.applicationStatusLabel()).isEqualTo("취소");
         assertThat(response.cancellationReason()).isEqualTo("일정 변경");
+        assertThat(response.remainingCapacity()).isEqualTo(6);
+        assertThat(response.recruitmentEndsAt()).isEqualTo(program.getRecruitmentEndsAt());
         verify(eventPublisher).publishEvent(any(WaitlistSlotOpenedEvent.class));
+    }
+
+    @Test
+    void cancel_whenOccupiedCountExceedsCapacity_clampsRemainingCapacityToZero() throws Exception {
+        // 정원(capacity)이 이미 신청된 인원(occupiedCount)보다 작게 수정된 뒤 취소된 경우,
+        // remainingCapacity는 음수가 아니라 0으로 내려가야 한다.
+        Instant now = Instant.now();
+        ExtracurricularProgram program = buildProgramFixture(
+                1, now.minusSeconds(3600), now.plusSeconds(3600), 3);
+        ProgramApplication application = buildApplicationFixture(5, program, "APPLIED", 100);
+
+        when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
+        when(applicationRepository.findByIdForUpdate(5)).thenReturn(Optional.of(application));
+        when(applicationRepository.updateCancellation(eq(5), eq("일정 변경"), any())).thenReturn(1);
+        when(applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(eq(1), any()))
+                .thenReturn(5L);
+
+        ProgramApplicationCancelResponseDTO response =
+                programApplicationService.cancel(1, 5, 100, "일정 변경");
+
+        assertThat(response.remainingCapacity()).isZero();
     }
 
     @Test

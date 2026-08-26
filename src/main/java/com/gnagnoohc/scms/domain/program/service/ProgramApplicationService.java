@@ -313,9 +313,18 @@ public class ProgramApplicationService {
                     new WaitlistSlotOpenedEvent(programId, application.getProgram().getProgramName()));
         }
 
+        /**
+         * (h) 취소 직후 기준 잔여 정원 계산 --------------------------------------------------
+         * (f)의 UPDATE가 이미 반영된 뒤라 이 신청 건은 더 이상 APPLIED/APPROVED로 집계되지 않으므로,
+         * 이전 상태가 무엇이었든 다시 세기만 하면 취소 반영 직후의 정확한 점유 건수를 얻는다.
+         */
+        long occupiedCount = applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(
+                programId, List.of(ApplicationStatus.APPLIED.name(), ApplicationStatus.APPROVED.name()));
+        int remainingCapacity = Math.max((int) (application.getProgram().getCapacity() - occupiedCount), 0);
+
         return new ProgramApplicationCancelResponseDTO(
                 applicationId, programId, ApplicationStatus.CANCELLED.name(), ApplicationStatus.CANCELLED.getLabel(),
-                reason, now);
+                reason, now, remainingCapacity, application.getProgram().getRecruitmentEndsAt());
     }
 
     /**
@@ -330,8 +339,28 @@ public class ProgramApplicationService {
         Map<Integer, ProgramAttendanceRepository.AttendanceCountProjection> attendanceByApplication =
                 summarizeAttendance(applicationIds);
         Map<Integer, BigDecimal> earnedPointsByApplication = summarizeEarnedMileage(applicationIds);
+        Map<Integer, Long> occupiedCountByProgram = summarizeOccupiedCount(applications.getContent());
         return PageResponse.from(applications.map(a -> toSummary(
-                a, attendanceByApplication.get(a.getApplicationId()), earnedPointsByApplication.get(a.getApplicationId()))));
+                a, attendanceByApplication.get(a.getApplicationId()), earnedPointsByApplication.get(a.getApplicationId()),
+                occupiedCountByProgram.getOrDefault(a.getProgram().getProgramId(), 0L))));
+    }
+
+    /**
+     * 신청 내역 목록 한 페이지에 등장하는 프로그램들의 현재 점유 건수(APPLIED/APPROVED)를 한 번의
+     * GROUP BY 쿼리로 배치 조회한다(summarizeAttendance/summarizeEarnedMileage와 같은 이유의 N+1 방지).
+     * 같은 프로그램에 여러 신청 건이 나타날 수는 없지만(uq_program_application_program_student), 페이지 안에
+     * 서로 다른 프로그램 여러 개가 섞여 있을 수 있어 programId 목록으로 한 번에 조회한다.
+     */
+    private Map<Integer, Long> summarizeOccupiedCount(List<ProgramApplication> applications) {
+        List<Integer> programIds = applications.stream()
+                .map(a -> a.getProgram().getProgramId()).distinct().toList();
+        if (programIds.isEmpty()) {
+            return Map.of();
+        }
+        return applicationRepository.countActiveApplicantsByProgramIds(programIds).stream()
+                .collect(Collectors.toMap(
+                        ProgramApplicationRepository.ProgramApplicantCount::getProgramId,
+                        ProgramApplicationRepository.ProgramApplicantCount::getCount));
     }
 
     /**
@@ -426,20 +455,23 @@ public class ProgramApplicationService {
     private ProgramApplicationSummaryResponseDTO toSummary(
             ProgramApplication a,
             ProgramAttendanceRepository.AttendanceCountProjection attendance,
-            BigDecimal earnedMileagePoints) {
+            BigDecimal earnedMileagePoints,
+            long occupiedCount) {
         ApplicationStatus status = ApplicationStatus.valueOf(a.getApplicationStatus());
         int totalAttendanceCount = attendance != null ? attendance.getTotalCount().intValue() : 0;
         int presentAttendanceCount = attendance != null ? attendance.getPresentCount().intValue() : 0;
         Double attendanceRate = totalAttendanceCount > 0
                 ? presentAttendanceCount * 100.0 / totalAttendanceCount
                 : null;
+        int remainingCapacity = Math.max(a.getProgram().getCapacity() - (int) occupiedCount, 0);
         return new ProgramApplicationSummaryResponseDTO(
                 a.getApplicationId(), a.getProgram().getProgramId(), a.getProgram().getProgramName(),
                 a.getApplicationStatus(), status.getLabel(), a.getWaitlistOrder(),
                 a.getCreatedAt(), a.getProcessedAt(), a.getDecisionReason(),
                 a.getCanceledAt(), a.getCancellationReason(),
                 a.getCompletionStatus(), a.getCertificateNo(), a.getCertificateIssuedAt(),
-                totalAttendanceCount, presentAttendanceCount, attendanceRate, earnedMileagePoints);
+                totalAttendanceCount, presentAttendanceCount, attendanceRate, earnedMileagePoints,
+                remainingCapacity, a.getProgram().getRecruitmentEndsAt());
     }
 
     /**

@@ -24,16 +24,30 @@ public class NcsStandard {
     @Column(name = "ncs_standard_id", nullable = false)
     private Integer ncsStandardId;
 
-    @Column(name = "ncs_code", nullable = false, unique = true, length = 255)
+    @Column(name = "ncs_code", nullable = false, unique = true, length = 50)
     private String ncsCode;
 
     @Column(name = "category_name", nullable = true, length = 255)
     private String categoryName;
 
+    @Column(name = "job_description", columnDefinition = "TEXT")
+    private String jobDescription;
+
     @JdbcTypeCode(SqlTypes.VECTOR)
     @Column(name = "embedding_vector", nullable = true, columnDefinition = "vector")
     private float[] embeddingVector;
 
-    @Column(name = "capability_element", nullable = true, length = 255)
-    private String capabilityElement;
+    public NcsStandard(String ncsCode, String categoryName, String jobDescription) {
+        this.ncsCode = ncsCode;
+        this.categoryName = categoryName;
+        this.jobDescription = jobDescription;
+    }
+
+    public static NcsStandard of(String ncsCode, String categoryName, String jobDescription) {
+        return new NcsStandard(ncsCode, categoryName, jobDescription);
+    }
+
+    public void updateEmbeddingVector(float[] embeddingVector) {
+        this.embeddingVector = embeddingVector;
+    }
 }

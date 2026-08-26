@@ -6,6 +6,7 @@ import com.gnagnoohc.scms.domain.program.dto.response.ProgramAdminListItemRespon
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramDetailResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramListItemResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.request.ProgramRegisterRequestDTO;
+import com.gnagnoohc.scms.domain.program.dto.request.ProgramSessionRegisterRequestDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramRegisterResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.request.ProgramUpdateRequestDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramSessionResponseDTO;
@@ -57,13 +58,11 @@ public class ProgramService {
      */
     private static final ProgramStatus INITIAL_STATUS = ProgramStatus.DRAFT;
     /**
-     * 요청에 부서/프로그램 유형 코드가 없을 때 채워 넣을 기본값(CommonCode의 code_group/code).
-     * 코드값은 CommonCodeSeeder 기준(접두어+100단위 형식으로 리네임됨: 학습=PT100, 비교과운영부서=D200).
+     * 로그인한 사용자가 비교과운영부서 소속인지 검증(isOperatingDepartment)할 때 기준이 되는 CommonCode 값.
+     * 코드값은 CommonCodeSeeder 기준(비교과운영부서=D200).
      */
     private static final String DEPARTMENT_GROUP = "DEPARTMENT";
     private static final String DEFAULT_DEPARTMENT_CODE = "D200"; // 비교과운영부서
-    private static final String PROGRAM_TYPE_GROUP = "PROGRAM_TYPE";
-    private static final String DEFAULT_PROGRAM_TYPE_CODE = "PT100"; // 학습
     // 운영계획서는 문서 1개(PDF)만 받는다 — FileUploadValidator의 기본 허용 확장자(이미지+PDF)보다 좁게 검증한다.
     private static final Set<String> OPERATION_PLAN_EXTENSIONS = Set.of("pdf");
 
@@ -107,6 +106,17 @@ public class ProgramService {
                 request.operationStartsAt(), request.operationEndsAt());
 
         /**
+         * (a-1-1) 회차 최소 1개 검증 ----------------------------------------------------
+         * 프론트의 "회차관리" 탭에서 최소 1회차를 입력하지 않으면 등록 자체를 막는다. 프론트에서
+         * 버튼/화면으로 막더라도 우회 가능하므로 백엔드가 반드시 재검증한다(다른 검증들과 동일한 이유).
+         * DB에 아무것도 쓰기 전(첨부파일 검증/INSERT 이전)에 가장 먼저 확인해, 회차 없이 등록을 시도했을 때
+         * 불필요한 부수효과 없이 곧바로 막는다.
+         */
+        if (request.sessions() == null || request.sessions().isEmpty()) {
+            throw new BusinessException(ErrorCode.PROGRAM_SESSION_REQUIRED);
+        }
+
+        /**
          * (a-2) 첨부파일 검증 ----------------------------------------------------------
          * 클라이언트가 보낸 fileGroupId를 검증 없이 그대로 저장하면, 업로더 본인이 아닌 그룹이나
          * 이미 다른 프로그램에 연결된 그룹을 임의로 지정해 연결할 수 있다. 아래에서 소유권/단일PDF/재사용을 검증한다.
@@ -119,13 +129,9 @@ public class ProgramService {
          */
         BigDecimal completionRate = request.completionRate() != null
                 ? request.completionRate() : DEFAULT_COMPLETION_RATE;
-        // 요청에 operatingUnitCodeId/programTypeCodeId가 없으면(null) 각각 "비교과운영부서"/"학습" 코드로 채운다.
-        Integer operatingUnitCodeId = resolveCodeId(
-                request.operatingUnitCodeId(), DEPARTMENT_GROUP, DEFAULT_DEPARTMENT_CODE,
-                ErrorCode.OPERATING_UNIT_NOT_FOUND);
-        Integer programTypeCodeId = resolveCodeId(
-                request.programTypeCodeId(), PROGRAM_TYPE_GROUP, DEFAULT_PROGRAM_TYPE_CODE,
-                ErrorCode.PROGRAM_CATEGORY_NOT_FOUND);
+        // operatingUnitCodeId/programTypeCodeId는 이제 프론트가 드롭다운으로 선택해서 보내는 필수값이라 그대로 사용한다.
+        Integer operatingUnitCodeId = request.operatingUnitCodeId();
+        Integer programTypeCodeId = request.programTypeCodeId();
         /**
          * "지금 이 순간"의 시각을 한 번만 만들어서, 아래 INSERT 쿼리(created_at/updated_at)와
          * 응답 DTO(createdAt)에 똑같은 값으로 사용한다.
@@ -165,6 +171,24 @@ public class ProgramService {
              * 위반된 컬럼을 구분해 어떤 참조 값이 없는지에 맞는 404 에러로 바꿔서 응답한다.
              */
             throw resolveForeignKeyViolation(e);
+        }
+
+        /**
+         * (d) 회차 일괄 생성 -----------------------------------------------------------
+         * 위 (a-1-1)에서 이미 1개 이상임을 확인했으므로, 요청에 담긴 회차를 그대로 순회하며 생성한다.
+         * ProgramSessionService.registerSession()과 동일한 리포지토리 메서드를 재사용한다.
+         * createdBy는 등록 담당자(managerUserId), 생성 시각은 프로그램 생성에 쓴 now를 그대로 재사용한다.
+         */
+        for (ProgramSessionRegisterRequestDTO session : request.sessions()) {
+            try {
+                programSessionRepository.insertSession(
+                        programId, session.sessionNo(), session.sessionName(),
+                        session.startsAt(), session.endsAt(), session.location(),
+                        managerUserId, now);
+            } catch (DataIntegrityViolationException e) {
+                // uq_program_session_program_no 위반 = 요청 안에서 같은 회차번호가 중복된 경우.
+                throw new BusinessException(ErrorCode.DUPLICATE_SESSION_NO);
+            }
         }
 
         // 등록에 성공했으니, 방금 저장한 값들을 그대로 담아 응답 DTO를 만들어 돌려준다.
@@ -313,9 +337,8 @@ public class ProgramService {
         BigDecimal completionRate = request.completionRate() != null
                 ? request.completionRate() : DEFAULT_COMPLETION_RATE;
 
-        // 운영단위는 이 API로 변경할 수 없는 값이다.
-        // 요청 DTO에는 이 값을 받는 필드 자체가 없으므로, 항상 프로그램에 이미 저장된 값을 그대로 유지한다.
-        Integer operatingUnitCodeId = program.getOperatingUnitCode().getCodeId();
+        // 운영단위도 이제 프론트가 드롭다운으로 선택해서 보내는 필수값이라 그대로 사용한다.
+        Integer operatingUnitCodeId = request.operatingUnitCodeId();
 
         // 첨부파일은 별도 업로드 화면에서만 바뀌므로, 수정 폼이 파일을 다시 첨부하지 않아
         // 요청에 안 담겨오면(null) 기존에 첨부돼 있던 파일을 그대로 유지한다(지우지 않는다).
@@ -621,23 +644,6 @@ public class ProgramService {
                 .stream()
                 .filter(commonCode -> commonCode.getCode().equals(DEFAULT_DEPARTMENT_CODE))
                 .anyMatch(commonCode -> commonCode.getCodeId().equals(departmentCodeId));
-    }
-
-    /**
-     * 요청값이 있으면 그대로 쓰고, 없으면(null) 주어진 그룹에서 defaultCode와 일치하는 CommonCode를 찾아 그 codeId를 대신 쓴다.
-     * (CommonCodeRepository에는 group+code 단건 조회 메서드가 없어, 기존에 있는 그룹 전체 조회 메서드로 가져온 뒤 code로 걸러낸다.)
-     */
-    private Integer resolveCodeId(Integer requestedCodeId, String codeGroup, String defaultCode,
-                                   ErrorCode notFoundError) {
-        if (requestedCodeId != null) {
-            return requestedCodeId;
-        }
-        return commonCodeRepository.findByCodeGroupAndActiveTrueOrderBySortOrderAsc(codeGroup)
-                .stream()
-                .filter(commonCode -> commonCode.getCode().equals(defaultCode))
-                .findFirst()
-                .orElseThrow(() -> new BusinessException(notFoundError))
-                .getCodeId();
     }
 
     /**

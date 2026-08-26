@@ -25,6 +25,16 @@ public class AssessmentAttempt extends BaseCreatedAtEntity {
     @Column(name = "saved_at") private Instant savedAt;
     @Column(name = "submitted_at") private Instant submittedAt;
 
+    // 동의 확인 후 응시 시작 시점에 생성. userConsent는 증빙용 참조라 nullable —
+    // 필수 동의 충족 여부 자체는 ConsentVerifier.hasAgreedAllRequired로 이미 확인한 뒤 호출된다.
+    public static AssessmentAttempt create(AssessmentRound assessmentRound, AppUser student, UserConsent userConsent) {
+        AssessmentAttempt attempt = new AssessmentAttempt();
+        attempt.assessmentRound = assessmentRound;
+        attempt.student = student;
+        attempt.userConsent = userConsent;
+        return attempt;
+    }
+
     // 첫 응답 저장 시점에 한 번만 응시 시작으로 표시한다 (재저장은 시작 시점을 건드리지 않음).
     // AssessmentRoundService.updateRound가 이 startedAt으로 회차 잠금 여부를 판정하므로 반드시 채워야 한다.
     public void start() {
