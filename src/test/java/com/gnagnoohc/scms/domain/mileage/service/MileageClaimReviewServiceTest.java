@@ -28,6 +28,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -90,7 +91,7 @@ class MileageClaimReviewServiceTest {
         mileageClaimReviewService.reject(
                 10, 99, new MileageClaimRejectRequest("증빙 내용이 확인되지 않습니다."));
 
-        verify(fixture.claim()).reject("증빙 내용이 확인되지 않습니다.", 99, any());
+        verify(fixture.claim()).reject(eq("증빙 내용이 확인되지 않습니다."), eq(99), any());
         verify(mileageTransactionRepository, never()).save(any());
         verify(eventPublisher).publishEvent(any(ExternalActivityClaimDecisionEvent.class));
     }
@@ -118,7 +119,7 @@ class MileageClaimReviewServiceTest {
                 10, 99, new MileageClaimCancelRequest("중복 적립 확인으로 취소"));
 
         assertThat(result.claimStatus()).isEqualTo(ExternalActivityClaim.CANCELLED_STATUS);
-        verify(fixture.claim()).cancel("중복 적립 확인으로 취소", 99, any());
+        verify(fixture.claim()).cancel(eq("중복 적립 확인으로 취소"), eq(99), any());
 
         ArgumentCaptor<MileageTransaction> transactionCaptor =
                 ArgumentCaptor.forClass(MileageTransaction.class);
