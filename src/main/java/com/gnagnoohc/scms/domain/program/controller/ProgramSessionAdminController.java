@@ -1,6 +1,7 @@
 package com.gnagnoohc.scms.domain.program.controller;
 
 import com.gnagnoohc.scms.domain.program.dto.request.ProgramSessionRegisterRequestDTO;
+import com.gnagnoohc.scms.domain.program.dto.request.ProgramSessionUpdateRequestDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramSessionResponseDTO;
 import com.gnagnoohc.scms.domain.program.service.ProgramSessionService;
 import com.gnagnoohc.scms.global.common.dto.ApiResponse;
@@ -37,5 +38,16 @@ public class ProgramSessionAdminController {
     @GetMapping
     public ApiResponse<List<ProgramSessionResponseDTO>> listSessions(@PathVariable Integer programId) {
         return ApiResponse.ok(programSessionService.listSessions(programId));
+    }
+
+    @Operation(summary = "회차 수정", description = "프로그램의 회차(장소 포함)를 수정합니다.")
+    @PutMapping("/{sessionId}")
+    public ApiResponse<ProgramSessionResponseDTO> updateSession(
+            @PathVariable Integer programId,
+            @PathVariable Integer sessionId,
+            @Valid @RequestBody ProgramSessionUpdateRequestDTO request,
+            @AuthenticationPrincipal AuthUser authUser) {
+        return ApiResponse.ok(programSessionService.updateSession(
+                programId, sessionId, request, authUser.getId(), authUser.getDepartmentCodeId()));
     }
 }
