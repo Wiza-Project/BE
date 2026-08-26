@@ -79,6 +79,8 @@ public class ProgramApplicationService {
          * 체크한 뒤, FK 증빙으로 저장할 PERSONAL_INFO 동의 건을 조회한다. 게이트를 이미 통과했으므로
          * 아래 orElseThrow는 방어적 장치다(CAREER 도메인과 동일한 패턴). 동의 검증과 신청 저장이
          * 같은 트랜잭션(클래스 레벨 @Transactional)에 묶여 있어야 TOCTOU 경합이 없다.
+         * 이 시점의 now는 동의 확인 asOf 시각일 뿐, 아래 모집기간 검사·저장 시각에는 쓰지 않는다 —
+         * 락 대기·정원 계산 등으로 그 사이 시간이 흐를 수 있어 (b), (e)에서 각각 다시 계산한다.
          */
         if (!consentVerifier.hasAgreedAllRequired(studentId, ConsentModuleCode.PROGRAM, now)) {
             throw new BusinessException(ErrorCode.REQUIRED_CONSENT_NOT_AGREED);
@@ -98,8 +100,11 @@ public class ProgramApplicationService {
         /**
          * (b) 신청 가능 기간인지 확인 --------------------------------------------------
          * ProgramService.update/delete와 같은 이유로, programStatus 컬럼(스케줄러가 최대 1분 지연으로 갱신)을
-         * 믿지 않고 지금 시각을 모집 시작/종료 시각과 직접 비교한다.
+         * 믿지 않고 지금 시각을 모집 시작/종료 시각과 직접 비교한다. 락 획득 직후 now를 다시 계산해서
+         * (0) 동의 확인에 걸린 지연이 이 검사에 섞이지 않게 한다 — program row는 이미 락으로 잡혀 있어
+         * recruitmentStartsAt/EndsAt 값 자체는 이 트랜잭션 동안 바뀌지 않는다.
          */
+        now = Instant.now();
         if (now.isBefore(program.getRecruitmentStartsAt()) || !now.isBefore(program.getRecruitmentEndsAt())) {
             throw new BusinessException(ErrorCode.APPLICATION_PERIOD_CLOSED);
         }
@@ -140,6 +145,13 @@ public class ProgramApplicationService {
         }
 
         // (e) 실제 DB 반영 -------------------------------------------------------------
+        // (c) 기존 신청 조회, (d) 정원 계산 등으로 (b) 이후에도 시간이 흐를 수 있으므로, 저장 직전 시각으로
+        // 한 번 더 마감 여부를 재확인한다. 시작 시각은 시간이 거꾸로 흐르지 않으므로 재검사가 필요 없다.
+        // 이 시각이 그대로 아래 저장·응답 시각(now)으로 쓰인다.
+        now = Instant.now();
+        if (!now.isBefore(program.getRecruitmentEndsAt())) {
+            throw new BusinessException(ErrorCode.APPLICATION_PERIOD_CLOSED);
+        }
         Integer applicationId;
         if (existing.isPresent()) {
             // 취소됐던 기존 row를 새 신청으로 되살린다. WHERE 절이 여전히 CANCELLED인지 재확인하므로,

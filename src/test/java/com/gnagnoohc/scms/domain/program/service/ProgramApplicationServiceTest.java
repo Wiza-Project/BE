@@ -162,6 +162,34 @@ class ProgramApplicationServiceTest {
                 .isEqualTo(ErrorCode.APPLICATION_PERIOD_CLOSED);
     }
 
+    // 락 획득 직후에는 마감 전이었지만(모집 마감까지 80ms), 정원 계산 쿼리가 그보다 오래 걸려(150ms)
+    // 실제 저장 시점에는 이미 마감이 지난 경우를 재현한다. (e) 직전 재검사가 없다면 오래된 now로
+    // 그대로 INSERT/UPDATE가 되어 마감 후 신청이 저장되는 회귀가 생긴다.
+    @Test
+    void apply_whenRecruitmentEndsDuringCapacityCheck_throwsApplicationPeriodClosed() throws Exception {
+        Instant now = Instant.now();
+        ExtracurricularProgram program = buildProgramFixture(
+                1, now.minusSeconds(3600), now.plusMillis(80), 10);
+
+        mockValidProgramConsent(100, 900);
+        when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
+        when(applicationRepository.findByProgram_ProgramIdAndStudent_UserIdForUpdate(1, 100))
+                .thenReturn(Optional.empty());
+        when(applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(1, List.of("APPLIED", "APPROVED")))
+                .thenAnswer(invocation -> {
+                    Thread.sleep(150);
+                    return 0L;
+                });
+
+        assertThatThrownBy(() -> programApplicationService.apply(1, 100))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.APPLICATION_PERIOD_CLOSED);
+
+        verify(applicationRepository, never())
+                .insertApplication(anyInt(), anyInt(), any(), any(), anyBoolean(), any(), any());
+    }
+
     @Test
     void apply_whenNotAgreedToRequiredConsent_throwsRequiredConsentNotAgreed() throws Exception {
         when(consentVerifier.hasAgreedAllRequired(eq(100), eq(ConsentModuleCode.PROGRAM), any()))
