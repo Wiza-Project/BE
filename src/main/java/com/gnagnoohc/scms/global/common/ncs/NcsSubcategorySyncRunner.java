@@ -1,6 +1,5 @@
 package com.gnagnoohc.scms.global.common.ncs;
 
-/*
 import com.gnagnoohc.scms.domain.career.service.NcsStandardService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -9,7 +8,6 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
- */
 
 /**
  * NCS 임베딩/잡매칭용 데이터 최초 적재 러너
@@ -25,7 +23,6 @@ import org.springframework.stereotype.Component;
  * @author YUN
  */
 
-/*
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -46,4 +43,3 @@ public class NcsSubcategorySyncRunner implements ApplicationRunner {
         }
     }
 }
- */

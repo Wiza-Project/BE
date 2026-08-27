@@ -1,6 +1,5 @@
 package com.gnagnoohc.scms.global.common.ncs;
 
-/*
 import com.gnagnoohc.scms.domain.career.service.NcsEmbeddingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -9,7 +8,7 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
-ㄴ
+
 //TODO: 배포 상황에서 절대 사용하지 마세요. Ollama 사용 시, 무조건 로컬 설정 후 사용하세요. 배포 상황에서 사용 시 비용 청구합니다.
 
 @Slf4j
@@ -32,4 +31,3 @@ public class NcsEmbeddingSyncRunner implements ApplicationRunner {
         }
     }
 }
- */
