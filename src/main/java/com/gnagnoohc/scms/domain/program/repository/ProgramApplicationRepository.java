@@ -119,9 +119,9 @@ public interface ProgramApplicationRepository extends JpaRepository<ProgramAppli
      */
     @Query(value = """
         INSERT INTO program_application (
-            program_id, student_id, application_status, waitlist_order, survey_completed, created_at, updated_at
+            program_id, student_id, application_status, waitlist_order, survey_completed, user_consent_id, created_at, updated_at
         ) VALUES (
-            :programId, :studentId, :applicationStatus, :waitlistOrder, :surveyCompleted, :now, :now
+            :programId, :studentId, :applicationStatus, :waitlistOrder, :surveyCompleted, :userConsentId, :now, :now
         )
         RETURNING application_id
         """, nativeQuery = true)
@@ -144,6 +144,8 @@ public interface ProgramApplicationRepository extends JpaRepository<ProgramAppli
                                @Param("waitlistOrder") Integer waitlistOrder,
                                // 신규 신청은 항상 false(만족도 설문 미완료).
                                @Param("surveyCompleted") boolean surveyCompleted,
+                               // 신청 시점에 유효했던 PROGRAM/PERSONAL_INFO 동의 건의 PK(FK 증빙).
+                               @Param("userConsentId") Integer userConsentId,
                                @Param("now") Instant now);
 
     // 특정 프로그램에서 특정 상태(주로 "APPLIED")인 신청 건수. 정원과 비교해 대기 여부를 판단하는 데 쓴다.
@@ -386,6 +388,7 @@ public interface ProgramApplicationRepository extends JpaRepository<ProgramAppli
             certificate_issued_at = NULL,
             judged_by = NULL,
             completed_at = NULL,
+            user_consent_id = :userConsentId,
             created_at = :now,
             updated_at = :now
         WHERE application_id = :applicationId
@@ -395,5 +398,8 @@ public interface ProgramApplicationRepository extends JpaRepository<ProgramAppli
                            // "APPLIED" 또는 "WAITLISTED". apply()가 정원 비교 결과로 결정한다.
                            @Param("applicationStatus") String applicationStatus,
                            @Param("waitlistOrder") Integer waitlistOrder,
+                           // 재신청 시점에 유효했던 PROGRAM/PERSONAL_INFO 동의 건의 PK — 취소 후
+                           // 철회·재동의가 있었을 수 있으므로 이전 값을 그대로 두지 않고 갱신한다.
+                           @Param("userConsentId") Integer userConsentId,
                            @Param("now") Instant now);
 }

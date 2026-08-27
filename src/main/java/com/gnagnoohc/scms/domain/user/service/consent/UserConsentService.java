@@ -71,10 +71,11 @@ public class UserConsentService implements ConsentVerifier {
     /**
      * 동의 내역을 철회합니다.
      * 필수 약관이라도 철회 자체는 허용하며, 권한 부전이나 이미 철회된 상태에 대해 예외를 반환합니다.
+     * requireOwnedValidConsent()와 같은 행 잠금(findByIdForUpdate)을 타 검증-철회 경쟁을 직렬화한다.
      */
     @Transactional
     public void withdraw(Integer userId, Integer userConsentId) {
-        UserConsent consent = userConsentRepository.findById(userConsentId)
+        UserConsent consent = userConsentRepository.findByIdForUpdate(userConsentId)
                 .filter(c -> c.getUser().getUserId().equals(userId))
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_CONSENT_NOT_FOUND));
 
@@ -93,7 +94,12 @@ public class UserConsentService implements ConsentVerifier {
 
     // ── ConsentVerifier ──────────────────────────────────────────
 
+    /**
+     * 잠근 엔티티에서 소유자·철회여부·정책 모듈/유형/활성/유효기간을 검사한다.
+     * 실패 사유는 구분하지 않고 전부 FORBIDDEN 하나로 던진다.
+     */
     @Override
+    @Transactional
     public UserConsent requireOwnedValidConsent(
             Integer userConsentId,
             Integer userId,
@@ -101,9 +107,18 @@ public class UserConsentService implements ConsentVerifier {
             ConsentType consentType,
             Instant asOf
     ) {
-        return userConsentRepository
-                .findOwnedValidConsent(userConsentId, userId, moduleCode.name(), consentType.name(), asOf)
+        UserConsent consent = userConsentRepository.findByIdForUpdate(userConsentId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
+        ConsentPolicy policy = consent.getConsentPolicy();
+        boolean valid = consent.getUser().getUserId().equals(userId)
+                && consent.getWithdrawnAt() == null
+                && policy.getModuleCode().equals(moduleCode.name())
+                && policy.getConsentType().equals(consentType.name())
+                && isCurrentlyEffective(policy, asOf);
+        if (!valid) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        return consent;
     }
 
     @Override
