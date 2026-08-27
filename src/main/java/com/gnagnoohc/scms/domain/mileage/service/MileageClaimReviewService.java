@@ -190,10 +190,7 @@ public class MileageClaimReviewService {
         }
 
         LocalDate activityDate = claim.getActivityDate();
-        if (activityDate == null
-                || policy.getValidFrom() == null
-                || activityDate.isBefore(policy.getValidFrom())
-                || policy.getValidTo() != null && activityDate.isAfter(policy.getValidTo())) {
+        if (!policy.isApplicableOn(activityDate)) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "활동 일자가 마일리지 정책 적용 기간에 포함되지 않습니다.");
         }
     }
