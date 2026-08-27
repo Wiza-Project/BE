@@ -6,7 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.Optional;
 
 /**
- * 학생 AI 프로필 및 임베딩 벡터 원장 데이터 접근 계층
+ * 학생 AI 프로필 및 임베딩 벡터 원장 데이터 접근 계층 레파지토리
  */
 public interface StudentProfileRepository extends JpaRepository<StudentProfile, Integer> {
 

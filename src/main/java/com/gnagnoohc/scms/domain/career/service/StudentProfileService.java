@@ -23,7 +23,7 @@ public class StudentProfileService {
     private final AppUserRepository appUserRepository;
 
     /**
-     * 학생의 선택 직무(NCS 코드)를 기반으로 StudentProfile의 임베딩 벡터를 동기화합니다.
+     * 학생의 선택 직무(NCS 코드)를 기반으로 StudentProfile의 임베딩 벡터 동기화 처리
      *
      * @param userId  학생 사용자 PK
      * @param ncsCode 선택된 NCS 8자리 직무 코드 (예: "20010102")
@@ -38,7 +38,6 @@ public class StudentProfileService {
         // 1. ncs_standard 원장에서 해당 직무의 사전 적재된 임베딩 벡터 조회
         NcsStandard ncsStandard = ncsStandardRepository.findByNcsCode(ncsCode)
                 .orElse(null);
-
         // ncs_standard에 사전에 생성된 벡터가 없는 경우 방어로직 (배포 시 Ollama가 없으므로 새로 만들지 않고 스킵)
         if (ncsStandard == null || ncsStandard.getEmbeddingVector() == null) {
             log.warn("[StudentProfile] 해당 NCS 코드({})의 사전 적재된 임베딩 벡터가 존재하지 않습니다.", ncsCode);

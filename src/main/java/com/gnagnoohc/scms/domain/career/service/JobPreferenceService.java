@@ -42,7 +42,7 @@ public class JobPreferenceService {
     private final CareerBindingHelper careerBindingHelper;
     private final JdbcUpsertHelper jdbcUpsertHelper;
 
-    // 학생 희망 조건값 벡터화를 위한 서비스단 주입
+    // 학생 희망 조건값 벡터화 처리를 위한 서비스단 주입
     private final StudentProfileService studentProfileService;
 
     /**

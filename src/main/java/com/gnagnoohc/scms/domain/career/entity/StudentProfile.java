@@ -19,7 +19,6 @@ import org.hibernate.type.SqlTypes;
 import java.util.List;
 
 /**
- * Embeddings must be produced by the same model used for {@link NcsStandard}.
  * <p>
  * [1. 학생 벡터 로드]
  * student_profile.embedding_vector (사전 연산 완료된 벡터)
@@ -90,30 +89,30 @@ public class StudentProfile {
     }
 
     /**
-     * 복수 직무 벡터들의 평균을 계산하여 학생 대표 벡터로 갱신합니다.
+     * 복수 직무 희망 시 벡터 평균 연산 로직 (현재 단일 희망직무 연동으로 미사용 처리, 추후 3뎁스 확장)
      */
-    public void updateAverageEmbeddingVector(List<float[]> vectors) {
-        if (vectors == null || vectors.isEmpty()) {
-            this.embeddingVector = null;
-            return;
-        }
-
-        int dimension = vectors.get(0).length;
-        float[] sumVector = new float[dimension];
-
-        for (float[] vector : vectors) {
-            if (vector == null || vector.length != dimension) {
-                continue;
-            }
-            for (int i = 0; i < dimension; i++) {
-                sumVector[i] += vector[i];
-            }
-        }
-
-        for (int i = 0; i < dimension; i++) {
-            sumVector[i] /= vectors.size();
-        }
-
-        this.embeddingVector = sumVector;
-    }
+//    public void updateAverageEmbeddingVector(List<float[]> vectors) {
+//        if (vectors == null || vectors.isEmpty()) {
+//            this.embeddingVector = null;
+//            return;
+//        }
+//
+//        int dimension = vectors.get(0).length;
+//        float[] sumVector = new float[dimension];
+//
+//        for (float[] vector : vectors) {
+//            if (vector == null || vector.length != dimension) {
+//                continue;
+//            }
+//            for (int i = 0; i < dimension; i++) {
+//                sumVector[i] += vector[i];
+//            }
+//        }
+//
+//        for (int i = 0; i < dimension; i++) {
+//            sumVector[i] /= vectors.size();
+//        }
+//
+//        this.embeddingVector = sumVector;
+//    }
 }
