@@ -131,4 +131,19 @@ public class CounselingSession extends BaseTimeEntity {
     public boolean isCancelable(Instant now) {
         return SESSION_PLANNED.equals(sessionStatus) && now.isBefore(startsAt);
     }
+
+    /**
+     * 비공개 기록 초안 작성이 허용되는 회기 상태다(설계: 시작 시각이 지난 PLANNED, 또는
+     * 출석 확인된 COMPLETED). 배정 활성 여부·확정 여부는 여기서 다루지 않고 서비스가 별도로 확인한다.
+     */
+    public boolean isPrivateDraftAllowed(Instant now) {
+        boolean startedPlanned = SESSION_PLANNED.equals(sessionStatus) && startsAt != null && !now.isBefore(startsAt);
+        boolean completedPresent = SESSION_COMPLETED.equals(sessionStatus) && ATTENDANCE_PRESENT.equals(attendanceStatus);
+        return startedPlanned || completedPresent;
+    }
+
+    /** 비공개 기록 확정이 허용되는 회기 상태다 — 출석 확인된 COMPLETED만 해당한다. */
+    public boolean isPrivateConfirmAllowed(Instant now) {
+        return SESSION_COMPLETED.equals(sessionStatus) && ATTENDANCE_PRESENT.equals(attendanceStatus);
+    }
 }
