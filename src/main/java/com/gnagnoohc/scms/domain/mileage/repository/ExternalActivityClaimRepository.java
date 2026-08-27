@@ -4,8 +4,8 @@ import com.gnagnoohc.scms.domain.mileage.entity.ExternalActivityClaim;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -16,7 +16,7 @@ import java.util.List;
 /** 학생이 신청한 외부활동 실적의 최근 처리 상태를 조회한다. */
 public interface ExternalActivityClaimRepository extends JpaRepository<ExternalActivityClaim, Integer> {
 
-    /** 교직원 심사 목록을 조회한다. 심사 화면에 필요한 연관 데이터를 함께 가져와 N+1을 막는다. */
+    /** 교직원 심사 목록에 필요한 연관 데이터를 함께 조회한다. */
     @Query(value = """
             select c
             from ExternalActivityClaim c
@@ -46,12 +46,12 @@ public interface ExternalActivityClaimRepository extends JpaRepository<ExternalA
             Pageable pageable
     );
 
-    /** 승인·반려 경쟁 요청을 직렬화하기 위해 신청 행을 잠근다. */
+    /** 승인·반려·취소의 경쟁 요청을 직렬화하기 위해 신청 행을 잠근다. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select c from ExternalActivityClaim c where c.externalClaimId = :claimId")
     java.util.Optional<ExternalActivityClaim> findByIdForUpdate(@Param("claimId") Integer claimId);
 
-    /** 상세 화면용으로 심사에 필요한 연관 데이터를 함께 조회한다. */
+    /** 교직원 상세 화면에 필요한 연관 데이터를 함께 조회한다. */
     @Query("""
             select c
             from ExternalActivityClaim c

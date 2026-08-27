@@ -10,7 +10,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 
-/** 교직원이 증빙과 정책을 확인할 때 사용하는 외부활동 마일리지 신청 상세 응답이다. */
+/** 교직원이 학생·증빙·정책·처리 이력을 함께 확인하는 상세 응답이다. */
 public record MileageClaimReviewDetailResponse(
         Integer externalClaimId,
         StudentSummary student,
@@ -26,14 +26,14 @@ public record MileageClaimReviewDetailResponse(
         Instant reviewedAt,
         String reviewReason,
         Instant applicationDate,
-        Integer mileageTransactionId,
-        BigDecimal postedPoints,
-        String transactionStatus
+        TransactionSummary originalTransaction,
+        TransactionSummary reversalTransaction
 ) {
 
     public static MileageClaimReviewDetailResponse from(
             ExternalActivityClaim claim,
-            MileageTransaction transaction
+            MileageTransaction originalTransaction,
+            MileageTransaction reversalTransaction
     ) {
         MileageActivityType activityType = claim.getActivityType();
         MileagePolicy mileagePolicy = claim.getMileagePolicy();
@@ -61,17 +61,12 @@ public record MileageClaimReviewDetailResponse(
                 claim.getReviewedAt(),
                 claim.getReviewReason(),
                 claim.getCreatedAt(),
-                transaction == null ? null : transaction.getMileageTransactionId(),
-                transaction == null ? null : transaction.getPoints(),
-                transaction == null ? null : transaction.getTransactionStatus()
+                TransactionSummary.from(originalTransaction),
+                TransactionSummary.from(reversalTransaction)
         );
     }
 
-    public record StudentSummary(
-            Integer studentId,
-            String studentName,
-            String studentNo
-    ) {
+    public record StudentSummary(Integer studentId, String studentName, String studentNo) {
     }
 
     public record ActivitySummary(
@@ -105,6 +100,30 @@ public record MileageClaimReviewDetailResponse(
                     policy.getValidFrom(),
                     policy.getValidTo(),
                     policy.getPolicyStatus());
+        }
+    }
+
+    public record TransactionSummary(
+            Integer transactionId,
+            String transactionType,
+            BigDecimal points,
+            String transactionStatus,
+            Integer processedBy,
+            String transactionReason,
+            Instant postedAt
+    ) {
+        private static TransactionSummary from(MileageTransaction transaction) {
+            if (transaction == null) {
+                return null;
+            }
+            return new TransactionSummary(
+                    transaction.getMileageTransactionId(),
+                    transaction.getTransactionType(),
+                    transaction.getPoints(),
+                    transaction.getTransactionStatus(),
+                    transaction.getProcessedBy(),
+                    transaction.getTransactionReason(),
+                    transaction.getPostedAt());
         }
     }
 }

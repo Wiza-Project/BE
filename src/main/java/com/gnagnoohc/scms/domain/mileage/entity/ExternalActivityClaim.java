@@ -21,10 +21,10 @@ import java.time.LocalDate;
 @Entity @Getter @Table(name = "external_activity_claim")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ExternalActivityClaim extends BaseTimeEntity {
-    private static final String REQUESTED_STATUS = "REQUESTED";
-    private static final String APPROVED_STATUS = "APPROVED";
-    private static final String REJECTED_STATUS = "REJECTED";
-
+    public static final String REQUESTED_STATUS = "REQUESTED";
+    public static final String APPROVED_STATUS = "APPROVED";
+    public static final String REJECTED_STATUS = "REJECTED";
+    public static final String CANCELLED_STATUS = "CANCELLED";
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "external_claim_id", nullable = false) private Integer externalClaimId;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "file_group_id") private FileGroup fileGroup;
@@ -40,18 +40,18 @@ public class ExternalActivityClaim extends BaseTimeEntity {
     @Column(name = "reviewed_at") private Instant reviewedAt;
     @Column(name = "review_reason", columnDefinition = "text") private String reviewReason;
 
-    /** 교직원이 아직 심사하지 않은 외부활동 신청을 승인한다. */
+    /** 아직 심사하지 않은 신청만 승인한다. 승인 점수는 서비스가 정책에서 확정한다. */
     public void approve(Integer reviewerId, Instant reviewedAt) {
-        ensureRequested();
+        ensureStatus(REQUESTED_STATUS);
         this.claimStatus = APPROVED_STATUS;
         this.reviewedBy = reviewerId;
         this.reviewedAt = reviewedAt;
         this.reviewReason = null;
     }
 
-    /** 교직원이 아직 심사하지 않은 외부활동 신청을 반려한다. */
+    /** 아직 심사하지 않은 신청만 반려한다. */
     public void reject(String reason, Integer reviewerId, Instant reviewedAt) {
-        ensureRequested();
+        ensureStatus(REQUESTED_STATUS);
         if (reason == null || reason.isBlank()) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "반려 사유는 필수입니다.");
         }
@@ -61,8 +61,20 @@ public class ExternalActivityClaim extends BaseTimeEntity {
         this.reviewReason = reason.trim();
     }
 
-    private void ensureRequested() {
-        if (!REQUESTED_STATUS.equals(claimStatus)) {
+    /** 승인된 신청만 취소한다. 기존 원장은 수정하지 않고 별도 역분개를 생성한다. */
+    public void cancel(String reason, Integer reviewerId, Instant reviewedAt) {
+        ensureStatus(APPROVED_STATUS);
+        if (reason == null || reason.isBlank()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "취소 사유는 필수입니다.");
+        }
+        this.claimStatus = CANCELLED_STATUS;
+        this.reviewedBy = reviewerId;
+        this.reviewedAt = reviewedAt;
+        this.reviewReason = reason.trim();
+    }
+
+    private void ensureStatus(String expectedStatus) {
+        if (!expectedStatus.equals(claimStatus)) {
             throw new BusinessException(ErrorCode.APPLICATION_ALREADY_PROCESSED);
         }
     }

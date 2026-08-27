@@ -1,6 +1,6 @@
 package com.gnagnoohc.scms.domain.mileage.controller;
 
-import com.gnagnoohc.scms.domain.mileage.DTO.request.MileageClaimApproveRequest;
+import com.gnagnoohc.scms.domain.mileage.DTO.request.MileageClaimCancelRequest;
 import com.gnagnoohc.scms.domain.mileage.DTO.request.MileageClaimRejectRequest;
 import com.gnagnoohc.scms.domain.mileage.DTO.response.MileageClaimReviewDetailResponse;
 import com.gnagnoohc.scms.domain.mileage.DTO.response.MileageClaimReviewListResponse;
@@ -26,7 +26,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 교직원이 외부활동 마일리지 신청을 조회하고 승인·반려하는 API. */
+/** 교직원이 외부활동 마일리지 신청을 조회하고 승인·반려·취소하는 API다. */
 @Tag(name = "MileageClaimReview", description = "외부활동 마일리지 심사")
 @RestController
 @RequestMapping("/api/admin/mileage/claims")
@@ -49,21 +49,17 @@ public class MileageClaimReviewController {
 
     @Operation(summary = "마일리지 심사 신청 상세 조회")
     @GetMapping("/{claimId}")
-    public ApiResponse<MileageClaimReviewDetailResponse> detail(
-            @PathVariable Integer claimId
-    ) {
+    public ApiResponse<MileageClaimReviewDetailResponse> detail(@PathVariable Integer claimId) {
         return ApiResponse.ok(mileageClaimReviewService.getClaimDetail(claimId));
     }
 
-    @Operation(summary = "마일리지 신청 승인", description = "증빙과 정책을 검증한 뒤 적립 원장을 생성합니다.")
+    @Operation(summary = "마일리지 신청 승인", description = "증빙과 활성 정책을 검증한 뒤 정책 등록 점수로 적립 원장을 생성합니다.")
     @PostMapping("/{claimId}/approve")
     public ApiResponse<MileageClaimReviewResultResponse> approve(
             @PathVariable Integer claimId,
-            @Valid @RequestBody(required = false) MileageClaimApproveRequest request,
             @AuthenticationPrincipal AuthUser authUser
     ) {
-        return ApiResponse.ok(mileageClaimReviewService.approve(
-                claimId, authUser.getId(), request));
+        return ApiResponse.ok(mileageClaimReviewService.approve(claimId, authUser.getId()));
     }
 
     @Operation(summary = "마일리지 신청 반려", description = "반려 사유를 저장하고 신청을 반려 상태로 변경합니다.")
@@ -73,7 +69,16 @@ public class MileageClaimReviewController {
             @Valid @RequestBody MileageClaimRejectRequest request,
             @AuthenticationPrincipal AuthUser authUser
     ) {
-        return ApiResponse.ok(mileageClaimReviewService.reject(
-                claimId, authUser.getId(), request.reason()));
+        return ApiResponse.ok(mileageClaimReviewService.reject(claimId, authUser.getId(), request));
+    }
+
+    @Operation(summary = "승인된 마일리지 적립 취소", description = "기존 원장은 보존하고 반대 부호의 역분개 원장을 생성합니다.")
+    @PostMapping("/{claimId}/cancel")
+    public ApiResponse<MileageClaimReviewResultResponse> cancel(
+            @PathVariable Integer claimId,
+            @Valid @RequestBody MileageClaimCancelRequest request,
+            @AuthenticationPrincipal AuthUser authUser
+    ) {
+        return ApiResponse.ok(mileageClaimReviewService.cancel(claimId, authUser.getId(), request));
     }
 }

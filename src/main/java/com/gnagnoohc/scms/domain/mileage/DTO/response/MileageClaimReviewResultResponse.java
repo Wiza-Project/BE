@@ -6,11 +6,11 @@ import com.gnagnoohc.scms.domain.mileage.entity.MileageTransaction;
 import java.math.BigDecimal;
 import java.time.Instant;
 
-/** 외부활동 마일리지 신청 승인·반려 처리 결과다. */
+/** 외부활동 마일리지 심사 처리 결과다. */
 public record MileageClaimReviewResultResponse(
         Integer externalClaimId,
         String claimStatus,
-        BigDecimal postedPoints,
+        BigDecimal transactionPoints,
         Integer mileageTransactionId,
         Integer reviewedBy,
         Instant reviewedAt,
