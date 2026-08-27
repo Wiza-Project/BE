@@ -86,6 +86,8 @@ class ProgramApplicationConsentConcurrencyTest {
     private AppUser student;
     private ExtracurricularProgram program;
     private ConsentPolicy policy;
+    private ConsentPolicy termsPolicy;
+    private Integer termsConsentId;
 
     @BeforeEach
     void setUp() {
@@ -102,19 +104,13 @@ class ProgramApplicationConsentConcurrencyTest {
 
             program = buildProgram(operatingUnitCode, programTypeCode, competency, manager);
 
-            policy = BeanUtils.instantiateClass(ConsentPolicy.class);
-            ReflectionTestUtils.setField(policy, "consentType", ConsentType.PERSONAL_INFO.name());
-            ReflectionTestUtils.setField(policy, "moduleCode", ConsentModuleCode.PROGRAM.name());
-            ReflectionTestUtils.setField(policy, "version", "PGTEST-" + System.nanoTime());
-            ReflectionTestUtils.setField(policy, "title", "동시성 테스트 정책");
-            ReflectionTestUtils.setField(policy, "content", "테스트 본문");
-            ReflectionTestUtils.setField(policy, "required", true);
-            ReflectionTestUtils.setField(policy, "effectiveFrom", Instant.now().minus(1, ChronoUnit.DAYS));
-            ReflectionTestUtils.setField(policy, "active", true);
-            ReflectionTestUtils.setField(policy, "createdBy", 1);
-            policy = consentPolicyRepository.save(policy);
+            policy = saveRequiredPolicy(ConsentType.PERSONAL_INFO, "동시성 테스트 정책");
+            termsPolicy = saveRequiredPolicy(ConsentType.TERMS_OF_SERVICE, "동시성 테스트 이용약관");
             return null;
         });
+        // apply()의 hasAgreedAllRequired 게이트는 PROGRAM의 필수 동의(TERMS_OF_SERVICE, PERSONAL_INFO)를
+        // 모두 요구하므로, 각 테스트가 검증하려는 동의 종류와 무관하게 TERMS_OF_SERVICE는 여기서 미리 동의해 둔다.
+        termsConsentId = agreeTerms();
     }
 
     @AfterEach
@@ -126,6 +122,7 @@ class ProgramApplicationConsentConcurrencyTest {
             userConsentRepository.deleteAll(
                     userConsentRepository.findByUser_UserIdOrderByConsentedAtDesc(student.getUserId()));
             consentPolicyRepository.delete(policy);
+            consentPolicyRepository.delete(termsPolicy);
             programRepository.delete(program);
             appUserRepository.delete(student);
             return null;
@@ -169,6 +166,54 @@ class ProgramApplicationConsentConcurrencyTest {
         try {
             applyFuture.get(5, TimeUnit.SECONDS);
             throw new AssertionError("철회된 동의로 신청 접수가 성공해서는 안 된다");
+        } catch (ExecutionException e) {
+            assertThat(e.getCause()).isInstanceOf(BusinessException.class);
+            assertThat(((BusinessException) e.getCause()).getErrorCode()).isEqualTo(ErrorCode.REQUIRED_CONSENT_NOT_AGREED);
+        }
+
+        executor.shutdown();
+        assertThat(applicationRepository.findByProgram_ProgramIdAndStudent_UserId(
+                program.getProgramId(), student.getUserId())).isEmpty();
+    }
+
+    @Test
+    @DisplayName("TERMS_OF_SERVICE 철회가 동의 행 잠금을 먼저 잡으면, 뒤이은 신청 접수는 REQUIRED_CONSENT_NOT_AGREED로 실패하고 신청이 남지 않는다")
+    void termsOfServiceWithdrawWinsLock_applyFails() throws Exception {
+        agree();
+
+        CountDownLatch withdrawHoldsLock = new CountDownLatch(1);
+        CountDownLatch releaseWithdraw = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+
+        // 철회 스레드: TERMS_OF_SERVICE 동의 행을 수동으로 잠그고, 잠금을 잡았다는 신호를 보낸 뒤 해제 신호를 받을 때까지 기다린다.
+        Future<?> withdrawFuture = executor.submit(() -> {
+            TransactionTemplate tx = new TransactionTemplate(transactionManager);
+            tx.execute(status -> {
+                UserConsent locked = userConsentRepository.findByIdForUpdate(termsConsentId).orElseThrow();
+                withdrawHoldsLock.countDown();
+                await(releaseWithdraw);
+                locked.withdraw(Instant.now());
+                return null;
+            });
+            return null;
+        });
+
+        withdrawHoldsLock.await(5, TimeUnit.SECONDS);
+
+        // 신청 스레드(실제 서비스 경로): apply()가 TERMS_OF_SERVICE -> PERSONAL_INFO 순으로 잠그므로
+        // TERMS_OF_SERVICE 행 잠금을 기다리느라 아직 끝나지 않아야 한다.
+        Future<?> applyFuture = executor.submit(() ->
+                programApplicationService.apply(program.getProgramId(), student.getUserId()));
+
+        assertThatThrownBy(() -> applyFuture.get(300, TimeUnit.MILLISECONDS))
+                .isInstanceOf(TimeoutException.class);
+
+        releaseWithdraw.countDown();
+        withdrawFuture.get(5, TimeUnit.SECONDS);
+
+        try {
+            applyFuture.get(5, TimeUnit.SECONDS);
+            throw new AssertionError("철회된 TERMS_OF_SERVICE 동의로 신청 접수가 성공해서는 안 된다");
         } catch (ExecutionException e) {
             assertThat(e.getCause()).isInstanceOf(BusinessException.class);
             assertThat(((BusinessException) e.getCause()).getErrorCode()).isEqualTo(ErrorCode.REQUIRED_CONSENT_NOT_AGREED);
@@ -231,6 +276,24 @@ class ProgramApplicationConsentConcurrencyTest {
 
     private Integer agree() {
         return userConsentService.agree(student.getUserId(), policy.getConsentPolicyId()).userConsentId();
+    }
+
+    private Integer agreeTerms() {
+        return userConsentService.agree(student.getUserId(), termsPolicy.getConsentPolicyId()).userConsentId();
+    }
+
+    private ConsentPolicy saveRequiredPolicy(ConsentType consentType, String title) {
+        ConsentPolicy p = BeanUtils.instantiateClass(ConsentPolicy.class);
+        ReflectionTestUtils.setField(p, "consentType", consentType.name());
+        ReflectionTestUtils.setField(p, "moduleCode", ConsentModuleCode.PROGRAM.name());
+        ReflectionTestUtils.setField(p, "version", "PGTEST-" + System.nanoTime());
+        ReflectionTestUtils.setField(p, "title", title);
+        ReflectionTestUtils.setField(p, "content", "테스트 본문");
+        ReflectionTestUtils.setField(p, "required", true);
+        ReflectionTestUtils.setField(p, "effectiveFrom", Instant.now().minus(1, ChronoUnit.DAYS));
+        ReflectionTestUtils.setField(p, "active", true);
+        ReflectionTestUtils.setField(p, "createdBy", 1);
+        return consentPolicyRepository.save(p);
     }
 
     private ExtracurricularProgram buildProgram(
