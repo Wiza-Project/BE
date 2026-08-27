@@ -18,14 +18,9 @@ import org.springframework.stereotype.Component;
  * 이 러너는 {@code ncs_standard} 원장에 대·중·소·세분류 전체 계층 구조와 직무 설명을
  * 연쇄적으로 조회하여 적재하는 임베딩 기반 매칭 기능 전용 러너</p>
  *
-<<<<<<< HEAD
  * <p><b>주의:</b> 다수의 공공 API 호출이 연쇄적으로 발생하여 기동 시간에 영향을 줄 수 있으므로,
  * TODO: 현재는 로컬 개발 환경({@code local})에서만 동작하도록 제한 처리, 추후 개발(dev) 서버 등에서 최초 데이터 적재가 필요할 경우 프로필 설정을 검토 필수(주석으로 프로필 설정된 걸 바꿔서 처리해도 무방)</p>
-=======
- * <p><b>주의:</b> 다수의 공공 API 호출이 연쇄적으로 발생하여 기동 시간에 영향을 줄 수 있습니다.
- * 현재는 로컬 개발 환경({@code local})에서만 동작하도록 제한 처리, 추후 개발(dev) 서버 등에서 최초 데이터 적재가 필요할 경우 프로필 설정 검토 필수(주석으로 프로필 설정된 걸 바꿔서 처리해도 무방)
- * 실행 원할 경우 havingValue = "false" 처리 등등 NcsEmbeddingService 주석 확인 필요
->>>>>>> 3bc7e03 (feat(WP-208): NCS 태그 벡터값 테이블에 적재)
+ * 실행 원할 경우 NcsEmbeddingService 주석 확인 필요
  *
  * @author YUN
  */
@@ -33,11 +28,6 @@ import org.springframework.stereotype.Component;
 /*
 @Slf4j
 @Component
-<<<<<<< HEAD
-@Profile("local")
-//@Profile("!test")
-=======
->>>>>>> 3bc7e03 (feat(WP-208): NCS 태그 벡터값 테이블에 적재)
 @RequiredArgsConstructor
 @Profile("local")
 @ConditionalOnProperty(prefix = "app.embedding", name = "enabled", havingValue = "true")
