@@ -32,4 +32,12 @@ public class MileagePolicy extends BaseCreatedAtEntity {
     @JdbcTypeCode(SqlTypes.JSON) @Column(name = "duplicate_rule", columnDefinition = "jsonb") private JsonNode duplicateRule;
     @Column(name = "policy_status", nullable = false, length = 20) private String policyStatus = "ACTIVE";
     @Column(name = "created_by", nullable = false) private Integer createdBy;
+
+    /** 주어진 날짜가 이 정책의 적용 기간에 포함되는지 확인한다. 시작일과 종료일은 모두 포함한다. */
+    public boolean isApplicableOn(LocalDate date) {
+        return date != null
+                && validFrom != null
+                && !date.isBefore(validFrom)
+                && (validTo == null || !date.isAfter(validTo));
+    }
 }

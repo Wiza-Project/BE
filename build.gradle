@@ -29,7 +29,9 @@ repositories {
 
 dependencies {
 	// ── AI ────────────────────────────────────────────────────────
+// TODO: LOCAL, 배포 모두 pgvector 의존성 추가 필요
 //	implementation 'org.springframework.ai:spring-ai-starter-vector-store-pgvector'
+//	직접 테스트코드로 실행 원할 경우 로컬 한정으로 올라마 모델 설치 - 의존성 추가 필요, develop에선 무조건 주석 처리해야하니 push 전 필수로 확인
 //	implementation 'org.springframework.ai:spring-ai-starter-model-ollama'
 
 	// ── docker ────────────────────────────────────────────────────────
