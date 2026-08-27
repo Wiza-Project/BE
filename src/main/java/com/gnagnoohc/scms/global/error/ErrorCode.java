@@ -121,6 +121,8 @@ public enum ErrorCode {
     ASSESSMENT_TARGET_CONDITION_UNSUPPORTED(HttpStatus.BAD_REQUEST, "Q019", "지원하지 않는 응시 대상 조건입니다."),
     // grades/majorCodeIds 값이 배열이 아니거나 원소가 정수가 아닐 때 사용. Q019(인식 못 하는 키)와 달리 키는 맞음.
     ASSESSMENT_TARGET_CONDITION_INVALID_FORMAT(HttpStatus.BAD_REQUEST, "Q020", "저장된 응시 대상 조건의 형식이 올바르지 않습니다. 회차 등록/수정 화면에서 대상 조건을 다시 확인해주세요."),
+    // 통계 조회 groupBy 파라미터가 GRADE/MAJOR 중 하나가 아닐 때 사용.
+    ASSESSMENT_INVALID_GROUP_AXIS(HttpStatus.BAD_REQUEST, "Q021", "지원하지 않는 통계 그룹 기준입니다."),
 
     // ── 상담 ──────────────────────────────────────────────────────
     COUNSELOR_NOT_FOUND(HttpStatus.NOT_FOUND, "S001", "상담사를 찾을 수 없습니다."),
@@ -131,6 +133,7 @@ public enum ErrorCode {
     ASSIGNMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "S006", "상담사 배정을 찾을 수 없습니다."),
     SESSION_NOT_FOUND(HttpStatus.NOT_FOUND, "S007", "상담 회기를 찾을 수 없습니다."),
     SESSION_STATE_NOT_ALLOWED(HttpStatus.CONFLICT, "S008", "허용되지 않은 회기 상태입니다."),
+    PRIVATE_RECORD_STATE_NOT_ALLOWED(HttpStatus.CONFLICT, "S009", "허용되지 않은 비공개 기록 상태입니다."),
 
     // ── 마일리지 ──────────────────────────────────────────────────
     MILEAGE_ITEM_NOT_FOUND(HttpStatus.NOT_FOUND, "M001", "마일리지 항목을 찾을 수 없습니다."),
