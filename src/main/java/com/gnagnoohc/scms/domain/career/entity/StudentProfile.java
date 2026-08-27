@@ -10,14 +10,12 @@ import jakarta.persistence.MapsId;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
-<<<<<<< HEAD
-/** Embeddings must be produced by the same model used for {@link NcsStandard}. */
-=======
 import java.util.List;
 
 /**
@@ -54,7 +52,6 @@ import java.util.List;
  *
  *
  */
->>>>>>> 9e7c46a (feat(WP-209): 학생 희망 조건 벡터값 테이블에 적재)
 @Entity
 @Getter
 @Table(name = "student_profile")
@@ -76,8 +73,6 @@ public class StudentProfile {
     @JdbcTypeCode(SqlTypes.VECTOR)
     @Column(name = "embedding_vector", nullable = true, columnDefinition = "vector")
     private float[] embeddingVector;
-<<<<<<< HEAD
-=======
 
     @Builder
     public StudentProfile(AppUser user, String studentGrade, float[] embeddingVector) {
@@ -120,5 +115,4 @@ public class StudentProfile {
 //
 //        this.embeddingVector = sumVector;
 //    }
->>>>>>> 9e7c46a (feat(WP-209): 학생 희망 조건 벡터값 테이블에 적재)
 }
