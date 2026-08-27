@@ -10,6 +10,14 @@ spring:
       ddl-auto: update      # 로컬 개발 중에만. 절대 운영에 쓰지 말 것
     show-sql: true
 
-    app:
-      jwt:
-        cookie-secure: false    # 로컬은 http라서 Secure 쿠키를 쓰면 브라우저가 저장을 거부합니다
+# Ollama 로컬 임베딩 생성 시 활성화 (평상시 비활성화)
+#  ai:
+#    ollama:
+#      base-url: http://localhost:11434
+#      embedding:
+#        options:
+#          model: nomic-embed-text
+
+app:
+  jwt:
+    cookie-secure: false    # 로컬은 http라서 Secure 쿠키를 쓰면 브라우저가 저장을 거부합니다
