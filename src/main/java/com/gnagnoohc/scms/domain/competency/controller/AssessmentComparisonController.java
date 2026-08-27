@@ -24,7 +24,9 @@ public class AssessmentComparisonController {
     @Operation(summary = "사전·사후 비교 조회",
             description = "선택한 두 응시(attemptId)의 결과를 사전 → 사후 순으로 정렬해 겹친 방사형 차트용 점수와 "
                     + "역량별 변화량(afterScore - beforeScore, 하락도 그대로)을 반환합니다. 두 attemptId의 전달 순서는 무관하며, "
-                    + "회차 구분(PRE/POST)으로, 같으면 제출 시각으로 방향을 정합니다. 각 응시의 상세 점수 계산은 결과 조회 API와 동일합니다.")
+                    + "서버가 회차 구분(PRE/POST)으로 사전·사후 방향을 결정합니다. 비교 대상은 같은 학년도의 PRE 1건과 POST 1건이어야 하며, "
+                    + "같은 구분 2건이거나 학년도가 다르면 Q023, 같은 attemptId를 중복 지정하면 Q022를 반환합니다. "
+                    + "각 응시의 상세 점수 계산은 결과 조회 API와 동일합니다.")
     @GetMapping
     public ApiResponse<AssessmentComparisonResponse> compare(
             @RequestParam Integer firstAttemptId,
