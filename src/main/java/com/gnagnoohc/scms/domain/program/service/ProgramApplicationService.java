@@ -82,6 +82,8 @@ public class ProgramApplicationService {
          * 같은 트랜잭션(클래스 레벨 @Transactional)에 묶여 있어야 TOCTOU 경합이 없다.
          * 이 시점의 now는 동의 확인 asOf 시각일 뿐, 아래 모집기간 검사·저장 시각에는 쓰지 않는다 —
          * 락 대기·정원 계산 등으로 그 사이 시간이 흐를 수 있어 (b), (e)에서 각각 다시 계산한다.
+         * 이 최초 검사는 락을 잡기 전에 미리 걸러내는 실패-우선(fail-fast) 용도이고, 그 사이 동의가
+         * 철회·만료됐을 가능성에 대비한 최종 재검증은 (e) 저장 직전에 다시 수행한다.
          */
         if (!consentVerifier.hasAgreedAllRequired(studentId, ConsentModuleCode.PROGRAM, now)) {
             throw new BusinessException(ErrorCode.REQUIRED_CONSENT_NOT_AGREED);
@@ -153,6 +155,20 @@ public class ProgramApplicationService {
         if (!now.isBefore(program.getRecruitmentEndsAt())) {
             throw new BusinessException(ErrorCode.APPLICATION_PERIOD_CLOSED);
         }
+
+        /**
+         * (0) 이후 프로그램 행 락 대기·기존 신청 조회·정원 계산 등으로 시간이 흘렀을 수 있어, 그 사이
+         * 동의가 철회되거나 만료되지 않았는지 저장 직전 시각(now)으로 다시 검증한다. 증빙으로 저장할
+         * UserConsent도 다시 조회해 그 결과로 덮어쓴다 — (0)에서 구한 값을 그대로 쓰면, 그 사이 새 버전
+         * 동의로 갱신된 경우 이미 낡은 증빙 ID를 저장하게 된다.
+         */
+        if (!consentVerifier.hasAgreedAllRequired(studentId, ConsentModuleCode.PROGRAM, now)) {
+            throw new BusinessException(ErrorCode.REQUIRED_CONSENT_NOT_AGREED);
+        }
+        userConsent = consentVerifier
+                .findCurrentValidConsent(studentId, ConsentModuleCode.PROGRAM, ConsentType.PERSONAL_INFO, now)
+                .orElseThrow(() -> new BusinessException(ErrorCode.REQUIRED_CONSENT_NOT_AGREED));
+
         Integer applicationId;
         if (existing.isPresent()) {
             // 취소됐던 기존 row를 새 신청으로 되살린다. WHERE 절이 여전히 CANCELLED인지 재확인하므로,
