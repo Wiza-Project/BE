@@ -21,10 +21,17 @@ import java.time.Instant;
  *   - programId(수정 대상 PK)      : 요청 바디가 아니라 URL 경로(/programs/{programId})로 받는다.
  *   - managerUserId(등록자)        : 이 API로 등록자(소유권)를 바꿀 수 없게 하기 위해 아예 요청 항목에서 뺐다.
  *   - programStatus                : 상태값은 별도의 "상태 변경" 기능에서 다루도록 하고, 이 수정 API에서는 손대지 않는다.
+ *
+ * fileGroupId를 비워서(null) 보내면 기존 첨부파일이 그대로 유지된다(record 특성상 "키 생략"과
+ * "명시적 null"을 구분할 수 없기 때문). 첨부파일을 삭제하려면 fileGroupId는 비워두고
+ * clearFileGroup=true를 명시적으로 보내야 한다(MileagePolicyUpdateRequestDTO의 clearValidTo와 동일한 패턴).
  */
 public record ProgramUpdateRequestDTO(
         // 첨부파일 그룹 id. 파일이 없을 수도 있으므로 @NotNull을 붙이지 않았다(선택값).
         Integer fileGroupId,
+
+        // 위 fileGroupId를 비워두고 이 값을 true로 보내면 기존 첨부파일 연결을 해제(삭제)한다.
+        boolean clearFileGroup,
 
         // 운영 단위(부서) 코드 id. 프론트가 드롭다운으로 선택해서 보내야 하는 필수값.
         @NotNull Integer operatingUnitCodeId,

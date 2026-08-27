@@ -10,13 +10,16 @@ spring:
       ddl-auto: update      # 로컬 개발 중에만. 절대 운영에 쓰지 말 것
     show-sql: true
 
-# Ollama 로컬 임베딩 생성 시 활성화 (평상시 비활성화)
-#  ai:
-#    ollama:
-#      base-url: http://localhost:11434
-#      embedding:
-#        options:
-#          model: nomic-embed-text
+  # Ollama 로컬 임베딩 생성 시 활성화 (Spring AI 2.0 최신 규격)
+  #  ai:
+  #    model:
+  #      embedding: ollama
+  #    ollama:
+  #      base-url: http://localhost:11434
+  #      init:
+  #        pull-model-strategy: never
+  #      embedding:
+  #        model: nomic-embed-text
 
 app:
   jwt:
