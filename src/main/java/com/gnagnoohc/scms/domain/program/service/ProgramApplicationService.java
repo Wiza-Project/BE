@@ -548,21 +548,26 @@ public class ProgramApplicationService {
 
     private ProgramApplicationDecisionResponseDTO applyDecision(
             ProgramApplication application, ApplicationStatus decision, String reason, Integer staffId) {
+        /**
+         * updateDecision()은 @Modifying(clearAutomatically = true)라 실행 즉시 영속성 컨텍스트를
+         * clear한다. application.student는 LAZY이고 이 시점까지 한 번도 접근되지 않아 초기화되지
+         * 않은 프록시이므로, clear 이후에 접근하면 LazyInitializationException으로 트랜잭션이
+         * 롤백된다(방금 반영된 승인/반려 UPDATE까지 되돌아감). 그래서 update 전에 필요한 값을 전부
+         * local variable로 미리 읽어두고, 이후에는 이 값들만 사용한다.
+         */
+        Integer applicationId = application.getApplicationId();
+        Integer studentId = application.getStudent().getUserId();
+        Integer programId = application.getProgram().getProgramId();
+        String programName = application.getProgram().getProgramName();
+
         Instant now = Instant.now();
-        applicationRepository.updateDecision(
-                application.getApplicationId(), decision.name(), reason, staffId, now);
+        applicationRepository.updateDecision(applicationId, decision.name(), reason, staffId, now);
 
         eventPublisher.publishEvent(new ApplicationDecidedEvent(
-                application.getApplicationId(),
-                application.getStudent().getUserId(),
-                application.getProgram().getProgramId(),
-                application.getProgram().getProgramName(),
-                decision.name(),
-                reason));
+                applicationId, studentId, programId, programName, decision.name(), reason));
 
         return new ProgramApplicationDecisionResponseDTO(
-                application.getApplicationId(), application.getProgram().getProgramId(),
-                decision.name(), decision.getLabel(), reason, staffId, now);
+                applicationId, programId, decision.name(), decision.getLabel(), reason, staffId, now);
     }
 
     /**
