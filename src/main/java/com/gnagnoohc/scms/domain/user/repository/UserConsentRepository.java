@@ -1,7 +1,9 @@
 package com.gnagnoohc.scms.domain.user.repository;
 
 import com.gnagnoohc.scms.domain.user.entity.UserConsent;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -12,31 +14,12 @@ import java.util.Optional;
 public interface UserConsentRepository extends JpaRepository<UserConsent, Integer> {
 
     /**
-     * ConsentVerifier.requireOwnedValidConsent() 전용 조회.
-     * 특정 동의내역 의 소유권 및 유효성 단건 검증(소유권(userId) · 모듈/유형 일치 · 철회 여부 · 정책 유효기간)
-     * 실패 사유를 구분하지 않기 위한 의도적 설계다
-     * (호출부에서 전부 FORBIDDEN 하나로 통일해서 던진다).
+     * ConsentVerifier.requireOwnedValidConsent(), withdraw() 전용 조회.
+     * 동의 행만 잠그고 consentPolicy는 잠그지 않는다 — 정책은 호출부에서 지연 로딩한다.
      */
-
-    @Query("""
-            select c from UserConsent c
-            join fetch c.consentPolicy p
-            where c.userConsentId = :userConsentId
-              and c.user.userId = :userId
-              and p.moduleCode = :moduleCode
-              and p.consentType = :consentType
-              and c.withdrawnAt is null
-              and p.active = true
-              and p.effectiveFrom <= :asOf
-              and (p.effectiveTo is null or p.effectiveTo > :asOf)
-            """)
-    Optional<UserConsent> findOwnedValidConsent(
-            @Param("userConsentId") Integer userConsentId,
-            @Param("userId") Integer userId,
-            @Param("moduleCode") String moduleCode,
-            @Param("consentType") String consentType,
-            @Param("asOf") Instant asOf
-    );
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select c from UserConsent c where c.userConsentId = :userConsentId")
+    Optional<UserConsent> findByIdForUpdate(@Param("userConsentId") Integer userConsentId);
 
     /**
      * 특정 정책에 대해 사용자가 현재 유효하게 들고 있는 동의 1건.
