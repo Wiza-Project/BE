@@ -29,8 +29,8 @@ repositories {
 
 dependencies {
 	// ── AI ────────────────────────────────────────────────────────
-//	implementation 'org.springframework.ai:spring-ai-starter-vector-store-pgvector'
-//	implementation 'org.springframework.ai:spring-ai-starter-model-ollama'
+	implementation 'org.springframework.ai:spring-ai-starter-vector-store-pgvector'
+	implementation 'org.springframework.ai:spring-ai-starter-model-ollama'
 
 	// ── docker ────────────────────────────────────────────────────────
 	runtimeOnly 'org.springframework.boot:spring-boot-docker-compose'

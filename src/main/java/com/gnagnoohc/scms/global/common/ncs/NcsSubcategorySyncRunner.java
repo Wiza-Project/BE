@@ -15,15 +15,15 @@ import org.springframework.stereotype.Component;
  * 이 러너는 {@code ncs_standard} 원장에 대·중·소·세분류 전체 계층 구조와 직무 설명을
  * 연쇄적으로 조회하여 적재하는 임베딩 기반 매칭 기능 전용 러너</p>
  *
- * <p><b>주의:</b> 다수의 공공 API 호출이 연쇄적으로 발생하여 기동 시간에 영향을 줄 수 있으므로,
- * TODO: 현재는 로컬 개발 환경({@code local})에서만 동작하도록 제한 처리, 추후 개발(dev) 서버 등에서 최초 데이터 적재가 필요할 경우 프로필 설정을 검토 필수(주석으로 프로필 설정된 걸 바꿔서 처리해도 무방)</p>
+ * <p><b>주의:</b> 다수의 공공 API 호출이 연쇄적으로 발생하여 기동 시간에 영향을 줄 수 있습니다.
+ * 현재는 로컬 개발 환경({@code local})에서만 동작하도록 제한 처리, 추후 개발(dev) 서버 등에서 최초 데이터 적재가 필요할 경우 프로필 설정 검토 필수(주석으로 프로필 설정된 걸 바꿔서 처리해도 무방)
+ * TODO: 배포 상황에서 절대 사용하지 마세요. Ollama 사용 시, 무조건 로컬 설정 후 사용하세요. 배포 상황에서 사용 시 비용 청구합니다.</p>
  *
  * @author YUN
  */
 @Slf4j
 @Component
 @Profile("local")
-//@Profile("!test")
 @RequiredArgsConstructor
 public class NcsSubcategorySyncRunner implements ApplicationRunner {
 

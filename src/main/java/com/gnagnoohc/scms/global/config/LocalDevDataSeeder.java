@@ -6,6 +6,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
+// YUN 로컬 전용
 @Component
 @Profile("local")
 public class LocalDevDataSeeder implements CommandLineRunner {
