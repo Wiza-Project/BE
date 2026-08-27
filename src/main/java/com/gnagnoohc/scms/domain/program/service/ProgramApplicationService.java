@@ -77,9 +77,15 @@ public class ProgramApplicationService {
         /**
          * (0) 필수 동의 확인 -------------------------------------------------------------
          * PROGRAM 모듈의 필수 동의(TERMS_OF_SERVICE, PERSONAL_INFO)를 모두 마쳤는지 게이트로
-         * 체크한 뒤, FK 증빙으로 저장할 PERSONAL_INFO 동의 건을 조회한다. 게이트를 이미 통과했으므로
-         * 아래 orElseThrow는 방어적 장치다(CAREER 도메인과 동일한 패턴). 동의 검증과 신청 저장이
-         * 같은 트랜잭션(클래스 레벨 @Transactional)에 묶여 있어야 TOCTOU 경합이 없다.
+         * 체크한 뒤, 두 필수 동의 건 각각을 잠금 재검증한다. lockAndVerifyRequiredConsent() 안의
+         * findCurrentValidConsent()는 잠금이 없으므로 후보 ID만 얻는 용도로만 쓰고,
+         * requireOwnedValidConsent()로 그 ID를 다시 넘겨 UserConsent 행에 비관적 락(findByIdForUpdate)을
+         * 걸고 재검증한다. UserConsentService.withdraw()도 같은 락을 쓰므로, 신청과 철회가 같은 동의
+         * 행을 두고 직렬화된다 — 락을 먼저 잡은 쪽이 이기고, 철회가 먼저 커밋되면 재검증에서
+         * withdrawnAt이 채워진 것을 보고 FORBIDDEN이 되어 아래에서 REQUIRED_CONSENT_NOT_AGREED로
+         * 변환된다(CounselingReservationService.create()와 동일 패턴). 두 동의 행을 잠글 때는
+         * 항상 TERMS_OF_SERVICE -> PERSONAL_INFO 순서로 고정해, 이 메서드 안에서 여러 동의 행을
+         * 동시에 잠그는 다른 경로가 생기더라도 락 순서가 엇갈려 데드락이 나지 않게 한다.
          * 이 시점의 now는 동의 확인 asOf 시각일 뿐, 아래 모집기간 검사·저장 시각에는 쓰지 않는다 —
          * 락 대기·정원 계산 등으로 그 사이 시간이 흐를 수 있어 (b), (e)에서 각각 다시 계산한다.
          * 이 최초 검사는 락을 잡기 전에 미리 걸러내는 실패-우선(fail-fast) 용도이고, 그 사이 동의가
@@ -88,9 +94,8 @@ public class ProgramApplicationService {
         if (!consentVerifier.hasAgreedAllRequired(studentId, ConsentModuleCode.PROGRAM, now)) {
             throw new BusinessException(ErrorCode.REQUIRED_CONSENT_NOT_AGREED);
         }
-        UserConsent userConsent = consentVerifier
-                .findCurrentValidConsent(studentId, ConsentModuleCode.PROGRAM, ConsentType.PERSONAL_INFO, now)
-                .orElseThrow(() -> new BusinessException(ErrorCode.REQUIRED_CONSENT_NOT_AGREED));
+        lockAndVerifyRequiredConsent(studentId, ConsentType.TERMS_OF_SERVICE, now);
+        UserConsent userConsent = lockAndVerifyRequiredConsent(studentId, ConsentType.PERSONAL_INFO, now);
 
         /**
          * (a) 존재 확인 + 락 --------------------------------------------------------
@@ -195,6 +200,27 @@ public class ProgramApplicationService {
 
         return new ProgramApplyResponseDTO(
                 applicationId, programId, status.name(), status.getLabel(), waitlistOrder, now);
+    }
+
+    /**
+     * PROGRAM 모듈의 특정 필수 동의 건을 찾아 비관적 락으로 재검증한다. apply()의 (0) 단계에서
+     * 필수 동의 종류마다 이 메서드를 호출한다 — 여러 종류를 잠글 때는 항상 같은 순서로 호출해야
+     * 데드락을 피할 수 있다.
+     */
+    private UserConsent lockAndVerifyRequiredConsent(Integer studentId, ConsentType consentType, Instant now) {
+        Integer candidateConsentId = consentVerifier
+                .findCurrentValidConsent(studentId, ConsentModuleCode.PROGRAM, consentType, now)
+                .map(UserConsent::getUserConsentId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.REQUIRED_CONSENT_NOT_AGREED));
+        try {
+            return consentVerifier.requireOwnedValidConsent(
+                    candidateConsentId, studentId, ConsentModuleCode.PROGRAM, consentType, now);
+        } catch (BusinessException e) {
+            if (e.getErrorCode() != ErrorCode.FORBIDDEN) {
+                throw e;
+            }
+            throw new BusinessException(ErrorCode.REQUIRED_CONSENT_NOT_AGREED);
+        }
     }
 
     /**

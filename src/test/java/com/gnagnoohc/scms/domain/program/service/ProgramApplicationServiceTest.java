@@ -204,6 +204,36 @@ class ProgramApplicationServiceTest {
         verify(programRepository, never()).findByIdForUpdate(any());
     }
 
+    // findCurrentValidConsent(잠금 없음)로 후보를 찾은 직후, 다른 트랜잭션의 withdraw()가 같은 동의 행의
+    // 락을 먼저 잡고 철회를 커밋해버린 경합을 재현한다. requireOwnedValidConsent()가 락 획득 후 재검증에서
+    // FORBIDDEN을 던지면, apply()는 이를 REQUIRED_CONSENT_NOT_AGREED로 변환해야 하고 신청을 저장해서는 안 된다.
+    @Test
+    void apply_whenConsentWithdrawnConcurrentlyAfterCandidateLookup_throwsRequiredConsentNotAgreed() throws Exception {
+        when(consentVerifier.hasAgreedAllRequired(eq(100), eq(ConsentModuleCode.PROGRAM), any()))
+                .thenReturn(true);
+        when(consentVerifier.findCurrentValidConsent(
+                eq(100), eq(ConsentModuleCode.PROGRAM), eq(ConsentType.TERMS_OF_SERVICE), any()))
+                .thenReturn(Optional.of(buildUserConsentFixture(899)));
+        when(consentVerifier.requireOwnedValidConsent(
+                eq(899), eq(100), eq(ConsentModuleCode.PROGRAM), eq(ConsentType.TERMS_OF_SERVICE), any()))
+                .thenReturn(buildUserConsentFixture(899));
+        when(consentVerifier.findCurrentValidConsent(
+                eq(100), eq(ConsentModuleCode.PROGRAM), eq(ConsentType.PERSONAL_INFO), any()))
+                .thenReturn(Optional.of(buildUserConsentFixture(900)));
+        when(consentVerifier.requireOwnedValidConsent(
+                eq(900), eq(100), eq(ConsentModuleCode.PROGRAM), eq(ConsentType.PERSONAL_INFO), any()))
+                .thenThrow(new BusinessException(ErrorCode.FORBIDDEN));
+
+        assertThatThrownBy(() -> programApplicationService.apply(1, 100))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.REQUIRED_CONSENT_NOT_AGREED);
+
+        verify(programRepository, never()).findByIdForUpdate(any());
+        verify(applicationRepository, never())
+                .insertApplication(anyInt(), anyInt(), any(), any(), anyBoolean(), any(), any());
+    }
+
     @Test
     void apply_whenDuplicate_throwsAlreadyApplied() throws Exception {
         Instant now = Instant.now();
@@ -1023,12 +1053,25 @@ class ProgramApplicationServiceTest {
     }
 
     // apply() 맨 앞의 동의 게이트를 통과시키고, FK 증빙으로 쓰일 UserConsent를 반환하도록 목을 세팅한다.
+    // findCurrentValidConsent(잠금 없음)로 후보 ID를 찾은 뒤 requireOwnedValidConsent(락+재검증)로
+    // 같은 ID를 다시 조회하므로, 둘 다 같은 userConsentId를 반환하도록 목을 세팅해야 한다. apply()는
+    // TERMS_OF_SERVICE도 같은 방식으로 잠금 재검증하므로, 별도 userConsentId로 함께 세팅해 둔다.
     private void mockValidProgramConsent(Integer studentId, Integer userConsentId) throws Exception {
+        Integer termsConsentId = userConsentId - 1;
         when(consentVerifier.hasAgreedAllRequired(eq(studentId), eq(ConsentModuleCode.PROGRAM), any()))
                 .thenReturn(true);
         when(consentVerifier.findCurrentValidConsent(
+                eq(studentId), eq(ConsentModuleCode.PROGRAM), eq(ConsentType.TERMS_OF_SERVICE), any()))
+                .thenReturn(Optional.of(buildUserConsentFixture(termsConsentId)));
+        when(consentVerifier.requireOwnedValidConsent(
+                eq(termsConsentId), eq(studentId), eq(ConsentModuleCode.PROGRAM), eq(ConsentType.TERMS_OF_SERVICE), any()))
+                .thenReturn(buildUserConsentFixture(termsConsentId));
+        when(consentVerifier.findCurrentValidConsent(
                 eq(studentId), eq(ConsentModuleCode.PROGRAM), eq(ConsentType.PERSONAL_INFO), any()))
                 .thenReturn(Optional.of(buildUserConsentFixture(userConsentId)));
+        when(consentVerifier.requireOwnedValidConsent(
+                eq(userConsentId), eq(studentId), eq(ConsentModuleCode.PROGRAM), eq(ConsentType.PERSONAL_INFO), any()))
+                .thenReturn(buildUserConsentFixture(userConsentId));
     }
 
     // UserConsent도 같은 이유(protected 기본 생성자, setter/빌더 없음)로 리플렉션 픽스처를 사용한다.
