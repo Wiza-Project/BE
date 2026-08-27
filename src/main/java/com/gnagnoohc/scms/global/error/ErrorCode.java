@@ -123,6 +123,11 @@ public enum ErrorCode {
     ASSESSMENT_TARGET_CONDITION_INVALID_FORMAT(HttpStatus.BAD_REQUEST, "Q020", "저장된 응시 대상 조건의 형식이 올바르지 않습니다. 회차 등록/수정 화면에서 대상 조건을 다시 확인해주세요."),
     // 통계 조회 groupBy 파라미터가 GRADE/MAJOR 중 하나가 아닐 때 사용.
     ASSESSMENT_INVALID_GROUP_AXIS(HttpStatus.BAD_REQUEST, "Q021", "지원하지 않는 통계 그룹 기준입니다."),
+    // 사전·사후 비교에서 같은 응시(attemptId)를 두 번 지정했을 때 사용. 비교 대상 두 회차는 서로 달라야 한다.
+    ASSESSMENT_COMPARISON_SAME_ATTEMPT(HttpStatus.BAD_REQUEST, "Q022", "비교할 두 응시는 서로 달라야 합니다."),
+    // 사전·사후 비교 대상 두 응시가 같은 학년도의 사전(PRE)·사후(POST) 한 쌍이 아닐 때 사용.
+    // 같은 구분 2건이거나 학년도가 다르면 변화량 방향을 정할 근거가 없어 비교를 거부한다.
+    ASSESSMENT_COMPARISON_NOT_PRE_POST_PAIR(HttpStatus.BAD_REQUEST, "Q023", "사전·사후 비교는 같은 학년도의 사전·사후 응시 한 쌍이어야 합니다."),
 
     // ── 상담 ──────────────────────────────────────────────────────
     COUNSELOR_NOT_FOUND(HttpStatus.NOT_FOUND, "S001", "상담사를 찾을 수 없습니다."),
