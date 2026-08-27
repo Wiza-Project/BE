@@ -14,7 +14,7 @@ public record RecommendedProgramsResponse(
         Integer attemptId,
         List<WeakCompetencyGroup> weakCompetencies
 ) {
-    /** 취약 역량이 없거나(모든 역량 고득점) 조건에 맞는 프로그램이 하나도 없을 때도 에러가 아니라 빈 목록으로 응답한다. */
+    /** 취약 역량이 하나도 선정되지 않은 경우에만 사용한다. */
     public static RecommendedProgramsResponse empty(Integer attemptId) {
         return new RecommendedProgramsResponse(attemptId, List.of());
     }
@@ -25,6 +25,7 @@ public record RecommendedProgramsResponse(
             Integer displayOrder,
             // 이 역량이 취약으로 뽑힌 근거를 FE가 함께 보여줄 수 있도록 환산점수를 동봉한다.
             BigDecimal convertedScore,
+            // 이 취약 역량에 연계된 모집 중 프로그램이 없으면 빈 목록. 그룹 자체는 유지된다.
             List<RecommendedProgram> programs
     ) {}
 
