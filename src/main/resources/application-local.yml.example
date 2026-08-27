@@ -11,11 +11,11 @@ spring:
     show-sql: true
 
 # Ollama 로컬 임베딩 생성 시 활성화 (Spring AI 최신 규격)
-  ai:
-    ollama:
-      base-url: http://localhost:11434
-      embedding:
-        model: nomic-embed-text
+#  ai:
+#    ollama:
+#      base-url: http://localhost:11434
+#      embedding:
+#        model: nomic-embed-text
 
 app:
   jwt:
