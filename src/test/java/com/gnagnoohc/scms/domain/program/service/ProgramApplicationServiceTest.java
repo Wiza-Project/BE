@@ -9,6 +9,7 @@ import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplicationSurveyRe
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplyResponseDTO;
 import com.gnagnoohc.scms.domain.program.entity.ExtracurricularProgram;
 import com.gnagnoohc.scms.domain.program.entity.ProgramApplication;
+import com.gnagnoohc.scms.domain.program.event.ApplicationDecidedEvent;
 import com.gnagnoohc.scms.domain.program.event.WaitlistSlotOpenedEvent;
 import com.gnagnoohc.scms.domain.program.repository.ExtracurricularProgramRepository;
 import com.gnagnoohc.scms.domain.program.repository.ProgramApplicationRepository;
@@ -322,7 +323,7 @@ class ProgramApplicationServiceTest {
     @Test
     void approve_whenWithinCapacity_succeeds() throws Exception {
         ExtracurricularProgram program = buildProgramFixture(1, Instant.now(), Instant.now(), 10);
-        ProgramApplication application = buildApplicationFixture(5, program, "WAITLISTED");
+        ProgramApplication application = buildApplicationFixture(5, program, "WAITLISTED", 100);
 
         when(applicationRepository.findByIdForUpdate(5)).thenReturn(Optional.of(application));
         when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
@@ -334,6 +335,10 @@ class ProgramApplicationServiceTest {
         assertThat(response.applicationStatus()).isEqualTo("APPROVED");
         assertThat(response.applicationStatusLabel()).isEqualTo("승인");
         assertThat(response.processedBy()).isEqualTo(200);
+        verify(eventPublisher).publishEvent(argThat((Object e) -> e instanceof ApplicationDecidedEvent evt
+                && "APPROVED".equals(evt.decisionStatus())
+                && evt.studentId().equals(100)
+                && evt.applicationId().equals(5)));
     }
 
     @Test
@@ -355,7 +360,7 @@ class ProgramApplicationServiceTest {
     @Test
     void approve_whenPreviouslyApplied_skipsCapacityCheckEvenIfFull() throws Exception {
         ExtracurricularProgram program = buildProgramFixture(1, Instant.now(), Instant.now(), 10);
-        ProgramApplication application = buildApplicationFixture(5, program, "APPLIED");
+        ProgramApplication application = buildApplicationFixture(5, program, "APPLIED", 100);
 
         when(applicationRepository.findByIdForUpdate(5)).thenReturn(Optional.of(application));
         when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
@@ -384,7 +389,7 @@ class ProgramApplicationServiceTest {
     @Test
     void reject_succeeds_withReason() throws Exception {
         ExtracurricularProgram program = buildProgramFixture(1, Instant.now(), Instant.now(), 10);
-        ProgramApplication application = buildApplicationFixture(5, program, "APPLIED");
+        ProgramApplication application = buildApplicationFixture(5, program, "APPLIED", 100);
 
         when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
         when(applicationRepository.findByIdForUpdate(5)).thenReturn(Optional.of(application));
@@ -396,12 +401,16 @@ class ProgramApplicationServiceTest {
         assertThat(response.applicationStatusLabel()).isEqualTo("반려");
         assertThat(response.decisionReason()).isEqualTo("정원 외 사유");
         verify(eventPublisher).publishEvent(any(WaitlistSlotOpenedEvent.class));
+        verify(eventPublisher).publishEvent(argThat((Object e) -> e instanceof ApplicationDecidedEvent evt
+                && "REJECTED".equals(evt.decisionStatus())
+                && "정원 외 사유".equals(evt.reason())
+                && evt.studentId().equals(100)));
     }
 
     @Test
     void reject_whenPreviouslyWaitlisted_doesNotPublishEvent() throws Exception {
         ExtracurricularProgram program = buildProgramFixture(1, Instant.now(), Instant.now(), 10);
-        ProgramApplication application = buildApplicationFixture(5, program, "WAITLISTED");
+        ProgramApplication application = buildApplicationFixture(5, program, "WAITLISTED", 100);
 
         when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
         when(applicationRepository.findByIdForUpdate(5)).thenReturn(Optional.of(application));
@@ -859,8 +868,8 @@ class ProgramApplicationServiceTest {
     @Test
     void bulkApprove_whenOneExceedsCapacity_returnsPartialSuccess() throws Exception {
         ExtracurricularProgram program = buildProgramFixture(1, Instant.now(), Instant.now(), 10);
-        ProgramApplication succeeding = buildApplicationFixture(5, program, "WAITLISTED");
-        ProgramApplication failing = buildApplicationFixture(6, program, "WAITLISTED");
+        ProgramApplication succeeding = buildApplicationFixture(5, program, "WAITLISTED", 100);
+        ProgramApplication failing = buildApplicationFixture(6, program, "WAITLISTED", 101);
 
         when(applicationRepository.findByIdForUpdate(5)).thenReturn(Optional.of(succeeding));
         when(applicationRepository.findByIdForUpdate(6)).thenReturn(Optional.of(failing));
@@ -882,8 +891,8 @@ class ProgramApplicationServiceTest {
     @Test
     void bulkReject_allSucceed_returnsAllInSucceeded() throws Exception {
         ExtracurricularProgram program = buildProgramFixture(1, Instant.now(), Instant.now(), 10);
-        ProgramApplication first = buildApplicationFixture(5, program, "APPLIED");
-        ProgramApplication second = buildApplicationFixture(6, program, "APPLIED");
+        ProgramApplication first = buildApplicationFixture(5, program, "APPLIED", 100);
+        ProgramApplication second = buildApplicationFixture(6, program, "APPLIED", 101);
 
         when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
         when(applicationRepository.findByIdForUpdate(5)).thenReturn(Optional.of(first));

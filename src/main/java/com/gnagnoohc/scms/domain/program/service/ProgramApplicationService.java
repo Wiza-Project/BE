@@ -9,6 +9,7 @@ import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplicationSurveyRe
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplyResponseDTO;
 import com.gnagnoohc.scms.domain.program.entity.ExtracurricularProgram;
 import com.gnagnoohc.scms.domain.program.entity.ProgramApplication;
+import com.gnagnoohc.scms.domain.program.event.ApplicationDecidedEvent;
 import com.gnagnoohc.scms.domain.program.event.WaitlistSlotOpenedEvent;
 import com.gnagnoohc.scms.domain.program.repository.ExtracurricularProgramRepository;
 import com.gnagnoohc.scms.domain.program.repository.ProgramApplicationRepository;
@@ -535,11 +536,13 @@ public class ProgramApplicationService {
         applicationRepository.updateDecision(
                 application.getApplicationId(), decision.name(), reason, staffId, now);
 
-        /**
-         * TODO: 알림 발송 연동 (공통 담당자 구현 예정, global.common.entity.Notification 사용) — 승인/반려
-         *   (대기자였다가 여기서 승인되어 "승격"되는 경우 포함) 결과를 학생에게 카카오톡/이메일로 알려야 한다.
-         *   지금은 Notification 엔티티만 있고 실제 발송 서비스가 없어 program 도메인에서는 손대지 않는다.
-         */
+        eventPublisher.publishEvent(new ApplicationDecidedEvent(
+                application.getApplicationId(),
+                application.getStudent().getUserId(),
+                application.getProgram().getProgramId(),
+                application.getProgram().getProgramName(),
+                decision.name(),
+                reason));
 
         return new ProgramApplicationDecisionResponseDTO(
                 application.getApplicationId(), application.getProgram().getProgramId(),
