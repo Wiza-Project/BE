@@ -9,6 +9,7 @@ import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplicationSurveyRe
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplyResponseDTO;
 import com.gnagnoohc.scms.domain.program.entity.ExtracurricularProgram;
 import com.gnagnoohc.scms.domain.program.entity.ProgramApplication;
+import com.gnagnoohc.scms.domain.program.event.ApplicationDecidedEvent;
 import com.gnagnoohc.scms.domain.program.event.WaitlistSlotOpenedEvent;
 import com.gnagnoohc.scms.domain.program.repository.ExtracurricularProgramRepository;
 import com.gnagnoohc.scms.domain.program.repository.ProgramApplicationRepository;
@@ -81,6 +82,8 @@ public class ProgramApplicationService {
          * 같은 트랜잭션(클래스 레벨 @Transactional)에 묶여 있어야 TOCTOU 경합이 없다.
          * 이 시점의 now는 동의 확인 asOf 시각일 뿐, 아래 모집기간 검사·저장 시각에는 쓰지 않는다 —
          * 락 대기·정원 계산 등으로 그 사이 시간이 흐를 수 있어 (b), (e)에서 각각 다시 계산한다.
+         * 이 최초 검사는 락을 잡기 전에 미리 걸러내는 실패-우선(fail-fast) 용도이고, 그 사이 동의가
+         * 철회·만료됐을 가능성에 대비한 최종 재검증은 (e) 저장 직전에 다시 수행한다.
          */
         if (!consentVerifier.hasAgreedAllRequired(studentId, ConsentModuleCode.PROGRAM, now)) {
             throw new BusinessException(ErrorCode.REQUIRED_CONSENT_NOT_AGREED);
@@ -152,6 +155,20 @@ public class ProgramApplicationService {
         if (!now.isBefore(program.getRecruitmentEndsAt())) {
             throw new BusinessException(ErrorCode.APPLICATION_PERIOD_CLOSED);
         }
+
+        /**
+         * (0) 이후 프로그램 행 락 대기·기존 신청 조회·정원 계산 등으로 시간이 흘렀을 수 있어, 그 사이
+         * 동의가 철회되거나 만료되지 않았는지 저장 직전 시각(now)으로 다시 검증한다. 증빙으로 저장할
+         * UserConsent도 다시 조회해 그 결과로 덮어쓴다 — (0)에서 구한 값을 그대로 쓰면, 그 사이 새 버전
+         * 동의로 갱신된 경우 이미 낡은 증빙 ID를 저장하게 된다.
+         */
+        if (!consentVerifier.hasAgreedAllRequired(studentId, ConsentModuleCode.PROGRAM, now)) {
+            throw new BusinessException(ErrorCode.REQUIRED_CONSENT_NOT_AGREED);
+        }
+        userConsent = consentVerifier
+                .findCurrentValidConsent(studentId, ConsentModuleCode.PROGRAM, ConsentType.PERSONAL_INFO, now)
+                .orElseThrow(() -> new BusinessException(ErrorCode.REQUIRED_CONSENT_NOT_AGREED));
+
         Integer applicationId;
         if (existing.isPresent()) {
             // 취소됐던 기존 row를 새 신청으로 되살린다. WHERE 절이 여전히 CANCELLED인지 재확인하므로,
@@ -531,19 +548,26 @@ public class ProgramApplicationService {
 
     private ProgramApplicationDecisionResponseDTO applyDecision(
             ProgramApplication application, ApplicationStatus decision, String reason, Integer staffId) {
-        Instant now = Instant.now();
-        applicationRepository.updateDecision(
-                application.getApplicationId(), decision.name(), reason, staffId, now);
-
         /**
-         * TODO: 알림 발송 연동 (공통 담당자 구현 예정, global.common.entity.Notification 사용) — 승인/반려
-         *   (대기자였다가 여기서 승인되어 "승격"되는 경우 포함) 결과를 학생에게 카카오톡/이메일로 알려야 한다.
-         *   지금은 Notification 엔티티만 있고 실제 발송 서비스가 없어 program 도메인에서는 손대지 않는다.
+         * updateDecision()은 @Modifying(clearAutomatically = true)라 실행 즉시 영속성 컨텍스트를
+         * clear한다. application.student는 LAZY이고 이 시점까지 한 번도 접근되지 않아 초기화되지
+         * 않은 프록시이므로, clear 이후에 접근하면 LazyInitializationException으로 트랜잭션이
+         * 롤백된다(방금 반영된 승인/반려 UPDATE까지 되돌아감). 그래서 update 전에 필요한 값을 전부
+         * local variable로 미리 읽어두고, 이후에는 이 값들만 사용한다.
          */
+        Integer applicationId = application.getApplicationId();
+        Integer studentId = application.getStudent().getUserId();
+        Integer programId = application.getProgram().getProgramId();
+        String programName = application.getProgram().getProgramName();
+
+        Instant now = Instant.now();
+        applicationRepository.updateDecision(applicationId, decision.name(), reason, staffId, now);
+
+        eventPublisher.publishEvent(new ApplicationDecidedEvent(
+                applicationId, studentId, programId, programName, decision.name(), reason));
 
         return new ProgramApplicationDecisionResponseDTO(
-                application.getApplicationId(), application.getProgram().getProgramId(),
-                decision.name(), decision.getLabel(), reason, staffId, now);
+                applicationId, programId, decision.name(), decision.getLabel(), reason, staffId, now);
     }
 
     /**

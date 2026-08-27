@@ -14,7 +14,9 @@ ALTER TABLE program_application
 DO $$
 BEGIN
     IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint WHERE conname = 'fk_program_application_user_consent_id'
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'fk_program_application_user_consent_id'
+          AND conrelid = 'program_application'::regclass
     ) THEN
         ALTER TABLE program_application
             ADD CONSTRAINT fk_program_application_user_consent_id

@@ -340,11 +340,23 @@ public class ProgramService {
         // 운영단위도 이제 프론트가 드롭다운으로 선택해서 보내는 필수값이라 그대로 사용한다.
         Integer operatingUnitCodeId = request.operatingUnitCodeId();
 
+        /**
+         * fileGroupId와 clearFileGroup=true를 동시에 보내는 것은 "새 파일을 연결하라"와
+         * "첨부파일을 지워라"가 충돌하는 모순된 요청이므로 막는다(MileagePolicyService의
+         * clearValidTo 충돌 검사와 동일한 패턴).
+         */
+        if (request.clearFileGroup() && request.fileGroupId() != null) {
+            throw new BusinessException(ErrorCode.PROGRAM_FILE_GROUP_CONFLICT);
+        }
+
         // 첨부파일은 별도 업로드 화면에서만 바뀌므로, 수정 폼이 파일을 다시 첨부하지 않아
         // 요청에 안 담겨오면(null) 기존에 첨부돼 있던 파일을 그대로 유지한다(지우지 않는다).
-        Integer fileGroupId = request.fileGroupId() != null
-                ? request.fileGroupId()
-                : (program.getFileGroup() != null ? program.getFileGroup().getFileGroupId() : null);
+        // 첨부파일을 삭제하려면 clearFileGroup=true를 명시적으로 보내야 하며, 이때는 null로 갱신해
+        // 연결을 해제한다(FileGroup은 여러 도메인이 공유하는 테이블이라 row 자체를 지우지는 않는다).
+        Integer fileGroupId = request.clearFileGroup() ? null
+                : request.fileGroupId() != null
+                        ? request.fileGroupId()
+                        : (program.getFileGroup() != null ? program.getFileGroup().getFileGroupId() : null);
 
         /**
          * (d-1) 첨부파일 검증 ----------------------------------------------------------

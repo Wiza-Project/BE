@@ -388,7 +388,7 @@ class ProgramServiceTest {
         Instant operationEndsAt = operationStartsAt.plusSeconds(3600);
 
         ProgramUpdateRequestDTO request = new ProgramUpdateRequestDTO(
-                null, 11, 2, 3, null,
+                null, false, 11, 2, 3, null,
                 "수정된 프로그램명", "설명",
                 recruitmentStartsAt, recruitmentEndsAt, operationStartsAt, operationEndsAt,
                 20, null
@@ -426,7 +426,7 @@ class ProgramServiceTest {
 
         // 프로그램에 이미 저장된 운영단위(11)와 다른 값(99)을 요청으로 보낸다.
         ProgramUpdateRequestDTO request = new ProgramUpdateRequestDTO(
-                null, 99, 2, 3, null,
+                null, false, 99, 2, 3, null,
                 "수정된 프로그램명", "설명",
                 recruitmentStartsAt, recruitmentEndsAt, operationStartsAt, operationEndsAt,
                 20, null
@@ -435,6 +435,87 @@ class ProgramServiceTest {
         programService.update(1, request, 100, 11);
 
         assertThat(operatingUnitCaptor.getValue()).isEqualTo(99);
+    }
+
+    @Test
+    void update_whenClearFileGroupTrue_unlinksExistingFileGroup() throws Exception {
+        AppUser managerUser = mock(AppUser.class);
+        when(managerUser.getUserId()).thenReturn(100);
+
+        when(commonCodeRepository.findByCodeGroupAndActiveTrueOrderBySortOrderAsc("DEPARTMENT"))
+                .thenReturn(List.of(buildCommonCodeFixture(11, "DEPARTMENT", "D200")));
+
+        Instant now = Instant.now();
+        ExtracurricularProgram program = buildProgramFixture(
+                1, managerUser, now.plusSeconds(3600), ProgramStatus.DRAFT);
+        ReflectionTestUtils.setField(program, "operatingUnitCode", buildCommonCodeFixture(11, "DEPARTMENT", "D200"));
+        FileGroup existingFileGroup = mock(FileGroup.class);
+        ReflectionTestUtils.setField(program, "fileGroup", existingFileGroup);
+
+        when(programRepository.findById(1)).thenReturn(Optional.of(program));
+        ArgumentCaptor<Integer> fileGroupIdCaptor = ArgumentCaptor.forClass(Integer.class);
+        when(programRepository.updateProgram(
+                any(), fileGroupIdCaptor.capture(), any(), any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), any(), any(), any(), any()
+        )).thenReturn(1);
+
+        Instant recruitmentStartsAt = now;
+        Instant recruitmentEndsAt = now.plusSeconds(1800);
+        Instant operationStartsAt = recruitmentEndsAt;
+        Instant operationEndsAt = operationStartsAt.plusSeconds(3600);
+
+        // fileGroupId는 비우고 clearFileGroup=true만 명시해 기존 첨부파일 연결 해제를 요청한다.
+        ProgramUpdateRequestDTO request = new ProgramUpdateRequestDTO(
+                null, true, 11, 2, 3, null,
+                "수정된 프로그램명", "설명",
+                recruitmentStartsAt, recruitmentEndsAt, operationStartsAt, operationEndsAt,
+                20, null
+        );
+
+        programService.update(1, request, 100, 11);
+
+        assertThat(fileGroupIdCaptor.getValue()).isNull();
+        verifyNoInteractions(fileGroupRepository);
+    }
+
+    @Test
+    void update_whenFileGroupIdAndClearFileGroupBothSet_throwsFileGroupConflict() throws Exception {
+        AppUser managerUser = mock(AppUser.class);
+        when(managerUser.getUserId()).thenReturn(100);
+
+        when(commonCodeRepository.findByCodeGroupAndActiveTrueOrderBySortOrderAsc("DEPARTMENT"))
+                .thenReturn(List.of(buildCommonCodeFixture(11, "DEPARTMENT", "D200")));
+
+        Instant now = Instant.now();
+        ExtracurricularProgram program = buildProgramFixture(
+                1, managerUser, now.plusSeconds(3600), ProgramStatus.DRAFT);
+        ReflectionTestUtils.setField(program, "operatingUnitCode", buildCommonCodeFixture(11, "DEPARTMENT", "D200"));
+
+        when(programRepository.findById(1)).thenReturn(Optional.of(program));
+
+        Instant recruitmentStartsAt = now;
+        Instant recruitmentEndsAt = now.plusSeconds(1800);
+        Instant operationStartsAt = recruitmentEndsAt;
+        Instant operationEndsAt = operationStartsAt.plusSeconds(3600);
+
+        // fileGroupId(새 값)와 clearFileGroup=true를 동시에 보내는 모순된 요청.
+        ProgramUpdateRequestDTO request = new ProgramUpdateRequestDTO(
+                5, true, 11, 2, 3, null,
+                "수정된 프로그램명", "설명",
+                recruitmentStartsAt, recruitmentEndsAt, operationStartsAt, operationEndsAt,
+                20, null
+        );
+
+        assertThatThrownBy(() -> programService.update(1, request, 100, 11))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.PROGRAM_FILE_GROUP_CONFLICT);
+
+        verifyNoInteractions(fileGroupRepository);
+        verify(programRepository, never()).updateProgram(
+                any(), any(), any(), any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), any(), any(), any(), any()
+        );
     }
 
     @Test
@@ -472,7 +553,7 @@ class ProgramServiceTest {
         Instant operationEndsAt = operationStartsAt.plusSeconds(3600);
 
         ProgramUpdateRequestDTO request = new ProgramUpdateRequestDTO(
-                77, 11, 2, 3, null,
+                77, false, 11, 2, 3, null,
                 "수정된 프로그램명", "설명",
                 recruitmentStartsAt, recruitmentEndsAt, operationStartsAt, operationEndsAt,
                 20, null
@@ -499,7 +580,7 @@ class ProgramServiceTest {
         when(programRepository.findById(1)).thenReturn(Optional.of(program));
 
         ProgramUpdateRequestDTO request = new ProgramUpdateRequestDTO(
-                null, 11, 2, 3, null,
+                null, false, 11, 2, 3, null,
                 "수정된 프로그램명", "설명",
                 now.minusSeconds(7200), now.minusSeconds(3600),
                 now.minusSeconds(3600), now.minusSeconds(1800),
@@ -525,7 +606,7 @@ class ProgramServiceTest {
 
         Instant now = Instant.now();
         ProgramUpdateRequestDTO request = new ProgramUpdateRequestDTO(
-                null, 11, 2, 3, null,
+                null, false, 11, 2, 3, null,
                 "수정된 프로그램명", "설명",
                 now, now.plusSeconds(1800), now.plusSeconds(1800), now.plusSeconds(3600),
                 20, null
