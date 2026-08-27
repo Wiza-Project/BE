@@ -28,8 +28,10 @@ jobs:
       - name: Build
         run: ./gradlew clean build -x test
 
+# 로컬 올라마 테스트 원할 경우 -Dspring.autoconfigure.exclude 설정 제거 후 테스트하세요(기본 옵션은 exclude입니다)
       - name: Test
-        run: ./gradlew test
+        run: ./gradlew test -Dspring.autoconfigure.exclude=org.springframework.ai.model.ollama.autoconfigure.OllamaAutoConfiguration
+
   # 공통 보안 사항 [.github repo]의 yml 호출 용도. 절대 삭제하지 마세요.
   security-scan:
     uses: Wiza-Project/.github/.github/workflows/reusable-security.yml@main
