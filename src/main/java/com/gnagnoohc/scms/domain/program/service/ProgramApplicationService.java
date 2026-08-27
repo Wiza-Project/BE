@@ -14,6 +14,10 @@ import com.gnagnoohc.scms.domain.program.repository.ExtracurricularProgramReposi
 import com.gnagnoohc.scms.domain.program.repository.ProgramApplicationRepository;
 import com.gnagnoohc.scms.domain.program.repository.ProgramAttendanceRepository;
 import com.gnagnoohc.scms.domain.program.repository.ProgramMileageTransactionRepository;
+import com.gnagnoohc.scms.domain.user.entity.UserConsent;
+import com.gnagnoohc.scms.domain.user.service.consent.ConsentModuleCode;
+import com.gnagnoohc.scms.domain.user.service.consent.ConsentType;
+import com.gnagnoohc.scms.domain.user.service.consent.ConsentVerifier;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;
 import com.gnagnoohc.scms.global.common.notification.ModuleCode;
 import com.gnagnoohc.scms.global.common.notification.NotificationRequest;
@@ -58,6 +62,7 @@ public class ProgramApplicationService {
     private final NotificationSender notificationSender;
     private final ApplicationEventPublisher eventPublisher;
     private final PlatformTransactionManager transactionManager;
+    private final ConsentVerifier consentVerifier;
 
     /**
      * 학생의 프로그램 참여 신청을 접수한다. 매개변수 2개의 의미:
@@ -65,6 +70,24 @@ public class ProgramApplicationService {
      *   studentId : 지금 로그인해서 이 요청을 보낸 학생의 id (인증 정보에서 옴, 클라이언트가 위조 불가)
      */
     public ProgramApplyResponseDTO apply(Integer programId, Integer studentId) {
+
+        Instant now = Instant.now();
+
+        /**
+         * (0) 필수 동의 확인 -------------------------------------------------------------
+         * PROGRAM 모듈의 필수 동의(TERMS_OF_SERVICE, PERSONAL_INFO)를 모두 마쳤는지 게이트로
+         * 체크한 뒤, FK 증빙으로 저장할 PERSONAL_INFO 동의 건을 조회한다. 게이트를 이미 통과했으므로
+         * 아래 orElseThrow는 방어적 장치다(CAREER 도메인과 동일한 패턴). 동의 검증과 신청 저장이
+         * 같은 트랜잭션(클래스 레벨 @Transactional)에 묶여 있어야 TOCTOU 경합이 없다.
+         * 이 시점의 now는 동의 확인 asOf 시각일 뿐, 아래 모집기간 검사·저장 시각에는 쓰지 않는다 —
+         * 락 대기·정원 계산 등으로 그 사이 시간이 흐를 수 있어 (b), (e)에서 각각 다시 계산한다.
+         */
+        if (!consentVerifier.hasAgreedAllRequired(studentId, ConsentModuleCode.PROGRAM, now)) {
+            throw new BusinessException(ErrorCode.REQUIRED_CONSENT_NOT_AGREED);
+        }
+        UserConsent userConsent = consentVerifier
+                .findCurrentValidConsent(studentId, ConsentModuleCode.PROGRAM, ConsentType.PERSONAL_INFO, now)
+                .orElseThrow(() -> new BusinessException(ErrorCode.REQUIRED_CONSENT_NOT_AGREED));
 
         /**
          * (a) 존재 확인 + 락 --------------------------------------------------------
@@ -77,9 +100,11 @@ public class ProgramApplicationService {
         /**
          * (b) 신청 가능 기간인지 확인 --------------------------------------------------
          * ProgramService.update/delete와 같은 이유로, programStatus 컬럼(스케줄러가 최대 1분 지연으로 갱신)을
-         * 믿지 않고 지금 시각을 모집 시작/종료 시각과 직접 비교한다.
+         * 믿지 않고 지금 시각을 모집 시작/종료 시각과 직접 비교한다. 락 획득 직후 now를 다시 계산해서
+         * (0) 동의 확인에 걸린 지연이 이 검사에 섞이지 않게 한다 — program row는 이미 락으로 잡혀 있어
+         * recruitmentStartsAt/EndsAt 값 자체는 이 트랜잭션 동안 바뀌지 않는다.
          */
-        Instant now = Instant.now();
+        now = Instant.now();
         if (now.isBefore(program.getRecruitmentStartsAt()) || !now.isBefore(program.getRecruitmentEndsAt())) {
             throw new BusinessException(ErrorCode.APPLICATION_PERIOD_CLOSED);
         }
@@ -120,12 +145,20 @@ public class ProgramApplicationService {
         }
 
         // (e) 실제 DB 반영 -------------------------------------------------------------
+        // (c) 기존 신청 조회, (d) 정원 계산 등으로 (b) 이후에도 시간이 흐를 수 있으므로, 저장 직전 시각으로
+        // 한 번 더 마감 여부를 재확인한다. 시작 시각은 시간이 거꾸로 흐르지 않으므로 재검사가 필요 없다.
+        // 이 시각이 그대로 아래 저장·응답 시각(now)으로 쓰인다.
+        now = Instant.now();
+        if (!now.isBefore(program.getRecruitmentEndsAt())) {
+            throw new BusinessException(ErrorCode.APPLICATION_PERIOD_CLOSED);
+        }
         Integer applicationId;
         if (existing.isPresent()) {
             // 취소됐던 기존 row를 새 신청으로 되살린다. WHERE 절이 여전히 CANCELLED인지 재확인하므로,
             // 0건이면 그 사이 다른 요청이 먼저 처리한 것이니 "이미 신청됨"으로 처리한다.
             int updatedRows = applicationRepository.reviveApplication(
-                    existing.get().getApplicationId(), status.name(), waitlistOrder, now);
+                    existing.get().getApplicationId(), status.name(), waitlistOrder,
+                    userConsent.getUserConsentId(), now);
             if (updatedRows == 0) {
                 throw new BusinessException(ErrorCode.ALREADY_APPLIED);
             }
@@ -135,7 +168,8 @@ public class ProgramApplicationService {
         } else {
             try {
                 applicationId = applicationRepository.insertApplication(
-                        programId, studentId, status.name(), waitlistOrder, false, now);
+                        programId, studentId, status.name(), waitlistOrder, false,
+                        userConsent.getUserConsentId(), now);
             } catch (DataIntegrityViolationException e) {
                 // uq_program_application_program_student 유니크 제약 위반 = 이미 신청한 프로그램(동시 요청 경쟁).
                 throw new BusinessException(ErrorCode.ALREADY_APPLIED);
