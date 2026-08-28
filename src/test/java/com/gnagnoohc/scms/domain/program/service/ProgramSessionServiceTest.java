@@ -30,6 +30,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -117,6 +119,7 @@ class ProgramSessionServiceTest {
                 2, "2주차", Instant.now(), Instant.now().plusSeconds(3600), SessionLocationType.DIRECT_INPUT, "  ");
 
         when(programRepository.existsById(1)).thenReturn(true);
+        when(sessionRepository.countByProgram_ProgramId(1)).thenReturn(1L);
 
         assertThatThrownBy(() -> programSessionService.registerSession(1, request, 200))
                 .isInstanceOf(BusinessException.class)
@@ -135,6 +138,7 @@ class ProgramSessionServiceTest {
                 2, "2주차", startsAt, endsAt, SessionLocationType.SAME_AS_PREVIOUS, null);
 
         when(programRepository.existsById(1)).thenReturn(true);
+        when(sessionRepository.countByProgram_ProgramId(1)).thenReturn(1L);
         when(sessionRepository.findByProgram_ProgramIdAndSessionNo(1, 1))
                 .thenReturn(java.util.Optional.of(previousSession));
         when(sessionRepository.insertSession(
@@ -159,6 +163,40 @@ class ProgramSessionServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.PREVIOUS_SESSION_LOCATION_NOT_FOUND);
+    }
+
+    // 빈 프로그램(회차 0개)에 sessionNo=2로 첫 회차를 등록하려 하면, 연속성 정책(항상 count+1로만 추가)
+    // 위반이므로 거절해야 한다.
+    @Test
+    void registerSession_whenSessionNoSkipsFirstNumber_throwsProgramSessionNoNotContiguous() {
+        ProgramSessionRegisterRequestDTO request = new ProgramSessionRegisterRequestDTO(
+                2, "2주차", Instant.now(), Instant.now().plusSeconds(3600), SessionLocationType.DIRECT_INPUT, "본관 101호");
+
+        when(programRepository.existsById(1)).thenReturn(true);
+
+        assertThatThrownBy(() -> programSessionService.registerSession(1, request, 200))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.PROGRAM_SESSION_NO_NOT_CONTIGUOUS);
+
+        verify(sessionRepository, never()).insertSession(any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    // 이미 1개 회차가 있는 프로그램에 sessionNo=3(2를 건너뜀)으로 등록하려 하면 마찬가지로 거절해야 한다.
+    @Test
+    void registerSession_whenSessionNoSkipsNextNumber_throwsProgramSessionNoNotContiguous() {
+        ProgramSessionRegisterRequestDTO request = new ProgramSessionRegisterRequestDTO(
+                3, "3주차", Instant.now(), Instant.now().plusSeconds(3600), SessionLocationType.DIRECT_INPUT, "본관 101호");
+
+        when(programRepository.existsById(1)).thenReturn(true);
+        when(sessionRepository.countByProgram_ProgramId(1)).thenReturn(1L);
+
+        assertThatThrownBy(() -> programSessionService.registerSession(1, request, 200))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.PROGRAM_SESSION_NO_NOT_CONTIGUOUS);
+
+        verify(sessionRepository, never()).insertSession(any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test

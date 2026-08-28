@@ -381,6 +381,40 @@ class ProgramServiceTest {
                 any(), any(), any(), any(), any(), any(), any(), any());
     }
 
+    // 회차 번호에 빈 구간(2회차 없이 1,3회차만)이 있으면, sessionNo-1을 가정하는 SAME_AS_PREVIOUS 처리가
+    // 엉뚱하게 PREVIOUS_SESSION_LOCATION_NOT_FOUND를 던지기 전에, 연속성 정책 위반으로 먼저 거절해야 한다.
+    @Test
+    void register_whenSessionNoHasGap_throwsProgramSessionNoNotContiguous() throws Exception {
+        when(commonCodeRepository.findByCodeGroupAndActiveTrueOrderBySortOrderAsc("DEPARTMENT"))
+                .thenReturn(List.of(buildCommonCodeFixture(11, "DEPARTMENT", "D200")));
+
+        Instant recruitmentStartsAt = Instant.now();
+        Instant recruitmentEndsAt = recruitmentStartsAt.plusSeconds(3600);
+        Instant operationStartsAt = recruitmentEndsAt;
+        Instant operationEndsAt = operationStartsAt.plusSeconds(3600);
+
+        ProgramSessionRegisterRequestDTO session1 = new ProgramSessionRegisterRequestDTO(
+                1, "1주차", operationStartsAt, operationEndsAt, SessionLocationType.DIRECT_INPUT, "학생회관 3층 세미나실");
+        ProgramSessionRegisterRequestDTO session3 = new ProgramSessionRegisterRequestDTO(
+                3, "3주차", operationStartsAt, operationEndsAt, SessionLocationType.SAME_AS_PREVIOUS, null);
+
+        ProgramRegisterRequestDTO request = new ProgramRegisterRequestDTO(
+                null, 1, 2, 3, null,
+                "프로그램명", "설명",
+                recruitmentStartsAt, recruitmentEndsAt, operationStartsAt, operationEndsAt,
+                10, null,
+                List.of(session1, session3)
+        );
+
+        assertThatThrownBy(() -> programService.register(request, 100, 11))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.PROGRAM_SESSION_NO_NOT_CONTIGUOUS);
+
+        verify(programSessionRepository, never()).insertSession(
+                any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
     @Test
     void uploadOperationPlan_withPdfFile_createsFileGroupAndStoresFile() throws Exception {
         when(commonCodeRepository.findByCodeGroupAndActiveTrueOrderBySortOrderAsc("DEPARTMENT"))

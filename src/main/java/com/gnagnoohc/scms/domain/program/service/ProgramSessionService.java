@@ -51,6 +51,16 @@ public class ProgramSessionService {
             throw new BusinessException(ErrorCode.PROGRAM_INVALID_PERIOD);
         }
 
+        /**
+         * 회차 번호는 1부터 빈 번호 없이 연속되어야 한다(ProgramService.register()의 일괄 등록과 동일한
+         * 정책). 그래야 SAME_AS_PREVIOUS가 참조하는 sessionNo - 1이 항상 존재를 보장받는다. 새 회차는
+         * 항상 "현재 회차 수 + 1" 번호로만 추가할 수 있다(중간에 끼워넣거나 건너뛸 수 없음, append만 허용).
+         */
+        long existingCount = sessionRepository.countByProgram_ProgramId(programId);
+        if (!request.sessionNo().equals((int) existingCount + 1)) {
+            throw new BusinessException(ErrorCode.PROGRAM_SESSION_NO_NOT_CONTIGUOUS);
+        }
+
         String location = resolveLocation(programId, request.sessionNo(), request.locationType(), request.location(), null);
 
         Instant now = Instant.now();

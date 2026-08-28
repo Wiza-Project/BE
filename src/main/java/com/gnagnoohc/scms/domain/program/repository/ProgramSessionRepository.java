@@ -40,6 +40,9 @@ public interface ProgramSessionRepository extends JpaRepository<ProgramSession, 
 
     List<ProgramSession> findByProgram_ProgramIdOrderBySessionNoAsc(Integer programId);
 
+    // registerSession()이 새 회차 번호가 "현재 회차 수 + 1"인지(연속성 정책) 검증할 때 사용한다.
+    long countByProgram_ProgramId(Integer programId);
+
     Optional<ProgramSession> findByProgramSessionIdAndProgram_ProgramId(Integer programSessionId, Integer programId);
 
     // "전회차와 동일" 장소 복사 시 직전 회차(sessionNo - 1)를 찾기 위한 조회 메서드.

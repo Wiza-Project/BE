@@ -190,6 +190,19 @@ public class ProgramService {
         List<ProgramSessionRegisterRequestDTO> sortedSessions = request.sessions().stream()
                 .sorted(Comparator.comparing(ProgramSessionRegisterRequestDTO::sessionNo))
                 .toList();
+        /**
+         * 회차 번호는 DB 유니크 제약(중복 방지)만 있을 뿐 연속성을 강제하는 제약이 없어서, 이 검증이
+         * 없으면 예를 들어 1회차만 두고 3회차를 SAME_AS_PREVIOUS로 보내는 요청에서 sessionNo=2가
+         * 없다는 이유로 위 SAME_AS_PREVIOUS 처리가 (실제로는 정책 위반인데) 엉뚱한 에러코드
+         * (PREVIOUS_SESSION_LOCATION_NOT_FOUND)로 거절해버린다. 회차 번호는 1부터 빈 번호 없이
+         * 연속되어야 한다는 정책을 여기서 명시적으로 검증해, 이후 SAME_AS_PREVIOUS 처리가 항상
+         * sessionNo - 1을 안전하게 참조할 수 있도록 보장한다(요청 내 중복 번호도 함께 걸러진다).
+         */
+        for (int i = 0; i < sortedSessions.size(); i++) {
+            if (!sortedSessions.get(i).sessionNo().equals(i + 1)) {
+                throw new BusinessException(ErrorCode.PROGRAM_SESSION_NO_NOT_CONTIGUOUS);
+            }
+        }
         Map<Integer, String> resolvedLocations = new HashMap<>();
         for (ProgramSessionRegisterRequestDTO session : sortedSessions) {
             String location;
