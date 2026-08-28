@@ -1,5 +1,7 @@
 package com.gnagnoohc.scms.domain.career.dto.resume;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 import jakarta.validation.ValidatorFactory;
@@ -36,6 +38,15 @@ class ResumeRequestValidationTest {
         assertThat(validator.validate(career))
                 .extracting(violation -> violation.getPropertyPath().toString())
                 .contains("dateRangeValid");
+    }
+
+    @Test
+    void careerDateRangeValidationMethod_isNotSerialized() {
+        ResumeCareerDTO career = new ResumeCareerDTO(
+                "테스트 회사", "개발자", LocalDate.of(2025, 1, 1), LocalDate.of(2025, 1, 31), null);
+        ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
+
+        assertThat(objectMapper.valueToTree(career).has("dateRangeValid")).isFalse();
     }
 
     @Test

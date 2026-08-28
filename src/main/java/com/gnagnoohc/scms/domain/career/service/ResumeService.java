@@ -16,6 +16,7 @@ import com.gnagnoohc.scms.domain.user.repository.AppUserRepository;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;
 import com.gnagnoohc.scms.global.common.util.DateTimeUtils;
 import com.gnagnoohc.scms.global.error.BusinessException;
+import com.gnagnoohc.scms.global.error.DbConstraintViolationMatcher;
 import com.gnagnoohc.scms.global.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -29,6 +30,8 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class ResumeService {
+
+    private static final String CAREER_DOCUMENT_VERSION_CONSTRAINT = "uq_career_document_student_type_version";
 
     private final CareerDocumentRepository careerDocumentRepository;
     private final AppUserRepository appUserRepository;
@@ -54,8 +57,7 @@ public class ResumeService {
 
     @Transactional
     public ResumeResponseDTO createResume(Integer studentUserId, ResumeCreateRequestDTO request) {
-        AppUser student = appUserRepository.findById(studentUserId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+        AppUser student = getStudentForUpdate(studentUserId);
         if (careerDocumentRepository.findTopByStudent_UserIdAndDocumentTypeOrderByVersionNoDesc(
                 studentUserId, CareerDocument.TYPE_RESUME).isPresent()) {
             throw new BusinessException(ErrorCode.RESUME_ALREADY_EXISTS);
@@ -67,6 +69,7 @@ public class ResumeService {
     /** 임시 저장은 최신 버전만 제자리에서 갱신한다. 과거 버전은 변경하지 않는다. */
     @Transactional
     public ResumeResponseDTO updateResume(Integer studentUserId, Integer careerDocumentId, ResumeUpdateRequestDTO request) {
+        getStudentForUpdate(studentUserId);
         CareerDocument document = careerDocumentAccessHelper.getOwnedResume(studentUserId, careerDocumentId);
         CareerDocument latestDocument = careerDocumentRepository
                 .findTopByStudent_UserIdAndDocumentTypeOrderByVersionNoDesc(studentUserId, CareerDocument.TYPE_RESUME)
@@ -81,6 +84,7 @@ public class ResumeService {
     /** 확정 저장은 현재 내용을 기준으로 다음 버전 스냅샷을 만든다. */
     @Transactional
     public ResumeResponseDTO createNextVersion(Integer studentUserId, Integer careerDocumentId) {
+        getStudentForUpdate(studentUserId);
         CareerDocument base = careerDocumentAccessHelper.getOwnedResume(studentUserId, careerDocumentId);
         int nextVersion = careerDocumentRepository
                 .findTopByStudent_UserIdAndDocumentTypeOrderByVersionNoDesc(studentUserId, CareerDocument.TYPE_RESUME)
@@ -89,7 +93,8 @@ public class ResumeService {
         try {
             return toResponse(careerDocumentRepository.saveAndFlush(base.createNextVersion(nextVersion)));
         } catch (DataIntegrityViolationException exception) {
-            throw new BusinessException(ErrorCode.DOCUMENT_VERSION_CONFLICT);
+            throwVersionConflictOrRethrow(exception, ErrorCode.DOCUMENT_VERSION_CONFLICT);
+            throw exception;
         }
     }
 
@@ -104,8 +109,27 @@ public class ResumeService {
             return toResponse(careerDocumentRepository.saveAndFlush(
                     CareerDocument.createResume(student, versionNo, title, toJson(contentData))));
         } catch (DataIntegrityViolationException exception) {
+            throwVersionConflictOrRethrow(exception, conflictErrorCode);
+            throw exception;
+        }
+    }
+
+    private AppUser getStudentForUpdate(Integer studentUserId) {
+        return appUserRepository.findByIdForUpdate(studentUserId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+    }
+
+    private void throwVersionConflictOrRethrow(DataIntegrityViolationException exception, ErrorCode conflictErrorCode) {
+        if (isCareerDocumentVersionConflict(exception)) {
             throw new BusinessException(conflictErrorCode);
         }
+    }
+
+    private boolean isCareerDocumentVersionConflict(DataIntegrityViolationException exception) {
+        return DbConstraintViolationMatcher.contains(exception, CAREER_DOCUMENT_VERSION_CONSTRAINT)
+                || (DbConstraintViolationMatcher.contains(exception, "student_id")
+                && DbConstraintViolationMatcher.contains(exception, "document_type")
+                && DbConstraintViolationMatcher.contains(exception, "version_no"));
     }
 
     private JsonNode toJson(ResumeContentDTO contentData) {
