@@ -2,7 +2,6 @@ package com.gnagnoohc.scms.domain.program.controller;
 
 import com.gnagnoohc.scms.domain.program.dto.request.ProgramApplicationCancelRequestDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplicationCancelResponseDTO;
-import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplicationDecisionResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplicationSummaryResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplicationSurveyResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplyResponseDTO;
@@ -62,9 +61,9 @@ public class ProgramApplicationController {
         return ApiResponse.ok(programApplicationService.cancel(programId, applicationId, authUser.getId(), reason));
     }
 
-    @Operation(summary = "대기 신청 확정", description = "정원에 자리가 난 경우, 본인의 대기(WAITLISTED) 신청을 스스로 확정합니다.")
+    @Operation(summary = "대기 신청 확정", description = "정원에 자리가 난 경우, 본인의 대기(WAITLISTED) 신청을 다시 정원 내 신청(APPLIED)으로 전환합니다. 최종 승인은 운영부서가 별도로 처리합니다.")
     @PostMapping("/{programId}/applications/{applicationId}/confirm")
-    public ApiResponse<ProgramApplicationDecisionResponseDTO> confirm(
+    public ApiResponse<ProgramApplyResponseDTO> confirm(
             @PathVariable Integer programId,
             @PathVariable Integer applicationId,
             @AuthenticationPrincipal AuthUser authUser) {

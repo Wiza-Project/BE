@@ -258,13 +258,16 @@ public class ProgramApplicationService {
 
     /**
      * 학생이 자신의 대기(WAITLISTED) 신청을 스스로 확정한다. 대기 중 자리가 났다는 알림을 받은 뒤,
-     * 운영부서 승인을 기다리지 않고 본인이 직접 확정할 수 있게 한다. apply()를 그대로 재호출하면
-     * (c) 기존 신청 이력 확인에서 ALREADY_APPLIED로 막히므로(WAITLISTED는 CANCELLED가 아님), approve()와
-     * 별도의 경로로 둔다. approve()와 정원 검사 로직은 같지만, 처리 주체가 운영부서(staffId)가 아니라
-     * 신청 본인(studentId)이라는 점과, 대상 상태를 WAITLISTED로만 한정한다는 점이 다르다 — findApplicationForUpdate()는
-     * APPLIED도 허용해 승인/반려 양쪽에 쓰이지만, 확정은 이미 정원 내로 확보된 APPLIED 건에는 의미가 없다.
+     * 운영부서 승인을 기다리지 않고 본인이 직접 "정원 내 신청(APPLIED)"으로 다시 들어갈 수 있게 한다.
+     * 학생이 직접 최종 승인(APPROVED)까지 하는 것은 아니다 — 최종 승인은 여전히 운영부서가 approve()를
+     * 호출해야만 이뤄진다. apply()를 그대로 재호출하면 (c) 기존 신청 이력 확인에서 ALREADY_APPLIED로
+     * 막히므로(WAITLISTED는 CANCELLED가 아님), 별도의 경로로 둔다. approve()와 정원 검사 로직(APPLIED+
+     * APPROVED 합산 기준)은 같다 — APPLIED도 이미 정원을 차지한 상태이므로 계산식을 바꿀 필요가 없다.
+     * 처리 주체가 운영부서(staffId)가 아니라 신청 본인(studentId)이라는 점과, 대상 상태를 WAITLISTED로만
+     * 한정한다는 점이 findApplicationForUpdate()(승인/반려 양쪽에 APPLIED까지 허용)와 다르다 — 확정은
+     * 이미 정원 내로 확보된 APPLIED 건에는 의미가 없다.
      */
-    public ProgramApplicationDecisionResponseDTO confirm(Integer programId, Integer applicationId, Integer studentId) {
+    public ProgramApplyResponseDTO confirm(Integer programId, Integer applicationId, Integer studentId) {
         /**
          * 필수 동의 재확인 -----------------------------------------------------------
          * 확정은 정원 슬롯을 새로 점유해 참여를 확정짓는 행위라 apply()의 (0)단계와 성격이 같다.
@@ -336,14 +339,30 @@ public class ProgramApplicationService {
          * 동의 락은 동시 withdraw()는 막아주지만, 프로그램 행 락 대기·정원 계산 등으로 흐른 시간 동안
          * 정책 유효기간(isCurrentlyEffective)이 만료됐을 가능성까지는 막지 못한다 — 락은 "누가 값을
          * 바꾸는지"만 직렬화할 뿐 시간 경과 자체를 멈추지 못하기 때문이다. confirm()은 apply()와 달리
-         * user_consent_id를 갱신 저장하지 않으므로(updateDecision이 그 컬럼을 건드리지 않음), 증빙을
+         * user_consent_id를 갱신 저장하지 않으므로(confirmWaitlisted가 그 컬럼을 건드리지 않음), 증빙을
          * 다시 조회할 필요 없이 게이트 체크(hasAgreedAllRequired)만 다시 수행하면 된다.
          */
         if (!consentVerifier.hasAgreedAllRequired(studentId, ConsentModuleCode.PROGRAM, now)) {
             throw new BusinessException(ErrorCode.REQUIRED_CONSENT_NOT_AGREED);
         }
 
-        return applyDecision(application, ApplicationStatus.APPROVED, null, studentId);
+        /**
+         * applyDecision()(승인/반려 전용)을 재사용하지 않는다 — WAITLISTED -> APPLIED는 아직 "결정"이
+         * 아니라 다시 승인 대기열로 들어가는 것뿐이라, processed_by/processed_at/decision_reason을
+         * 채우면 안 되고(그 컬럼들은 approve()가 실제로 호출될 때만 의미가 있다), ApplicationDecidedEvent
+         * (승인/반려 알림)도 발행하면 안 된다 — 그 알림은 나중에 운영부서가 실제로 approve()를 호출할 때
+         * 정상적으로 나간다. updatedRows == 0은 이미 application 행에 비관적 락을 잡고 있어 이 트랜잭션
+         * 안에서는 사실상 도달할 수 없지만, updateCancellation/reviveApplication과 동일하게 방어적으로
+         * WHERE 조건 + 결과 확인 패턴을 맞춘다.
+         */
+        int updatedRows = applicationRepository.confirmWaitlisted(applicationId, now);
+        if (updatedRows == 0) {
+            throw new BusinessException(ErrorCode.APPLICATION_ALREADY_PROCESSED);
+        }
+
+        return new ProgramApplyResponseDTO(
+                applicationId, programId, ApplicationStatus.APPLIED.name(), ApplicationStatus.APPLIED.getLabel(),
+                null, now);
     }
 
     /**

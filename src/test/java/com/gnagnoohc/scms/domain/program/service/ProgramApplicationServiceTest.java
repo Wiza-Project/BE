@@ -362,12 +362,55 @@ class ProgramApplicationServiceTest {
         when(applicationRepository.findByIdForUpdate(5)).thenReturn(Optional.of(application));
         when(applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(1, List.of("APPLIED", "APPROVED")))
                 .thenReturn(9L);
+        when(applicationRepository.confirmWaitlisted(eq(5), any())).thenReturn(1);
 
-        ProgramApplicationDecisionResponseDTO response = programApplicationService.confirm(1, 5, 100);
+        ProgramApplyResponseDTO response = programApplicationService.confirm(1, 5, 100);
 
-        assertThat(response.applicationStatus()).isEqualTo("APPROVED");
-        assertThat(response.applicationStatusLabel()).isEqualTo("승인");
-        assertThat(response.processedBy()).isEqualTo(100);
+        assertThat(response.applicationId()).isEqualTo(5);
+        assertThat(response.programId()).isEqualTo(1);
+        assertThat(response.applicationStatus()).isEqualTo("APPLIED");
+        assertThat(response.applicationStatusLabel()).isEqualTo("신청완료");
+        assertThat(response.waitlistOrder()).isNull();
+    }
+
+    @Test
+    void confirm_whenAtCapacity_throwsProgramCapacityExceeded() throws Exception {
+        Instant now = Instant.now();
+        ExtracurricularProgram program = buildProgramFixture(
+                1, now.minusSeconds(3600), now.plusSeconds(3600), 10);
+        ProgramApplication application = buildApplicationFixture(5, program, "WAITLISTED", 100);
+
+        mockValidProgramConsent(100, 900);
+        when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
+        when(applicationRepository.findByIdForUpdate(5)).thenReturn(Optional.of(application));
+        when(applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(1, List.of("APPLIED", "APPROVED")))
+                .thenReturn(10L);
+
+        assertThatThrownBy(() -> programApplicationService.confirm(1, 5, 100))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.PROGRAM_CAPACITY_EXCEEDED);
+
+        verify(applicationRepository, never()).confirmWaitlisted(any(), any());
+    }
+
+    @Test
+    void confirm_whenApplicationNotWaitlisted_throwsApplicationAlreadyProcessed() throws Exception {
+        Instant now = Instant.now();
+        ExtracurricularProgram program = buildProgramFixture(
+                1, now.minusSeconds(3600), now.plusSeconds(3600), 10);
+        ProgramApplication application = buildApplicationFixture(5, program, "APPLIED", 100);
+
+        mockValidProgramConsent(100, 900);
+        when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
+        when(applicationRepository.findByIdForUpdate(5)).thenReturn(Optional.of(application));
+
+        assertThatThrownBy(() -> programApplicationService.confirm(1, 5, 100))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.APPLICATION_ALREADY_PROCESSED);
+
+        verify(applicationRepository, never()).confirmWaitlisted(any(), any());
     }
 
     // 메서드 진입 시 게이트(hasAgreedAllRequired)는 통과했지만(동의 락은 잡음), 프로그램/신청 행 락 대기와
@@ -411,7 +454,7 @@ class ProgramApplicationServiceTest {
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.REQUIRED_CONSENT_NOT_AGREED);
 
-        verify(applicationRepository, never()).updateDecision(any(), any(), any(), any(), any());
+        verify(applicationRepository, never()).confirmWaitlisted(any(), any());
     }
 
     @Test
