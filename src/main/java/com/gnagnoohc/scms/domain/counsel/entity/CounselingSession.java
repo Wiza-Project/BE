@@ -146,4 +146,21 @@ public class CounselingSession extends BaseTimeEntity {
     public boolean isPrivateConfirmAllowed(Instant now) {
         return SESSION_COMPLETED.equals(sessionStatus) && ATTENDANCE_PRESENT.equals(attendanceStatus);
     }
+
+    /**
+     * 공개 결과 초안 저장이 허용되는 회기 상태다(공개 상담 결과 설계 3.3). 시작 시각이 지난 PLANNED이거나
+     * 출석 확인된 COMPLETED에서만 허용한다. 배정 활성 여부는 서비스가 별도로 확인한다.
+     * isPrivateDraftAllowed와 조건식이 같아 보이지만, 공개 결과의 정책은 앞으로 비공개 기록과
+     * 별개로 바뀔 수 있으므로 재사용하지 않고 전용 메서드로 분리해 둔다.
+     */
+    public boolean isPublicDraftAllowed(Instant now) {
+        boolean startedPlanned = SESSION_PLANNED.equals(sessionStatus) && startsAt != null && !now.isBefore(startsAt);
+        boolean completedPresent = SESSION_COMPLETED.equals(sessionStatus) && ATTENDANCE_PRESENT.equals(attendanceStatus);
+        return startedPlanned || completedPresent;
+    }
+
+    /** 공개 결과 일반 공개가 허용되는 회기 상태다 — 출석 확인된 COMPLETED만 해당한다(설계 3.3). */
+    public boolean isPublicPublishAllowed() {
+        return SESSION_COMPLETED.equals(sessionStatus) && ATTENDANCE_PRESENT.equals(attendanceStatus);
+    }
 }

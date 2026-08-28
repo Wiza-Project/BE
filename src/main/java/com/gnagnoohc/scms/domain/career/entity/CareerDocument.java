@@ -30,6 +30,7 @@ public class CareerDocument extends BaseTimeEntity {
 
     public static final String TYPE_COVER_LETTER = "COVER_LETTER";
     public static final String TYPE_PORTFOLIO = "PORTFOLIO";
+    public static final String TYPE_RESUME = "RESUME";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -78,6 +79,12 @@ public class CareerDocument extends BaseTimeEntity {
     public static CareerDocument createCoverLetter(AppUser student, Integer versionNo, String documentTitle,
                                                      JsonNode contentData, boolean aiAssistanceUsed) {
         return new CareerDocument(student, null, TYPE_COVER_LETTER, versionNo, documentTitle, contentData, aiAssistanceUsed);
+    }
+
+    /** 이력서 신규 작성. 변경 시 기존 버전은 보존하고 새 스냅샷을 만든다. */
+    public static CareerDocument createResume(AppUser student, Integer versionNo, String documentTitle,
+                                              JsonNode contentData) {
+        return new CareerDocument(student, null, TYPE_RESUME, versionNo, documentTitle, contentData, false);
     }
 
     /** 포트폴리오 항목 신규 생성. versionNo는 학생 기준 다음 항목 순번을 호출부에서 계산해 전달한다. */

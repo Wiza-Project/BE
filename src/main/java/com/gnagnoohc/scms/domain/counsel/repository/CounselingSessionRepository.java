@@ -4,6 +4,7 @@ import com.gnagnoohc.scms.domain.counsel.dto.CounselingSessionRow;
 import com.gnagnoohc.scms.domain.counsel.entity.CounselingSession;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -11,6 +12,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -108,4 +111,65 @@ public interface CounselingSessionRepository extends JpaRepository<CounselingSes
             @Param("sessionId") Integer sessionId,
             @Param("counselorId") Integer counselorId
     );
+
+    /**
+     * 최종 완료는 예약 전체(종료된 과거 배정 포함) 이력에 미완료 회기가 없어야 하므로, 배정 활성
+     * 여부로 필터링하지 않고 예약에 딸린 모든 회기 중 PLANNED가 있는지 확인한다.
+     */
+    @Query("""
+            select case when count(s) > 0 then true else false end
+            from CounselingSession s
+            where s.counselingAssignment.counselingReservation.counselingReservationId = :reservationId
+              and s.sessionStatus = 'PLANNED'
+            """)
+    boolean existsPlannedSessionByReservationId(@Param("reservationId") Integer reservationId);
+
+    /**
+     * 지정한 배정 안에서 가장 늦게 끝난 COMPLETED+PRESENT 회기 하나를 endsAt DESC, counselingSessionId
+     * DESC 순으로 찾는다. JPQL 서브쿼리는 LIMIT을 직접 쓸 수 없으므로 Pageable로 한 건만 가져오는
+     * 방식을 쓰고, 최종 완료 대상 판정에 쓰는 findLatestCompletedPresentSessionId가 이를 감싼다.
+     */
+    @Query("""
+            select s.counselingSessionId
+            from CounselingSession s
+            where s.counselingAssignment.counselingAssignmentId = :assignmentId
+              and s.sessionStatus = 'COMPLETED'
+              and s.attendanceStatus = 'PRESENT'
+            order by s.endsAt desc, s.counselingSessionId desc
+            """)
+    List<Integer> findLatestCompletedPresentSessionIds(
+            @Param("assignmentId") Integer assignmentId,
+            Pageable pageable
+    );
+
+    default Optional<Integer> findLatestCompletedPresentSessionId(Integer assignmentId) {
+        List<Integer> ids = findLatestCompletedPresentSessionIds(assignmentId, PageRequest.of(0, 1));
+        return ids.isEmpty() ? Optional.empty() : Optional.of(ids.get(0));
+    }
+
+    /**
+     * 여러 예약의 COMPLETED+PRESENT 회기 후보를 한 번에 가져오는 배치 조회다. 상담사·학생 응답의
+     * finalResult(예약이 COMPLETED이고 이 회기가 그 예약의 마지막 출석 완료 회기인지)를 계산할 때,
+     * 예약마다 따로 조회하면 목록 페이지 크기만큼 쿼리가 늘어나므로(N+1) 배치로 한 번에 가져와
+     * 서비스에서 예약별로 (endsAt desc, sessionId desc) 최댓값을 골라내게 한다.
+     */
+    @Query("""
+            select s.counselingAssignment.counselingReservation.counselingReservationId as reservationId,
+                   s.counselingSessionId as sessionId,
+                   s.endsAt as endsAt
+            from CounselingSession s
+            where s.counselingAssignment.counselingReservation.counselingReservationId in :reservationIds
+              and s.sessionStatus = 'COMPLETED'
+              and s.attendanceStatus = 'PRESENT'
+            """)
+    List<CompletedPresentSessionCandidate> findCompletedPresentSessionCandidates(
+            @Param("reservationIds") Collection<Integer> reservationIds
+    );
+
+    /** findCompletedPresentSessionCandidates 전용 프로젝션. */
+    interface CompletedPresentSessionCandidate {
+        Integer getReservationId();
+        Integer getSessionId();
+        Instant getEndsAt();
+    }
 }

@@ -26,6 +26,7 @@ public class CounselingReservation extends BaseTimeEntity {
     private static final String REJECTED_STATUS = "REJECTED";
     private static final String CANCELED_STATUS = "CANCELED";
     private static final String IN_PROGRESS_STATUS = "IN_PROGRESS";
+    private static final String COMPLETED_STATUS = "COMPLETED";
 
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "counseling_reservation_id", nullable = false) private Integer counselingReservationId;
@@ -160,6 +161,19 @@ public class CounselingReservation extends BaseTimeEntity {
         if (!isBeforeDeadline(now)) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "변경할 수 없는 상태이거나 기한이 지난 예약입니다.");
         }
+    }
+
+    /**
+     * 공개 상담 결과 최종 완료에서만 호출한다. IN_PROGRESS만 COMPLETED로 바꾸며, 그 외 상태
+     * (REQUESTED, APPROVED, REJECTED, CANCELED, 이미 COMPLETED)는 중복 완료나 잘못된 전이를
+     * 막기 위해 거절한다. 승인 처리 시각인 processedAt/processedBy는 최종 완료와는 별개의 사건이므로
+     * 이 메서드가 건드리지 않는다.
+     */
+    public void complete(Instant now) {
+        if (!IN_PROGRESS_STATUS.equals(reservationStatus)) {
+            throw new BusinessException(ErrorCode.PUBLIC_RESULT_STATE_NOT_ALLOWED);
+        }
+        this.reservationStatus = COMPLETED_STATUS;
     }
 
     /**

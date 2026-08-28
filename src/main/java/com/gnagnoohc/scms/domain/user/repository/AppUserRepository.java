@@ -1,7 +1,9 @@
 package com.gnagnoohc.scms.domain.user.repository;
 
 import com.gnagnoohc.scms.domain.user.entity.AppUser;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -10,6 +12,14 @@ import java.time.Instant;
 import java.util.Optional;
 
 public interface AppUserRepository extends JpaRepository<AppUser, Integer> {
+
+    /**
+     * 같은 학생의 이력서 생성·수정·버전 생성을 직렬화한다.
+     * 이력서가 아직 없는 경우에도 항상 존재하는 학생 행을 잠금 대상으로 삼는다.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT u FROM AppUser u WHERE u.userId = :userId")
+    Optional<AppUser> findByIdForUpdate(@Param("userId") Integer userId);
 
     //부서코드를 JOIN FETCH로 미리 로딩
     @Query("SELECT u FROM AppUser u LEFT JOIN FETCH u.departmentCode WHERE u.universityNo = :universityNo")

@@ -24,6 +24,11 @@ public class CareerDocumentAccessHelper {
                 .orElseThrow(() -> new BusinessException(ErrorCode.COVER_LETTER_NOT_FOUND));
     }
 
+    public CareerDocument getOwnedResume(Integer studentUserId, Integer careerDocumentId) {
+        return careerDocumentRepository.findOwnedDocument(careerDocumentId, studentUserId, CareerDocument.TYPE_RESUME)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESUME_NOT_FOUND));
+    }
+
     public CareerDocument getOwnedPortfolio(Integer studentUserId, Integer careerDocumentId) {
         return careerDocumentRepository.findOwnedDocument(careerDocumentId, studentUserId, CareerDocument.TYPE_PORTFOLIO)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PORTFOLIO_NOT_FOUND));
