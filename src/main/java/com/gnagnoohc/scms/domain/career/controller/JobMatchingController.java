@@ -22,7 +22,10 @@ public class JobMatchingController {
 
     private final JobMatchingService jobMatchingService;
 
-    @Operation(summary = "학생 맞춤 채용공고 목록 조회", description = "로그인한 학생의 학과 및 희망직무(NCS) 기반 맞춤 추천 공고를 반환합니다. (PROFILING 미동의 시 기본 최신 공고 반환)")
+    @Operation(
+            summary = "학생 맞춤 채용공고 목록 조회",
+            description = "로그인한 학생의 프로필 임베딩 벡터 코사인 유사도 기반 맞춤 추천 채용공고 목록을 반환합니다. (PROFILING 미동의 시 기본 최신 공고 반환)"
+    )
     @GetMapping("/recommendations")
     public ApiResponse<List<JobPostingSummaryResponseDTO>> getRecommendations(
             @AuthenticationPrincipal AuthUser authUser

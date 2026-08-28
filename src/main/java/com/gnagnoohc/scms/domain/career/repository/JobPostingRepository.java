@@ -45,23 +45,32 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, Integer>
     Optional<JobPosting> findByIdWithDetails(@Param("jobPostingId") Integer jobPostingId);
 
     /**
-     * 학생의 희망 직무(NCS 공통코드)에 매칭되는 유효 추천 공고 (Fetch Join 적용)
+     * [pgvector AI 잡매칭] 학생 임베딩 벡터 코사인 유사도 상위 Top-K 공고 조회
      */
-    @Query("SELECT DISTINCT jp FROM JobPosting jp " +
-            "JOIN FETCH jp.companyAccount ca " +
-            "LEFT JOIN FETCH jp.ncsCode nc " +
-            "LEFT JOIN FETCH jp.regionCode rc " +
-            "WHERE jp.postingStatus = 'PUBLISHED' " +
-            "  AND (jp.applicationEndsAt IS NULL OR jp.applicationEndsAt >= :now) " +
-            "  AND (jp.ncsCode.codeId = :ncsCodeId) " +
-            "ORDER BY jp.createdAt DESC")
-    List<JobPosting> findRecommendedPostingsWithDetails(
-            @Param("ncsCodeId") Integer ncsCodeId,
+    @Query(value = """
+            WITH top_ncs AS (
+                SELECT ncs_code
+                FROM ncs_standard
+                WHERE embedding_vector IS NOT NULL
+                ORDER BY embedding_vector <=> CAST(:embeddingVector AS vector)
+                LIMIT :topK
+            )
+            SELECT DISTINCT jp.*
+            FROM job_posting jp
+            JOIN common_code cc ON jp.ncs_code_id = cc.code_id
+            JOIN top_ncs tn ON cc.code = tn.ncs_code
+            WHERE jp.posting_status = 'PUBLISHED'
+              AND (jp.application_ends_at IS NULL OR jp.application_ends_at >= :now)
+            ORDER BY jp.created_at DESC
+            """, nativeQuery = true)
+    List<JobPosting> findVectorRecommendedPostings(
+            @Param("embeddingVector") String embeddingVector,
+            @Param("topK") int topK,
             @Param("now") Instant now
     );
 
     /**
-     * 기본 최신 공개 공고 목록 (Fallback / Fetch Join 적용)
+     * Fallback용 최신 공고 조회
      */
     @Query("SELECT DISTINCT jp FROM JobPosting jp " +
             "JOIN FETCH jp.companyAccount ca " +
