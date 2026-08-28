@@ -3,6 +3,7 @@ package com.gnagnoohc.scms.domain.career.dto.resume;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -13,6 +14,7 @@ import lombok.NoArgsConstructor;
 public class ResumeUpdateRequestDTO {
 
     @NotBlank(message = "이력서 제목은 필수입니다.")
+    @Size(max = 200, message = "이력서 제목은 200자 이하여야 합니다.")
     private String documentTitle;
 
     @Valid

@@ -1,5 +1,6 @@
 package com.gnagnoohc.scms.domain.career.dto.resume;
 
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
@@ -22,4 +23,10 @@ public record ResumeCareerDTO(
         @Size(max = 500)
         String description
 ) {
+
+    /** 종료일이 입력된 경우 시작일보다 앞설 수 없다. */
+    @AssertTrue(message = "종료일은 시작일보다 빠를 수 없습니다.")
+    public boolean isDateRangeValid() {
+        return startDate == null || endDate == null || !endDate.isBefore(startDate);
+    }
 }

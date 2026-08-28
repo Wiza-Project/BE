@@ -60,13 +60,20 @@ public class ResumeService {
                 studentUserId, CareerDocument.TYPE_RESUME).isPresent()) {
             throw new BusinessException(ErrorCode.RESUME_ALREADY_EXISTS);
         }
-        return saveNewVersion(student, 1, request.getDocumentTitle(), request.getContentData());
+        return saveNewVersion(student, 1, request.getDocumentTitle(), request.getContentData(),
+                ErrorCode.RESUME_ALREADY_EXISTS);
     }
 
-    /** 임시 저장은 선택한 버전을 제자리에서 갱신한다. */
+    /** 임시 저장은 최신 버전만 제자리에서 갱신한다. 과거 버전은 변경하지 않는다. */
     @Transactional
     public ResumeResponseDTO updateResume(Integer studentUserId, Integer careerDocumentId, ResumeUpdateRequestDTO request) {
         CareerDocument document = careerDocumentAccessHelper.getOwnedResume(studentUserId, careerDocumentId);
+        CareerDocument latestDocument = careerDocumentRepository
+                .findTopByStudent_UserIdAndDocumentTypeOrderByVersionNoDesc(studentUserId, CareerDocument.TYPE_RESUME)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESUME_NOT_FOUND));
+        if (!latestDocument.getCareerDocumentId().equals(careerDocumentId)) {
+            throw new BusinessException(ErrorCode.RESUME_NOT_LATEST_VERSION);
+        }
         document.updateContent(request.getDocumentTitle(), toJson(request.getContentData()), false);
         return toResponse(document);
     }
@@ -80,7 +87,7 @@ public class ResumeService {
                 .map(document -> document.getVersionNo() + 1)
                 .orElse(base.getVersionNo() + 1);
         try {
-            return toResponse(careerDocumentRepository.save(base.createNextVersion(nextVersion)));
+            return toResponse(careerDocumentRepository.saveAndFlush(base.createNextVersion(nextVersion)));
         } catch (DataIntegrityViolationException exception) {
             throw new BusinessException(ErrorCode.DOCUMENT_VERSION_CONFLICT);
         }
@@ -91,12 +98,13 @@ public class ResumeService {
         careerDocumentRepository.delete(careerDocumentAccessHelper.getOwnedResume(studentUserId, careerDocumentId));
     }
 
-    private ResumeResponseDTO saveNewVersion(AppUser student, int versionNo, String title, ResumeContentDTO contentData) {
+    private ResumeResponseDTO saveNewVersion(AppUser student, int versionNo, String title, ResumeContentDTO contentData,
+                                             ErrorCode conflictErrorCode) {
         try {
-            return toResponse(careerDocumentRepository.save(
+            return toResponse(careerDocumentRepository.saveAndFlush(
                     CareerDocument.createResume(student, versionNo, title, toJson(contentData))));
         } catch (DataIntegrityViolationException exception) {
-            throw new BusinessException(ErrorCode.DOCUMENT_VERSION_CONFLICT);
+            throw new BusinessException(conflictErrorCode);
         }
     }
 
