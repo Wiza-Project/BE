@@ -4,6 +4,7 @@ import com.gnagnoohc.scms.domain.program.dto.request.ProgramSessionRegisterReque
 import com.gnagnoohc.scms.domain.program.dto.request.ProgramSessionUpdateRequestDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramSessionResponseDTO;
 import com.gnagnoohc.scms.domain.program.entity.ProgramSession;
+import com.gnagnoohc.scms.domain.program.entity.SessionLocationType;
 import com.gnagnoohc.scms.domain.program.repository.ExtracurricularProgramRepository;
 import com.gnagnoohc.scms.domain.program.repository.ProgramSessionRepository;
 import com.gnagnoohc.scms.global.common.repository.CommonCodeRepository;
@@ -13,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.time.Instant;
 import java.util.List;
@@ -48,12 +50,14 @@ public class ProgramSessionService {
             throw new BusinessException(ErrorCode.PROGRAM_INVALID_PERIOD);
         }
 
+        String location = resolveLocation(programId, request.sessionNo(), request.locationType(), request.location());
+
         Instant now = Instant.now();
         Integer sessionId;
         try {
             sessionId = sessionRepository.insertSession(
                     programId, request.sessionNo(), request.sessionName(),
-                    request.startsAt(), request.endsAt(), request.location(), staffId, now);
+                    request.startsAt(), request.endsAt(), location, staffId, now);
         } catch (DataIntegrityViolationException e) {
             // uq_program_session_program_no 유니크 제약 위반 = 이미 존재하는 회차 번호.
             throw new BusinessException(ErrorCode.DUPLICATE_SESSION_NO);
@@ -61,7 +65,7 @@ public class ProgramSessionService {
 
         return new ProgramSessionResponseDTO(
                 sessionId, programId, request.sessionNo(), request.sessionName(),
-                request.startsAt(), request.endsAt(), request.location());
+                request.startsAt(), request.endsAt(), location);
     }
 
     public List<ProgramSessionResponseDTO> listSessions(Integer programId) {
@@ -101,11 +105,13 @@ public class ProgramSessionService {
             throw new BusinessException(ErrorCode.PROGRAM_INVALID_PERIOD);
         }
 
+        String location = resolveLocation(programId, request.sessionNo(), request.locationType(), request.location());
+
         int updatedRows;
         try {
             updatedRows = sessionRepository.updateSession(
                     sessionId, programId, request.sessionNo(), request.sessionName(),
-                    request.startsAt(), request.endsAt(), request.location());
+                    request.startsAt(), request.endsAt(), location);
         } catch (DataIntegrityViolationException e) {
             // uq_program_session_program_no 유니크 제약 위반 = 다른 회차가 이미 쓰고 있는 회차 번호.
             throw new BusinessException(ErrorCode.DUPLICATE_SESSION_NO);
@@ -117,7 +123,28 @@ public class ProgramSessionService {
 
         return new ProgramSessionResponseDTO(
                 sessionId, programId, request.sessionNo(), request.sessionName(),
-                request.startsAt(), request.endsAt(), request.location());
+                request.startsAt(), request.endsAt(), location);
+    }
+
+    /**
+     * 회차 장소 입력 방식(locationType)에 따라 실제로 저장할 location 값을 확정한다.
+     *   DIRECT_INPUT      : location이 비어있으면 안 된다.
+     *   SAME_AS_PREVIOUS  : 직전 회차(sessionNo - 1)를 DB에서 찾아 그 location을 그대로 복사한다.
+     *                       직전 회차가 없거나(예: 1회차) 직전 회차의 location도 비어있으면 복사할 값이 없으므로 거부한다.
+     */
+    private String resolveLocation(Integer programId, Integer sessionNo,
+                                    SessionLocationType locationType, String location) {
+        if (locationType == SessionLocationType.DIRECT_INPUT) {
+            if (!StringUtils.hasText(location)) {
+                throw new BusinessException(ErrorCode.SESSION_LOCATION_REQUIRED);
+            }
+            return location;
+        }
+
+        return sessionRepository.findByProgram_ProgramIdAndSessionNo(programId, sessionNo - 1)
+                .map(ProgramSession::getLocation)
+                .filter(StringUtils::hasText)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PREVIOUS_SESSION_LOCATION_NOT_FOUND));
     }
 
     /**

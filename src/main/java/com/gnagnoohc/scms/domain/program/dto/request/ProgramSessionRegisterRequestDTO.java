@@ -1,5 +1,6 @@
 package com.gnagnoohc.scms.domain.program.dto.request;
 
+import com.gnagnoohc.scms.domain.program.entity.SessionLocationType;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
@@ -17,6 +18,9 @@ public record ProgramSessionRegisterRequestDTO(
         @NotNull Instant startsAt,
         @NotNull Instant endsAt,
 
+        // 장소 입력 방식. DIRECT_INPUT이면 location이 필수이고, SAME_AS_PREVIOUS이면
+        // location을 비워 보내도 되며 서버가 직전 회차의 장소를 그대로 복사한다.
+        @NotNull SessionLocationType locationType,
         @Size(max = 300) String location
 ) {
 }

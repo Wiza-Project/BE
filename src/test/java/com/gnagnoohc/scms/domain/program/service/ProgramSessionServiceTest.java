@@ -5,6 +5,7 @@ import com.gnagnoohc.scms.domain.program.dto.request.ProgramSessionUpdateRequest
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramSessionResponseDTO;
 import com.gnagnoohc.scms.domain.program.entity.ExtracurricularProgram;
 import com.gnagnoohc.scms.domain.program.entity.ProgramSession;
+import com.gnagnoohc.scms.domain.program.entity.SessionLocationType;
 import com.gnagnoohc.scms.domain.program.repository.ExtracurricularProgramRepository;
 import com.gnagnoohc.scms.domain.program.repository.ProgramSessionRepository;
 import com.gnagnoohc.scms.domain.user.entity.AppUser;
@@ -51,7 +52,7 @@ class ProgramSessionServiceTest {
         Instant startsAt = Instant.now().plusSeconds(3600);
         Instant endsAt = startsAt.plusSeconds(3600);
         ProgramSessionRegisterRequestDTO request =
-                new ProgramSessionRegisterRequestDTO(1, "1주차", startsAt, endsAt, "본관 101호");
+                new ProgramSessionRegisterRequestDTO(1, "1주차", startsAt, endsAt, SessionLocationType.DIRECT_INPUT, "본관 101호");
 
         when(programRepository.existsById(1)).thenReturn(true);
         when(sessionRepository.insertSession(
@@ -68,7 +69,8 @@ class ProgramSessionServiceTest {
     @Test
     void registerSession_whenProgramNotFound_throwsProgramNotFound() {
         ProgramSessionRegisterRequestDTO request =
-                new ProgramSessionRegisterRequestDTO(1, "1주차", Instant.now(), Instant.now().plusSeconds(3600), null);
+                new ProgramSessionRegisterRequestDTO(1, "1주차", Instant.now(), Instant.now().plusSeconds(3600),
+                        SessionLocationType.DIRECT_INPUT, null);
 
         when(programRepository.existsById(1)).thenReturn(false);
 
@@ -81,7 +83,8 @@ class ProgramSessionServiceTest {
     @Test
     void registerSession_whenSessionNoDuplicate_throwsDuplicateSessionNo() {
         ProgramSessionRegisterRequestDTO request =
-                new ProgramSessionRegisterRequestDTO(1, "1주차", Instant.now(), Instant.now().plusSeconds(3600), null);
+                new ProgramSessionRegisterRequestDTO(1, "1주차", Instant.now(), Instant.now().plusSeconds(3600),
+                        SessionLocationType.DIRECT_INPUT, "본관 101호");
 
         when(programRepository.existsById(1)).thenReturn(true);
         when(sessionRepository.insertSession(eq(1), eq(1), any(), any(), any(), any(), eq(200), any()))
@@ -98,7 +101,7 @@ class ProgramSessionServiceTest {
         Instant startsAt = Instant.now().plusSeconds(3600);
         Instant endsAt = startsAt.minusSeconds(1);
         ProgramSessionRegisterRequestDTO request =
-                new ProgramSessionRegisterRequestDTO(1, "1주차", startsAt, endsAt, null);
+                new ProgramSessionRegisterRequestDTO(1, "1주차", startsAt, endsAt, SessionLocationType.DIRECT_INPUT, null);
 
         when(programRepository.existsById(1)).thenReturn(true);
 
@@ -106,6 +109,56 @@ class ProgramSessionServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.PROGRAM_INVALID_PERIOD);
+    }
+
+    @Test
+    void registerSession_whenDirectInputAndLocationBlank_throwsSessionLocationRequired() {
+        ProgramSessionRegisterRequestDTO request = new ProgramSessionRegisterRequestDTO(
+                2, "2주차", Instant.now(), Instant.now().plusSeconds(3600), SessionLocationType.DIRECT_INPUT, "  ");
+
+        when(programRepository.existsById(1)).thenReturn(true);
+
+        assertThatThrownBy(() -> programSessionService.registerSession(1, request, 200))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.SESSION_LOCATION_REQUIRED);
+    }
+
+    @Test
+    void registerSession_whenSameAsPreviousAndPreviousExists_copiesPreviousLocation() throws Exception {
+        ExtracurricularProgram program = buildProgramFixture(1);
+        ProgramSession previousSession = buildSessionFixture(10, program, 1);
+        ReflectionTestUtils.setField(previousSession, "location", "본관 101호");
+        Instant startsAt = Instant.now().plusSeconds(3600);
+        Instant endsAt = startsAt.plusSeconds(3600);
+        ProgramSessionRegisterRequestDTO request = new ProgramSessionRegisterRequestDTO(
+                2, "2주차", startsAt, endsAt, SessionLocationType.SAME_AS_PREVIOUS, null);
+
+        when(programRepository.existsById(1)).thenReturn(true);
+        when(sessionRepository.findByProgram_ProgramIdAndSessionNo(1, 1))
+                .thenReturn(java.util.Optional.of(previousSession));
+        when(sessionRepository.insertSession(
+                eq(1), eq(2), eq("2주차"), eq(startsAt), eq(endsAt), eq("본관 101호"), eq(200), any()))
+                .thenReturn(11);
+
+        ProgramSessionResponseDTO response = programSessionService.registerSession(1, request, 200);
+
+        assertThat(response.location()).isEqualTo("본관 101호");
+    }
+
+    @Test
+    void registerSession_whenSameAsPreviousAndNoPreviousSession_throwsPreviousSessionLocationNotFound() {
+        ProgramSessionRegisterRequestDTO request = new ProgramSessionRegisterRequestDTO(
+                1, "1주차", Instant.now(), Instant.now().plusSeconds(3600), SessionLocationType.SAME_AS_PREVIOUS, null);
+
+        when(programRepository.existsById(1)).thenReturn(true);
+        when(sessionRepository.findByProgram_ProgramIdAndSessionNo(1, 0))
+                .thenReturn(java.util.Optional.empty());
+
+        assertThatThrownBy(() -> programSessionService.registerSession(1, request, 200))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.PREVIOUS_SESSION_LOCATION_NOT_FOUND);
     }
 
     @Test
@@ -141,7 +194,8 @@ class ProgramSessionServiceTest {
         Instant startsAt = Instant.now().plusSeconds(3600);
         Instant endsAt = startsAt.plusSeconds(3600);
         ProgramSessionUpdateRequestDTO request =
-                new ProgramSessionUpdateRequestDTO(1, "1주차(수정)", startsAt, endsAt, "본관 202호");
+                new ProgramSessionUpdateRequestDTO(1, "1주차(수정)", startsAt, endsAt,
+                        SessionLocationType.DIRECT_INPUT, "본관 202호");
 
         when(sessionRepository.findByProgramSessionIdAndProgram_ProgramId(10, 1))
                 .thenReturn(java.util.Optional.of(session));
@@ -160,7 +214,8 @@ class ProgramSessionServiceTest {
     @Test
     void updateSession_whenSessionNotFound_throwsProgramSessionNotFound() {
         ProgramSessionUpdateRequestDTO request =
-                new ProgramSessionUpdateRequestDTO(1, null, Instant.now(), Instant.now().plusSeconds(3600), null);
+                new ProgramSessionUpdateRequestDTO(1, null, Instant.now(), Instant.now().plusSeconds(3600),
+                        SessionLocationType.DIRECT_INPUT, null);
 
         when(sessionRepository.findByProgramSessionIdAndProgram_ProgramId(10, 1))
                 .thenReturn(java.util.Optional.empty());
@@ -177,7 +232,8 @@ class ProgramSessionServiceTest {
         ExtracurricularProgram program = buildProgramFixture(1, managerUser);
         ProgramSession session = buildSessionFixture(10, program, 1);
         ProgramSessionUpdateRequestDTO request =
-                new ProgramSessionUpdateRequestDTO(1, null, Instant.now(), Instant.now().plusSeconds(3600), null);
+                new ProgramSessionUpdateRequestDTO(1, null, Instant.now(), Instant.now().plusSeconds(3600),
+                        SessionLocationType.DIRECT_INPUT, null);
 
         when(sessionRepository.findByProgramSessionIdAndProgram_ProgramId(10, 1))
                 .thenReturn(java.util.Optional.of(session));
@@ -197,7 +253,8 @@ class ProgramSessionServiceTest {
         ExtracurricularProgram program = buildProgramFixture(1, managerUser);
         ProgramSession session = buildSessionFixture(10, program, 1);
         ProgramSessionUpdateRequestDTO request =
-                new ProgramSessionUpdateRequestDTO(1, null, Instant.now(), Instant.now().plusSeconds(3600), null);
+                new ProgramSessionUpdateRequestDTO(1, null, Instant.now(), Instant.now().plusSeconds(3600),
+                        SessionLocationType.DIRECT_INPUT, null);
 
         when(sessionRepository.findByProgramSessionIdAndProgram_ProgramId(10, 1))
                 .thenReturn(java.util.Optional.of(session));
@@ -219,7 +276,7 @@ class ProgramSessionServiceTest {
         Instant startsAt = Instant.now().plusSeconds(3600);
         Instant endsAt = startsAt.minusSeconds(1);
         ProgramSessionUpdateRequestDTO request =
-                new ProgramSessionUpdateRequestDTO(1, null, startsAt, endsAt, null);
+                new ProgramSessionUpdateRequestDTO(1, null, startsAt, endsAt, SessionLocationType.DIRECT_INPUT, null);
 
         when(sessionRepository.findByProgramSessionIdAndProgram_ProgramId(10, 1))
                 .thenReturn(java.util.Optional.of(session));
@@ -239,7 +296,8 @@ class ProgramSessionServiceTest {
         ExtracurricularProgram program = buildProgramFixture(1, managerUser);
         ProgramSession session = buildSessionFixture(10, program, 1);
         ProgramSessionUpdateRequestDTO request =
-                new ProgramSessionUpdateRequestDTO(2, null, Instant.now(), Instant.now().plusSeconds(3600), null);
+                new ProgramSessionUpdateRequestDTO(2, null, Instant.now(), Instant.now().plusSeconds(3600),
+                        SessionLocationType.DIRECT_INPUT, "본관 101호");
 
         when(sessionRepository.findByProgramSessionIdAndProgram_ProgramId(10, 1))
                 .thenReturn(java.util.Optional.of(session));

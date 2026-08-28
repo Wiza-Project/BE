@@ -42,6 +42,9 @@ public interface ProgramSessionRepository extends JpaRepository<ProgramSession, 
 
     Optional<ProgramSession> findByProgramSessionIdAndProgram_ProgramId(Integer programSessionId, Integer programId);
 
+    // "전회차와 동일" 장소 복사 시 직전 회차(sessionNo - 1)를 찾기 위한 조회 메서드.
+    Optional<ProgramSession> findByProgram_ProgramIdAndSessionNo(Integer programId, Integer sessionNo);
+
     /**
      * insertSession과 같은 이유(엔티티에 setter/빌더 없음)로 native UPDATE로 우회한다.
      * WHERE 절에 program_id도 함께 걸어, 다른 프로그램 소속 회차를 실수로 건드리지 않게 한다.

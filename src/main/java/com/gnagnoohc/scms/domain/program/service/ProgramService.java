@@ -14,6 +14,7 @@ import com.gnagnoohc.scms.domain.program.dto.response.ProgramUpdateResponseDTO;
 import com.gnagnoohc.scms.domain.program.entity.ExtracurricularProgram;
 import com.gnagnoohc.scms.domain.program.entity.ProgramApplication;
 import com.gnagnoohc.scms.domain.program.entity.ProgramStatus;
+import com.gnagnoohc.scms.domain.program.entity.SessionLocationType;
 import com.gnagnoohc.scms.domain.program.repository.CompetencyOptionRepository;
 import com.gnagnoohc.scms.domain.program.repository.ExtracurricularProgramRepository;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramFileUploadResponseDTO;
@@ -36,10 +37,13 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -178,17 +182,39 @@ public class ProgramService {
          * 위 (a-1-1)에서 이미 1개 이상임을 확인했으므로, 요청에 담긴 회차를 그대로 순회하며 생성한다.
          * ProgramSessionService.registerSession()과 동일한 리포지토리 메서드를 재사용한다.
          * createdBy는 등록 담당자(managerUserId), 생성 시각은 프로그램 생성에 쓴 now를 그대로 재사용한다.
+         *
+         * locationType=SAME_AS_PREVIOUS인 회차는 아직 DB에 없는(같은 요청 안의) 직전 회차 장소를
+         * 참조해야 하므로, sessionNo 오름차순으로 정렬한 뒤 지금까지 확정된 location을
+         * resolvedLocations에 누적해가며 순서대로 처리한다.
          */
-        for (ProgramSessionRegisterRequestDTO session : request.sessions()) {
+        List<ProgramSessionRegisterRequestDTO> sortedSessions = request.sessions().stream()
+                .sorted(Comparator.comparing(ProgramSessionRegisterRequestDTO::sessionNo))
+                .toList();
+        Map<Integer, String> resolvedLocations = new HashMap<>();
+        for (ProgramSessionRegisterRequestDTO session : sortedSessions) {
+            String location;
+            if (session.locationType() == SessionLocationType.DIRECT_INPUT) {
+                if (!StringUtils.hasText(session.location())) {
+                    throw new BusinessException(ErrorCode.SESSION_LOCATION_REQUIRED);
+                }
+                location = session.location();
+            } else {
+                location = resolvedLocations.get(session.sessionNo() - 1);
+                if (!StringUtils.hasText(location)) {
+                    throw new BusinessException(ErrorCode.PREVIOUS_SESSION_LOCATION_NOT_FOUND);
+                }
+            }
+
             try {
                 programSessionRepository.insertSession(
                         programId, session.sessionNo(), session.sessionName(),
-                        session.startsAt(), session.endsAt(), session.location(),
+                        session.startsAt(), session.endsAt(), location,
                         managerUserId, now);
             } catch (DataIntegrityViolationException e) {
                 // uq_program_session_program_no 위반 = 요청 안에서 같은 회차번호가 중복된 경우.
                 throw new BusinessException(ErrorCode.DUPLICATE_SESSION_NO);
             }
+            resolvedLocations.put(session.sessionNo(), location);
         }
 
         // 등록에 성공했으니, 방금 저장한 값들을 그대로 담아 응답 DTO를 만들어 돌려준다.

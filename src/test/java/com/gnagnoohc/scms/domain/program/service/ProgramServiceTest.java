@@ -13,6 +13,7 @@ import com.gnagnoohc.scms.domain.program.entity.ExtracurricularProgram;
 import com.gnagnoohc.scms.domain.program.entity.ProgramApplication;
 import com.gnagnoohc.scms.domain.program.entity.ProgramSession;
 import com.gnagnoohc.scms.domain.program.entity.ProgramStatus;
+import com.gnagnoohc.scms.domain.program.entity.SessionLocationType;
 import com.gnagnoohc.scms.domain.program.repository.CompetencyOptionRepository;
 import com.gnagnoohc.scms.domain.program.repository.ExtracurricularProgramRepository;
 import com.gnagnoohc.scms.domain.program.repository.ProgramApplicationRepository;
@@ -114,7 +115,8 @@ class ProgramServiceTest {
                 "프로그램명", "설명",
                 recruitmentStartsAt, recruitmentEndsAt, operationStartsAt, operationEndsAt,
                 10, null,
-                List.of(new ProgramSessionRegisterRequestDTO(1, null, operationStartsAt, operationEndsAt, "세미나실"))
+                List.of(new ProgramSessionRegisterRequestDTO(1, null, operationStartsAt, operationEndsAt,
+                        SessionLocationType.DIRECT_INPUT, "세미나실"))
         );
 
         ProgramRegisterResponseDTO response = programService.register(request, 100, 11);
@@ -196,7 +198,8 @@ class ProgramServiceTest {
                 "프로그램명", "설명",
                 recruitmentStartsAt, recruitmentEndsAt, operationStartsAt, operationEndsAt,
                 10, null,
-                List.of(new ProgramSessionRegisterRequestDTO(1, null, operationStartsAt, operationEndsAt, "세미나실"))
+                List.of(new ProgramSessionRegisterRequestDTO(1, null, operationStartsAt, operationEndsAt,
+                        SessionLocationType.DIRECT_INPUT, "세미나실"))
         );
 
         assertThatThrownBy(() -> programService.register(request, 100, 11))
@@ -221,9 +224,9 @@ class ProgramServiceTest {
         Instant operationEndsAt = operationStartsAt.plusSeconds(3600);
 
         ProgramSessionRegisterRequestDTO session1 = new ProgramSessionRegisterRequestDTO(
-                1, "1주차", operationStartsAt, operationEndsAt, "학생회관 3층 세미나실");
+                1, "1주차", operationStartsAt, operationEndsAt, SessionLocationType.DIRECT_INPUT, "학생회관 3층 세미나실");
         ProgramSessionRegisterRequestDTO session2 = new ProgramSessionRegisterRequestDTO(
-                2, "2주차", operationStartsAt, operationEndsAt, "학생회관 4층 세미나실");
+                2, "2주차", operationStartsAt, operationEndsAt, SessionLocationType.DIRECT_INPUT, "학생회관 4층 세미나실");
 
         ProgramRegisterRequestDTO request = new ProgramRegisterRequestDTO(
                 null, 1, 2, 3, null,
@@ -293,7 +296,7 @@ class ProgramServiceTest {
         Instant operationEndsAt = operationStartsAt.plusSeconds(3600);
 
         ProgramSessionRegisterRequestDTO session1 = new ProgramSessionRegisterRequestDTO(
-                1, null, operationStartsAt, operationEndsAt, "세미나실");
+                1, null, operationStartsAt, operationEndsAt, SessionLocationType.DIRECT_INPUT, "세미나실");
 
         ProgramRegisterRequestDTO request = new ProgramRegisterRequestDTO(
                 null, 1, 2, 3, null,
@@ -307,6 +310,75 @@ class ProgramServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.DUPLICATE_SESSION_NO);
+    }
+
+    @Test
+    void register_whenSecondSessionSameAsPrevious_copiesFirstSessionLocationEvenOutOfOrder() throws Exception {
+        when(commonCodeRepository.findByCodeGroupAndActiveTrueOrderBySortOrderAsc("DEPARTMENT"))
+                .thenReturn(List.of(buildCommonCodeFixture(11, "DEPARTMENT", "D200")));
+
+        when(programRepository.insertProgram(
+                any(), any(), any(), any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), any(), any(), any(), any()
+        )).thenReturn(1);
+
+        Instant recruitmentStartsAt = Instant.now();
+        Instant recruitmentEndsAt = recruitmentStartsAt.plusSeconds(3600);
+        Instant operationStartsAt = recruitmentEndsAt;
+        Instant operationEndsAt = operationStartsAt.plusSeconds(3600);
+
+        // 리스트 순서를 일부러 뒤집어(2회차가 1회차보다 먼저) 보내도 sessionNo 기준으로 정렬해 처리되는지 검증한다.
+        ProgramSessionRegisterRequestDTO session2 = new ProgramSessionRegisterRequestDTO(
+                2, "2주차", operationStartsAt, operationEndsAt, SessionLocationType.SAME_AS_PREVIOUS, null);
+        ProgramSessionRegisterRequestDTO session1 = new ProgramSessionRegisterRequestDTO(
+                1, "1주차", operationStartsAt, operationEndsAt, SessionLocationType.DIRECT_INPUT, "학생회관 3층 세미나실");
+
+        ProgramRegisterRequestDTO request = new ProgramRegisterRequestDTO(
+                null, 1, 2, 3, null,
+                "프로그램명", "설명",
+                recruitmentStartsAt, recruitmentEndsAt, operationStartsAt, operationEndsAt,
+                10, null,
+                List.of(session2, session1)
+        );
+
+        programService.register(request, 100, 11);
+
+        verify(programSessionRepository).insertSession(
+                eq(1), eq(1), eq("1주차"), eq(operationStartsAt), eq(operationEndsAt),
+                eq("학생회관 3층 세미나실"), eq(100), any());
+        verify(programSessionRepository).insertSession(
+                eq(1), eq(2), eq("2주차"), eq(operationStartsAt), eq(operationEndsAt),
+                eq("학생회관 3층 세미나실"), eq(100), any());
+    }
+
+    @Test
+    void register_whenFirstSessionSameAsPrevious_throwsPreviousSessionLocationNotFound() throws Exception {
+        when(commonCodeRepository.findByCodeGroupAndActiveTrueOrderBySortOrderAsc("DEPARTMENT"))
+                .thenReturn(List.of(buildCommonCodeFixture(11, "DEPARTMENT", "D200")));
+
+        Instant recruitmentStartsAt = Instant.now();
+        Instant recruitmentEndsAt = recruitmentStartsAt.plusSeconds(3600);
+        Instant operationStartsAt = recruitmentEndsAt;
+        Instant operationEndsAt = operationStartsAt.plusSeconds(3600);
+
+        ProgramSessionRegisterRequestDTO session1 = new ProgramSessionRegisterRequestDTO(
+                1, "1주차", operationStartsAt, operationEndsAt, SessionLocationType.SAME_AS_PREVIOUS, null);
+
+        ProgramRegisterRequestDTO request = new ProgramRegisterRequestDTO(
+                null, 1, 2, 3, null,
+                "프로그램명", "설명",
+                recruitmentStartsAt, recruitmentEndsAt, operationStartsAt, operationEndsAt,
+                10, null,
+                List.of(session1)
+        );
+
+        assertThatThrownBy(() -> programService.register(request, 100, 11))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.PREVIOUS_SESSION_LOCATION_NOT_FOUND);
+
+        verify(programSessionRepository, never()).insertSession(
+                any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
