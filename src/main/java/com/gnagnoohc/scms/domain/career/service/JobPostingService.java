@@ -10,11 +10,7 @@ import com.gnagnoohc.scms.domain.career.helper.CareerBindingHelper;
 import com.gnagnoohc.scms.domain.career.helper.CareerSecurityHelper;
 import com.gnagnoohc.scms.domain.career.repository.CompanyAccountRepository;
 import com.gnagnoohc.scms.domain.career.repository.JobPostingRepository;
-import com.gnagnoohc.scms.domain.user.entity.AppUser;
-import com.gnagnoohc.scms.domain.user.repository.AppUserRepository;
 import com.gnagnoohc.scms.global.common.entity.CommonCode;
-import com.gnagnoohc.scms.global.common.repository.CommonCodeRepository;
-import com.gnagnoohc.scms.global.common.service.CommonCodeService;
 import com.gnagnoohc.scms.global.common.util.DateTimeUtils;
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
@@ -27,8 +23,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.Instant;
-import java.time.OffsetDateTime;
-import java.time.ZoneId;
 import java.util.Map;
 
 /**
@@ -90,7 +84,7 @@ public class JobPostingService {
     /**
      * [학생용] 채용공고 다중 조건 검색 및 목록 페이징 조회
      *
-     * @param cond 검색 필터 파라미터 DTO (직무, 지역, 기업명, 고용형태, 공고구분 등)
+     * @param cond     검색 필터 파라미터 DTO (직무, 지역, 기업명, 고용형태, 공고구분 등)
      * @param pageable 페이징 파라미터
      * @return 채용공고 목록 요약 응답 DTO 페이징 객체
      */
@@ -102,7 +96,7 @@ public class JobPostingService {
     /**
      * [교직원용] 채용공고 전체 및 검수 목록 다중 조건 검색/페이징 조회
      *
-     * @param cond 검색 필터 파라미터 DTO (검수 상태, 공고 구분 등)
+     * @param cond     검색 필터 파라미터 DTO (검수 상태, 공고 구분 등)
      * @param pageable 페이징 파라미터
      * @return 채용공고 목록 요약 응답 DTO 페이징 객체
      */
@@ -171,7 +165,7 @@ public class JobPostingService {
      * [교직원/기업] 채용공고 내용 수정
      *
      * @param jobPostingId 공고 식별자 (PK)
-     * @param requestDTO 공고 수정 요청 DTO
+     * @param requestDTO   공고 수정 요청 DTO
      */
     @Transactional
     public void updateJobPosting(Integer jobPostingId, JobPostingUpdateRequestDTO requestDTO) {
@@ -210,9 +204,9 @@ public class JobPostingService {
     /**
      * [교직원 전용] 채용공고 검수 (승인 / 반려) 처리
      *
-     * @param jobPostingId 공고 식별자 (PK)
+     * @param jobPostingId   공고 식별자 (PK)
      * @param reviewerUserId 로그인한 교직원 사용자 식별자 (reviewed_by)
-     * @param requestDTO 검수 요청 DTO
+     * @param requestDTO     검수 요청 DTO
      */
     @Transactional
     public void reviewJobPosting(Integer jobPostingId, Integer reviewerUserId, JobPostingReviewRequestDTO requestDTO) {
@@ -261,7 +255,8 @@ public class JobPostingService {
         if (jsonNode == null || jsonNode.isNull()) {
             return null;
         }
-        return objectMapper.convertValue(jsonNode, new TypeReference<Map<String, Object>>() {});
+        return objectMapper.convertValue(jsonNode, new TypeReference<Map<String, Object>>() {
+        });
     }
 
     /**
