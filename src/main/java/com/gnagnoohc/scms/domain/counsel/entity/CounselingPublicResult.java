@@ -108,6 +108,57 @@ public class CounselingPublicResult extends BaseCreatedAtEntity {
     }
 
     /**
+     * 정정: 이미 공개된 최신 버전(latest)의 행은 절대 건드리지 않고 versionNo+1인 새 행을 만들어
+     * 즉시 공개한다. 학생이 과거에 어떤 내용을 받았는지, 누가 왜 바꿨는지를 이력으로 증명해야 하기
+     * 때문이다(설계 문서 2절) — CRUD 수정으로 원본을 덮어쓰면 그 증거가 사라진다.
+     * latest가 미공개(DRAFT)면 애초에 "학생에게 공개된 원본"이 없으므로 정정 대상이 아니다 — S010.
+     * 무변경(정규화 후 요약·실행계획이 latest와 완전히 같음)은 실패가 아니라 "정정할 필요가 없는 정상
+     * 요청"이라 별도 코드 S012로 구분한다(S010은 "버전/상태가 어긋남", S012는 "버전은 맞는데 내용이 같음").
+     */
+    public static CounselingPublicResult createCorrection(
+            CounselingPublicResult latest,
+            String resultSummary,
+            String actionPlan,
+            String correctionReason,
+            Integer counselorId,
+            Instant now
+    ) {
+        if (!latest.isPublished()) {
+            throw new BusinessException(ErrorCode.PUBLIC_RESULT_STATE_NOT_ALLOWED);
+        }
+        String normalizedSummary = validateSummary(resultSummary);
+        String normalizedActionPlan = validateActionPlan(actionPlan);
+        String normalizedReason = validateCorrectionReason(correctionReason);
+
+        boolean summaryUnchanged = normalizedSummary.equals(latest.resultSummary);
+        boolean actionPlanUnchanged = java.util.Objects.equals(normalizedActionPlan, latest.actionPlan);
+        if (summaryUnchanged && actionPlanUnchanged) {
+            throw new BusinessException(ErrorCode.PUBLIC_RESULT_NO_CHANGES);
+        }
+
+        CounselingPublicResult correction = new CounselingPublicResult();
+        correction.counselingSession = latest.counselingSession;
+        correction.versionNo = latest.versionNo + 1;
+        correction.resultSummary = normalizedSummary;
+        correction.actionPlan = normalizedActionPlan;
+        // followUpData는 이번 API에서 입력받지 않으므로 직전 버전 값을 그대로 옮겨 보존한다(설계 문서 4절).
+        correction.followUpData = latest.followUpData;
+        correction.correctionReason = normalizedReason;
+        correction.publishedAt = now;
+        correction.createdBy = counselorId;
+        return correction;
+    }
+
+    /** 정정 사유 검증 경계. 앞뒤 공백 제거 후 공백 제외 1자 이상 500자 이하만 허용한다(필수 입력). */
+    private static String validateCorrectionReason(String raw) {
+        String trimmed = raw == null ? "" : raw.strip();
+        if (trimmed.isEmpty() || trimmed.length() > 500) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "정정 사유는 공백 제외 1자 이상 500자 이하여야 합니다.");
+        }
+        return trimmed;
+    }
+
+    /**
      * 공개 요약 검증 경계. 앞뒤 공백만 제거(strip)하고 내부 줄바꿈·공백은 보존한다.
      * 필수 입력이므로 공백 제외 1자 이상 3,000자 이하만 허용한다.
      */
