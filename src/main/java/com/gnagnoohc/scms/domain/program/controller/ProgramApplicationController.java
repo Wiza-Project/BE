@@ -2,6 +2,7 @@ package com.gnagnoohc.scms.domain.program.controller;
 
 import com.gnagnoohc.scms.domain.program.dto.request.ProgramApplicationCancelRequestDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplicationCancelResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplicationDecisionResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplicationSummaryResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplicationSurveyResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplyResponseDTO;
@@ -59,6 +60,15 @@ public class ProgramApplicationController {
             @AuthenticationPrincipal AuthUser authUser) {
         String reason = request != null ? request.reason() : null;
         return ApiResponse.ok(programApplicationService.cancel(programId, applicationId, authUser.getId(), reason));
+    }
+
+    @Operation(summary = "대기 신청 확정", description = "정원에 자리가 난 경우, 본인의 대기(WAITLISTED) 신청을 스스로 확정합니다.")
+    @PostMapping("/{programId}/applications/{applicationId}/confirm")
+    public ApiResponse<ProgramApplicationDecisionResponseDTO> confirm(
+            @PathVariable Integer programId,
+            @PathVariable Integer applicationId,
+            @AuthenticationPrincipal AuthUser authUser) {
+        return ApiResponse.ok(programApplicationService.confirm(programId, applicationId, authUser.getId()));
     }
 
     @Operation(summary = "내 신청 현황 조회", description = "로그인한 학생 본인의 프로그램 참여 신청 현황을 최신 신청순으로 페이지 단위 조회합니다.")
