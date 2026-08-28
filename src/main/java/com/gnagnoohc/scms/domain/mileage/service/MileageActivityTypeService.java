@@ -9,10 +9,12 @@ import com.gnagnoohc.scms.domain.mileage.repository.MileageActivityTypeRepositor
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
@@ -41,7 +43,26 @@ public class MileageActivityTypeService {
                 staffId
         );
 
-        return MileageActivityTypeResponseDTO.from(activityTypeRepository.save(activityType));
+        try {
+            return MileageActivityTypeResponseDTO.from(activityTypeRepository.saveAndFlush(activityType));
+        } catch (DataIntegrityViolationException exception) {
+            if (isActivityCodeConstraintViolation(exception)) {
+                throw new BusinessException(ErrorCode.INVALID_INPUT, "이미 사용 중인 활동 코드입니다.");
+            }
+            throw exception;
+        }
+    }
+
+    private boolean isActivityCodeConstraintViolation(DataIntegrityViolationException exception) {
+        Throwable cause = exception.getMostSpecificCause();
+        String message = cause == null ? exception.getMessage() : cause.getMessage();
+        if (message == null) {
+            return false;
+        }
+
+        String normalizedMessage = message.toLowerCase(Locale.ROOT);
+        return normalizedMessage.contains("activity_code")
+                && (normalizedMessage.contains("duplicate") || normalizedMessage.contains("unique"));
     }
 
     // 정책 등록 화면의 활동 유형 드롭다운용. 비활성화된 유형은 노출하지 않는다.
