@@ -1,6 +1,7 @@
 package com.gnagnoohc.scms.domain.program.service;
 
-import com.gnagnoohc.scms.domain.program.dto.response.CompetencyOptionResponseDTO;
+import com.gnagnoohc.scms.domain.competency.dto.CompetencySummary;
+import com.gnagnoohc.scms.domain.competency.service.CompetencyQueryService;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramAdminDetailResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramAdminListItemResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramDetailResponseDTO;
@@ -15,7 +16,6 @@ import com.gnagnoohc.scms.domain.program.entity.ExtracurricularProgram;
 import com.gnagnoohc.scms.domain.program.entity.ProgramApplication;
 import com.gnagnoohc.scms.domain.program.entity.ProgramStatus;
 import com.gnagnoohc.scms.domain.program.entity.SessionLocationType;
-import com.gnagnoohc.scms.domain.program.repository.CompetencyOptionRepository;
 import com.gnagnoohc.scms.domain.program.repository.ExtracurricularProgramRepository;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramFileUploadResponseDTO;
 import com.gnagnoohc.scms.domain.program.repository.ProgramApplicationRepository;
@@ -71,7 +71,7 @@ public class ProgramService {
     private static final Set<String> OPERATION_PLAN_EXTENSIONS = Set.of("pdf");
 
     private final ExtracurricularProgramRepository programRepository;
-    private final CompetencyOptionRepository competencyOptionRepository;
+    private final CompetencyQueryService competencyQueryService;
     private final CommonCodeRepository commonCodeRepository;
     private final ProgramSessionRepository programSessionRepository;
     private final ProgramApplicationRepository applicationRepository;
@@ -609,12 +609,9 @@ public class ProgramService {
                         ProgramApplicationRepository.MyApplicationStatusProjection::getStatus));
     }
 
-    // 프로그램 등록 폼의 핵심역량 드롭다운용 옵션 목록. 최상위(하위 역량 없음) + 활성 상태만 노출한다.
-    public List<CompetencyOptionResponseDTO> getCompetencyOptions() {
-        return competencyOptionRepository.findByParentCompetencyIsNullAndActiveTrueOrderByDisplayOrderAsc()
-                .stream()
-                .map(CompetencyOptionResponseDTO::from)
-                .toList();
+    // 핵심역량 드롭다운용 옵션 목록. 학생용 화면(StudentProgramController)에서 사용 — 실제 조회는 핵심역량 도메인에 위임한다.
+    public List<CompetencySummary> getCompetencyOptions() {
+        return competencyQueryService.getActiveTopLevelCompetencies();
     }
 
     /**

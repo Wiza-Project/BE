@@ -1,6 +1,7 @@
 package com.gnagnoohc.scms.domain.program.service;
 
 import com.gnagnoohc.scms.domain.competency.entity.Competency;
+import com.gnagnoohc.scms.domain.competency.service.CompetencyQueryService;
 import com.gnagnoohc.scms.domain.program.dto.request.ProgramRegisterRequestDTO;
 import com.gnagnoohc.scms.domain.program.dto.request.ProgramSessionRegisterRequestDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramAdminListItemResponseDTO;
@@ -14,7 +15,6 @@ import com.gnagnoohc.scms.domain.program.entity.ProgramApplication;
 import com.gnagnoohc.scms.domain.program.entity.ProgramSession;
 import com.gnagnoohc.scms.domain.program.entity.ProgramStatus;
 import com.gnagnoohc.scms.domain.program.entity.SessionLocationType;
-import com.gnagnoohc.scms.domain.program.repository.CompetencyOptionRepository;
 import com.gnagnoohc.scms.domain.program.repository.ExtracurricularProgramRepository;
 import com.gnagnoohc.scms.domain.program.repository.ProgramApplicationRepository;
 import com.gnagnoohc.scms.domain.program.repository.ProgramSessionRepository;
@@ -68,7 +68,7 @@ class ProgramServiceTest {
     ExtracurricularProgramRepository programRepository;
 
     @Mock
-    CompetencyOptionRepository competencyOptionRepository;
+    CompetencyQueryService competencyQueryService;
 
     @Mock
     CommonCodeRepository commonCodeRepository;
