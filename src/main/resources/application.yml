@@ -43,6 +43,9 @@ app:
     # secret 은 application-secret.yml 에 작성
   file:
     upload-dir: ${user.home}/scms-uploads
+  career:
+    matching:
+      top-k: 10
 
 springdoc:
   swagger-ui:

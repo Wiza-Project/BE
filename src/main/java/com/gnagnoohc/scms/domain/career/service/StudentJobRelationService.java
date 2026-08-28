@@ -10,7 +10,11 @@ import com.gnagnoohc.scms.domain.career.helper.CareerSecurityHelper;
 import com.gnagnoohc.scms.domain.career.repository.JobPostingRepository;
 import com.gnagnoohc.scms.domain.career.repository.StudentJobRelationRepository;
 import com.gnagnoohc.scms.domain.user.entity.AppUser;
+import com.gnagnoohc.scms.domain.user.entity.UserConsent;
 import com.gnagnoohc.scms.domain.user.repository.AppUserRepository;
+import com.gnagnoohc.scms.domain.user.service.consent.ConsentModuleCode;
+import com.gnagnoohc.scms.domain.user.service.consent.ConsentType;
+import com.gnagnoohc.scms.domain.user.service.consent.ConsentVerifier;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;
 import com.gnagnoohc.scms.global.common.helper.JdbcUpsertHelper;
 import com.gnagnoohc.scms.global.common.util.DateTimeUtils;
@@ -32,6 +36,7 @@ import java.time.OffsetDateTime;
  * <p><strong>[가이드라인 및 아키텍처 원칙]</strong></p>
  * <ul>
  *   <li><b>상태 제어:</b> 엔티티의 불변성을 유지하고 비즈니스 메서드({@code apply()}, {@code cancelApplication()}, {@code toggleBookmark()})를 통해 상태 전이 수행</li>
+ *   <li><b>동의 검증 및 증빙 FK 바인딩:</b> 공통 {@link ConsentVerifier}를 통해 취·창업 필수 동의 게이트 검증 및 제3자 제공 동의({@code UserConsent}) 연동</li>
  *   <li><b>보안 및 유효성 검증:</b> 공고의 게시 상태({@code PUBLISHED}), 접수 마감 기한, 중복 지원 여부를 트랜잭션 내에서 철저히 검증</li>
  *   <li><b>시간 표준화:</b> DB의 UTC/TIMESTAMPTZ 일시({@link Instant})를 한국 표준시 KST({@link OffsetDateTime})로 변환하여 DTO 매핑</li>
  * </ul>
@@ -49,6 +54,7 @@ public class StudentJobRelationService {
     private final AppUserRepository appUserRepository;
     private final JdbcUpsertHelper jdbcUpsertHelper;
     private final CareerSecurityHelper careerSecurityHelper;
+    private final ConsentVerifier consentVerifier;
 
     /**
      * [학생] 온라인 채용공고 지원 신청
@@ -59,6 +65,7 @@ public class StudentJobRelationService {
      *   <li>2. 공고 게시 상태({@code PUBLISHED}) 및 접수 마감 기한 초과 여부 검증</li>
      *   <li>3. 기존 유효 지원 건에 대한 중복 지원 방지 검증</li>
      *   <li>4. 관계 엔티티 조회 또는 신규 생성 후 {@code apply()} 비즈니스 메서드 호출</li>
+     *   <li>5. 제3자 제공 동의 원장 조회 후 {@code apply(consent, "STUDENT_DIRECT")} 호출로 FK 영속화</li>
      * </ul>
      *
      * @param studentUserId 학생 식별자 (app_user.user_id)
@@ -67,28 +74,43 @@ public class StudentJobRelationService {
      */
     @Transactional
     public JobRelationResponseDTO applyJob(Integer studentUserId, JobRelationRequestDTO requestDTO) {
-        JobPosting jobPosting = jobPostingRepository.findById(requestDTO.getJobPostingId())
-                .orElseThrow(() -> new BusinessException(ErrorCode.JOB_POSTING_NOT_FOUND));
+        Instant now = Instant.now();
 
         AppUser student = appUserRepository.findById(studentUserId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
+        // 취·창업(CAREER) 필수 동의(PERSONAL_INFO + THIRD_PARTY_SHARE) 일괄 게이트 검사
+        if (!consentVerifier.hasAgreedAllRequired(studentUserId, ConsentModuleCode.CAREER, now)) {
+            throw new BusinessException(ErrorCode.REQUIRED_CONSENT_NOT_AGREED);
+        }
+
+        JobPosting jobPosting = jobPostingRepository.findById(requestDTO.getJobPostingId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.JOB_POSTING_NOT_FOUND));
+
         if (!"PUBLISHED".equalsIgnoreCase(jobPosting.getPostingStatus())) {
             throw new BusinessException(ErrorCode.JOB_POSTING_NOT_PUBLISHED);
         }
-        if (jobPosting.getApplicationEndsAt().isBefore(Instant.now())) {
+        if (jobPosting.getApplicationEndsAt() != null && jobPosting.getApplicationEndsAt().isBefore(now)) {
             throw new BusinessException(ErrorCode.APPLICATION_PERIOD_EXPIRED);
         }
 
-        // 1. 관계 Row 원자적 확보 (없으면 ON CONFLICT DO NOTHING 삽입 후 조회)
+        // 관계 Row 원자적 확보 (없으면 ON CONFLICT DO NOTHING 삽입 후 조회)
         StudentJobRelation relation = getOrCreateRelation(student, jobPosting);
 
-        // 2. 이미 활성 지원 상태인 경우에만 중복 지원 예외 발생
+        // 이미 활성 지원 상태인 경우에만 중복 지원 예외 발생
         if (relation.getAppliedAt() != null && relation.getCanceledAt() == null) {
             throw new BusinessException(ErrorCode.JOB_POSTING_ALREADY_APPLIED);
         }
 
-        relation.apply(null, "STUDENT_DIRECT");
+        // student_job_relation FK에 채울 제3자 제공 동의 엔티티 조회
+        UserConsent consent = consentVerifier
+                .findCurrentValidConsent(studentUserId, ConsentModuleCode.CAREER, ConsentType.THIRD_PARTY_SHARE, now)
+                .orElseThrow(() -> new BusinessException(ErrorCode.REQUIRED_CONSENT_NOT_AGREED));
+
+        relation.apply(consent, "STUDENT_DIRECT");
+
+        log.info("[StudentJobRelationService] 공고 지원 완료. studentUserId: {}, jobPostingId: {}, consentId: {}",
+                studentUserId, jobPosting.getJobPostingId(), consent.getUserConsentId());
 
         return mapToRelationResponseDTO(relation);
     }
@@ -111,7 +133,7 @@ public class StudentJobRelationService {
         JobPosting jobPosting = jobPostingRepository.findById(jobPostingId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.JOB_POSTING_NOT_FOUND));
 
-        if (jobPosting.getApplicationEndsAt().isBefore(Instant.now())) {
+        if (jobPosting.getApplicationEndsAt() != null && jobPosting.getApplicationEndsAt().isBefore(Instant.now())) {
             throw new BusinessException(ErrorCode.APPLICATION_PERIOD_EXPIRED);
         }
 
@@ -134,6 +156,7 @@ public class StudentJobRelationService {
      *   <li>1. 공고 및 학생 유효성 검증</li>
      *   <li>2. 관계 엔티티 조회 또는 신규 생성 후 {@code toggleBookmark()} 호출</li>
      *   <li>3. 북마크 일시의 존재 여부에 따라 가상 플래그 {@code isScrapped}를 조립하여 반환</li>
+     *   <li>4. 북마크 일시 존재 여부에 따라 응답 DTO 반환</li>
      * </ul>
      *
      * @param studentUserId 학생 식별자 (app_user.user_id)
@@ -142,6 +165,13 @@ public class StudentJobRelationService {
      */
     @Transactional
     public JobScrapToggleResponseDTO toggleScrap(Integer studentUserId, Integer jobPostingId) {
+        Instant now = Instant.now();
+
+        // 스크랩 쓰기 개인정보 동의 검증
+        if (!consentVerifier.hasValidConsent(studentUserId, ConsentModuleCode.CAREER, ConsentType.PERSONAL_INFO, now)) {
+            throw new BusinessException(ErrorCode.REQUIRED_CONSENT_NOT_AGREED);
+        }
+
         JobPosting jobPosting = jobPostingRepository.findById(jobPostingId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.JOB_POSTING_NOT_FOUND));
 
