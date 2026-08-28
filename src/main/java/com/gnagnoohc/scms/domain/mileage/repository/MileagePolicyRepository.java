@@ -36,6 +36,31 @@ public interface MileagePolicyRepository extends JpaRepository<MileagePolicy, In
                                @Param("academicYear") Integer academicYear,
                                @Param("semesterCode") String semesterCode);
 
+    Optional<MileagePolicy> findTopByActivityType_ActivityTypeIdAndAcademicYearAndSemesterCodeOrderByVersionNoDesc(
+            Integer activityTypeId, Integer academicYear, String semesterCode);
+
+    /** 프로그램의 핵심역량에 연결된 비교과 전용 정책을 최신 버전부터 조회한다. */
+    @Query("""
+            select p
+            from MileagePolicy p
+            join fetch p.activityType activityType
+            join fetch activityType.competency competency
+            where competency.competencyId = :competencyId
+              and activityType.categoryCode = :categoryCode
+              and activityType.earningRoute = :earningRoute
+              and p.policyStatus = 'ACTIVE'
+              and activityType.active = true
+              and p.validFrom <= :asOfDate
+              and (p.validTo is null or p.validTo >= :asOfDate)
+            order by p.versionNo desc
+            """)
+    List<MileagePolicy> findActiveExtracurricularPoliciesByCompetencyOn(
+            @Param("competencyId") Integer competencyId,
+            @Param("categoryCode") String categoryCode,
+            @Param("earningRoute") String earningRoute,
+            @Param("asOfDate") LocalDate asOfDate
+    );
+
     /**
      * 정책 row에 비관적 락을 걸어 조회한다(ExtracurricularProgramRepository.findByIdForUpdate와 동일 패턴).
      * update()의 조회→null-병합→UPDATE 전체를 이 락 아래에서 수행해야, 두 관리자가 같은 정책을

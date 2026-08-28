@@ -40,7 +40,15 @@ public class MileageTransaction extends BaseCreatedAtEntity {
             ProgramApplication application,
             Instant postedAt
     ) {
-        MileagePolicy policy = application.getProgram().getMileagePolicy();
+        return earnFromProgramCompletion(application, application.getProgram().getMileagePolicy(), postedAt);
+    }
+
+    /** 마일리지 영역에서 핵심역량으로 해석한 비교과 정책으로 적립 원장을 생성한다. */
+    public static MileageTransaction earnFromProgramCompletion(
+            ProgramApplication application,
+            MileagePolicy policy,
+            Instant postedAt
+    ) {
 
         MileageTransaction transaction = new MileageTransaction();
         transaction.student = application.getStudent();

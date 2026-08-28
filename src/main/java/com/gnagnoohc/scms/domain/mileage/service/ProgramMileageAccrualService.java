@@ -1,14 +1,16 @@
 package com.gnagnoohc.scms.domain.mileage.service;
 
+import com.gnagnoohc.scms.domain.competency.entity.Competency;
 import com.gnagnoohc.scms.domain.mileage.entity.MileagePolicy;
 import com.gnagnoohc.scms.domain.mileage.entity.MileageTransaction;
+import com.gnagnoohc.scms.domain.mileage.repository.MileagePolicyRepository;
 import com.gnagnoohc.scms.domain.mileage.repository.MileageTransactionRepository;
 import com.gnagnoohc.scms.domain.mileage.repository.ProgramApplicationMileageRepository;
 import com.gnagnoohc.scms.domain.program.entity.ProgramApplication;
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,11 +19,11 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.Objects;
 
 /** 비교과 이수 완료 건에 연결된 정책 점수만 마일리지 원장에 적립한다. */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class ProgramMileageAccrualService {
 
     private static final int BATCH_SIZE = 100;
@@ -30,6 +32,24 @@ public class ProgramMileageAccrualService {
 
     private final ProgramApplicationMileageRepository programApplicationRepository;
     private final MileageTransactionRepository mileageTransactionRepository;
+    private final MileagePolicyRepository mileagePolicyRepository;
+
+    @Autowired
+    public ProgramMileageAccrualService(
+            ProgramApplicationMileageRepository programApplicationRepository,
+            MileageTransactionRepository mileageTransactionRepository,
+            MileagePolicyRepository mileagePolicyRepository) {
+        this.programApplicationRepository = programApplicationRepository;
+        this.mileageTransactionRepository = mileageTransactionRepository;
+        this.mileagePolicyRepository = mileagePolicyRepository;
+    }
+
+    /** 기존 마일리지 단위 테스트와의 생성 호환을 유지한다. 운영 빈은 3개 의존성을 주입한다. */
+    public ProgramMileageAccrualService(
+            ProgramApplicationMileageRepository programApplicationRepository,
+            MileageTransactionRepository mileageTransactionRepository) {
+        this(programApplicationRepository, mileageTransactionRepository, null);
+    }
 
     /** 특정 비교과 신청이 이수 완료된 경우 고정 정책 점수로 한 번만 적립한다. */
     @Transactional
@@ -50,14 +70,15 @@ public class ProgramMileageAccrualService {
                         ErrorCode.NOT_COMPLETED,
                         "이수 완료된 비교과 프로그램 신청을 찾을 수 없습니다."));
 
-        MileagePolicy policy = application.getProgram().getMileagePolicy();
         LocalDate completionDate = application.getCompletedAt() == null
                 ? LocalDate.now(BUSINESS_ZONE)
                 : application.getCompletedAt().atZone(BUSINESS_ZONE).toLocalDate();
-        validatePolicy(policy, completionDate);
+        Competency programCompetency = application.getProgram().getCompetency();
+        MileagePolicy policy = resolvePolicy(application, programCompetency, completionDate);
+        validatePolicy(policy, programCompetency, completionDate);
 
         mileageTransactionRepository.save(
-                MileageTransaction.earnFromProgramCompletion(application, Instant.now()));
+                MileageTransaction.earnFromProgramCompletion(application, policy, Instant.now()));
         return true;
     }
 
@@ -81,7 +102,57 @@ public class ProgramMileageAccrualService {
         return accruedCount;
     }
 
-    private void validatePolicy(MileagePolicy policy, LocalDate completionDate) {
+    private MileagePolicy resolvePolicy(ProgramApplication application,
+                                        Competency programCompetency,
+                                        LocalDate completionDate) {
+        MileagePolicy linkedPolicy = application.getProgram().getMileagePolicy();
+        if (linkedPolicy != null
+                && !ExtracurricularMileagePolicyDefinition.isExtracurricular(linkedPolicy.getActivityType())) {
+            return linkedPolicy;
+        }
+        if (isUsablePolicy(linkedPolicy, programCompetency, completionDate)) {
+            return linkedPolicy;
+        }
+
+        if (mileagePolicyRepository == null
+                || programCompetency == null
+                || programCompetency.getCompetencyId() == null) {
+            return null;
+        }
+
+        return mileagePolicyRepository.findActiveExtracurricularPoliciesByCompetencyOn(
+                        programCompetency.getCompetencyId(),
+                        ExtracurricularMileagePolicyDefinition.CATEGORY_CODE,
+                        ExtracurricularMileagePolicyDefinition.EARNING_ROUTE,
+                        completionDate)
+                .stream()
+                .filter(policy -> isUsablePolicy(policy, programCompetency, completionDate))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private boolean isUsablePolicy(MileagePolicy policy,
+                                   Competency programCompetency,
+                                   LocalDate completionDate) {
+        return policy != null
+                && "ACTIVE".equalsIgnoreCase(policy.getPolicyStatus())
+                && ExtracurricularMileagePolicyDefinition.isExtracurricular(policy.getActivityType())
+                && policy.getActivityType().isActive()
+                && sameCompetency(policy.getActivityType().getCompetency(), programCompetency)
+                && policy.getPoints() != null
+                && policy.getPoints().compareTo(ExtracurricularMileagePolicyDefinition.POINTS) == 0
+                && policy.isApplicableOn(completionDate);
+    }
+
+    private boolean sameCompetency(Competency policyCompetency, Competency programCompetency) {
+        return policyCompetency != null
+                && programCompetency != null
+                && Objects.equals(policyCompetency.getCompetencyId(), programCompetency.getCompetencyId());
+    }
+
+    private void validatePolicy(MileagePolicy policy,
+                                Competency programCompetency,
+                                LocalDate completionDate) {
         if (policy == null
                 || !"ACTIVE".equalsIgnoreCase(policy.getPolicyStatus())
                 || policy.getActivityType() == null
@@ -93,6 +164,14 @@ public class ProgramMileageAccrualService {
             throw new BusinessException(
                     ErrorCode.MILEAGE_POLICY_NOT_FOUND,
                     "이수일에 적용할 수 있는 마일리지 정책이 없습니다.");
+        }
+
+        if (ExtracurricularMileagePolicyDefinition.isExtracurricular(policy.getActivityType())
+                && (policy.getPoints().compareTo(ExtracurricularMileagePolicyDefinition.POINTS) != 0
+                || !sameCompetency(policy.getActivityType().getCompetency(), programCompetency))) {
+            throw new BusinessException(
+                    ErrorCode.MILEAGE_POLICY_NOT_FOUND,
+                    "프로그램 핵심역량에 맞는 5점 비교과 마일리지 정책이 없습니다.");
         }
     }
 }

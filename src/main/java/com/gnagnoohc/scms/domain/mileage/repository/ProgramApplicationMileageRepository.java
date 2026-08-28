@@ -21,6 +21,7 @@ public interface ProgramApplicationMileageRepository extends JpaRepository<Progr
             from ProgramApplication a
             join fetch a.student
             join fetch a.program program
+            join fetch program.competency programCompetency
             left join fetch program.mileagePolicy policy
             left join fetch policy.activityType activityType
             left join fetch activityType.competency
@@ -37,6 +38,7 @@ public interface ProgramApplicationMileageRepository extends JpaRepository<Progr
             from ProgramApplication a
             join fetch a.student
             join fetch a.program program
+            join fetch program.competency programCompetency
             left join fetch program.mileagePolicy policy
             left join fetch policy.activityType activityType
             left join fetch activityType.competency

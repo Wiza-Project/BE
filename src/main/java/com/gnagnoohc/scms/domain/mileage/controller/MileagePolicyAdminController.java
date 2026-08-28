@@ -1,8 +1,10 @@
 package com.gnagnoohc.scms.domain.mileage.controller;
 
+import com.gnagnoohc.scms.domain.mileage.DTO.request.ExtracurricularMileagePolicySetupRequestDTO;
 import com.gnagnoohc.scms.domain.mileage.DTO.request.MileagePolicyRegisterRequestDTO;
 import com.gnagnoohc.scms.domain.mileage.DTO.request.MileagePolicyUpdateRequestDTO;
 import com.gnagnoohc.scms.domain.mileage.DTO.response.MileagePolicyResponseDTO;
+import com.gnagnoohc.scms.domain.mileage.service.ExtracurricularMileagePolicySetupService;
 import com.gnagnoohc.scms.domain.mileage.service.MileagePolicyService;
 import com.gnagnoohc.scms.global.common.dto.ApiResponse;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;
@@ -27,6 +29,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 /** 활동 유형별 마일리지 점수 기준(정책) 등록/조회/수정. 관리자(AD100)만 사용할 수 있다. */
 @Tag(name = "MileagePolicyAdmin", description = "마일리지 활동별 점수 기준(정책) 관리")
 @RestController
@@ -36,6 +40,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class MileagePolicyAdminController {
 
     private final MileagePolicyService mileagePolicyService;
+    private final ExtracurricularMileagePolicySetupService extracurricularMileagePolicySetupService;
 
     @Operation(summary = "마일리지 정책 등록", description = "활동 유형별 마일리지 지급 점수와 적용 기간을 등록합니다. 버전 번호는 서버가 자동으로 채번합니다.")
     @PostMapping
@@ -44,6 +49,15 @@ public class MileagePolicyAdminController {
             @Valid @RequestBody MileagePolicyRegisterRequestDTO request,
             @AuthenticationPrincipal AuthUser authUser) {
         return ApiResponse.ok(mileagePolicyService.register(request, authUser.getId()));
+    }
+
+    @Operation(summary = "비교과 핵심역량별 5점 정책 일괄 구성",
+            description = "C100~C600에 비교과 활동유형을 각각 연결하고, 프로그램 이수 1건당 5점인 정책을 구성합니다.")
+    @PostMapping("/extracurricular/defaults")
+    public ApiResponse<List<MileagePolicyResponseDTO>> setupExtracurricularDefaults(
+            @Valid @RequestBody ExtracurricularMileagePolicySetupRequestDTO request,
+            @AuthenticationPrincipal AuthUser authUser) {
+        return ApiResponse.ok(extracurricularMileagePolicySetupService.setup(request, authUser.getId()));
     }
 
     @Operation(summary = "마일리지 정책 목록 조회", description = "활동 유형/학년도/학기/상태로 필터링하여 정책 목록을 페이지 단위로 조회합니다.")
