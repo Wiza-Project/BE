@@ -8,20 +8,31 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
  * 공개 상담 결과 조회·저장을 담당한다. 결과 자체는 별도 잠금이 필요 없다 — 회기(또는 최종 완료 시
  * 예약·배정) 행을 먼저 잠그는 CounselingPublicResultService의 쓰기 트랜잭션이 접근을 직렬화한다.
+ * 체크리스트 10번(정정)부터는 회기당 여러 버전 행이 존재할 수 있으므로, "회기당 한 행"을 전제하는
+ * 모호한 단일 행 조회(findByCounselingSessionCounselingSessionId)는 두지 않는다 — 남겨두면 v2가
+ * 생기는 순간 IncorrectResultSizeDataAccessException으로 터진다.
  */
 public interface CounselingPublicResultRepository extends JpaRepository<CounselingPublicResult, Integer> {
 
-    /** 체크리스트 9번 범위는 회기당 한 행(versionNo=1)만 존재하므로 상담사 조회·저장은 이 메서드로 충분하다. */
-    Optional<CounselingPublicResult> findByCounselingSessionCounselingSessionId(Integer sessionId);
+    /** 회기의 최신 결과 한 건(DRAFT 포함). 상담사 조회·초안 저장·일반 공개·최종 완료가 사용한다. */
+    Optional<CounselingPublicResult> findTopByCounselingSessionCounselingSessionIdOrderByVersionNoDesc(
+            Integer sessionId
+    );
 
-    /** 특정 버전을 지정 조회한다. 체크리스트 10번(정정·버전 추가)과 호환되는 모양으로 미리 둔다. */
-    Optional<CounselingPublicResult> findByCounselingSessionCounselingSessionIdAndVersionNo(
-            Integer sessionId, Integer versionNo
+    /** 회기의 최신 공개(PUBLISHED) 결과 한 건. 정정의 기준 버전 조회가 사용한다. */
+    Optional<CounselingPublicResult> findTopByCounselingSessionCounselingSessionIdAndPublishedAtIsNotNullOrderByVersionNoDesc(
+            Integer sessionId
+    );
+
+    /** 회기의 공개된 모든 버전을 최신순으로. 상담사 이력 조회가 사용한다. */
+    List<CounselingPublicResult> findByCounselingSessionCounselingSessionIdAndPublishedAtIsNotNullOrderByVersionNoDesc(
+            Integer sessionId
     );
 
     /**

@@ -132,7 +132,7 @@ public class BoardService {
         BoardType boardType = parseBoardType(boardTypeRaw);
         BoardPost post = getPostForWrite(boardType, postId);
 
-        String categoryCode = request.clearCategoryCode()
+        String categoryCode = Boolean.TRUE.equals(request.clearCategoryCode())
                 ? null
                 : request.categoryCode() != null
                         ? resolveCategoryCodeForWrite(boardType, request.categoryCode())
