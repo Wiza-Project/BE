@@ -218,6 +218,69 @@ class AssessmentRecommendationServiceTest {
     }
 
     @Test
+    void recommend_clampsRemainingCapacityToZeroWhenApplicantsExceedCapacity() throws Exception {
+        when(assessmentResultService.getResult(ATTEMPT_ID, STUDENT_ID))
+                .thenReturn(resultOf(List.of(score(1, 1, 30.0))));
+
+        Competency weak1 = competency(1, 1);
+        stubRecruitingPrograms(1, program(501, weak1, 5));   // 정원 5
+        when(programApplicationRepository.countActiveApplicantsByProgramIds(anyList()))
+                .thenReturn(List.of(applicantCount(501, 8L)));   // 신청 8 > 정원 5
+        when(programApplicationRepository.findMyApplicationStatusesByProgramIds(eq(STUDENT_ID), anyList()))
+                .thenReturn(List.of());
+
+        RecommendedProgramsResponse.RecommendedProgram program =
+                assessmentRecommendationService.recommend(ATTEMPT_ID, STUDENT_ID)
+                        .weakCompetencies().get(0).programs().get(0);
+
+        assertThat(program.applicantCount()).isEqualTo(8L);
+        assertThat(program.remainingCapacity()).isZero();
+    }
+
+    @Test
+    void recommend_mapsNullMileagePolicyToNullPoints() throws Exception {
+        when(assessmentResultService.getResult(ATTEMPT_ID, STUDENT_ID))
+                .thenReturn(resultOf(List.of(score(1, 1, 30.0))));
+
+        Competency weak1 = competency(1, 1);
+        stubRecruitingPrograms(1, program(502, weak1, 10));   // program() 헬퍼는 mileagePolicy를 안 넣으므로 null
+        when(programApplicationRepository.countActiveApplicantsByProgramIds(anyList())).thenReturn(List.of());
+        when(programApplicationRepository.findMyApplicationStatusesByProgramIds(eq(STUDENT_ID), anyList()))
+                .thenReturn(List.of());
+
+        RecommendedProgramsResponse.RecommendedProgram program =
+                assessmentRecommendationService.recommend(ATTEMPT_ID, STUDENT_ID)
+                        .weakCompetencies().get(0).programs().get(0);
+
+        assertThat(program.mileagePoints()).isNull();
+    }
+
+    @Test
+    void recommend_mapsWaitlistedAndRejectedStatusLabels() throws Exception {
+        when(assessmentResultService.getResult(ATTEMPT_ID, STUDENT_ID))
+                .thenReturn(resultOf(List.of(score(1, 1, 30.0))));
+
+        Competency weak1 = competency(1, 1);
+        stubRecruitingPrograms(1, program(601, weak1, 10), program(602, weak1, 10));
+        when(programApplicationRepository.countActiveApplicantsByProgramIds(anyList())).thenReturn(List.of());
+        when(programApplicationRepository.findMyApplicationStatusesByProgramIds(eq(STUDENT_ID), anyList()))
+                .thenReturn(List.of(myStatus(601, "WAITLISTED"), myStatus(602, "REJECTED")));
+
+        List<RecommendedProgramsResponse.RecommendedProgram> programs =
+                assessmentRecommendationService.recommend(ATTEMPT_ID, STUDENT_ID)
+                        .weakCompetencies().get(0).programs();
+
+        assertThat(programs).filteredOn(p -> p.programId().equals(601)).singleElement().satisfies(p -> {
+            assertThat(p.myApplicationStatus()).isEqualTo("WAITLISTED");
+            assertThat(p.myApplicationStatusLabel()).isEqualTo("대기");
+        });
+        assertThat(programs).filteredOn(p -> p.programId().equals(602)).singleElement().satisfies(p -> {
+            assertThat(p.myApplicationStatus()).isEqualTo("REJECTED");
+            assertThat(p.myApplicationStatusLabel()).isEqualTo("반려");
+        });
+    }
+
+    @Test
     void recommend_whenNoWeakCompetenciesScored_returnsEmptyWithoutQueryingPrograms() {
         when(assessmentResultService.getResult(ATTEMPT_ID, STUDENT_ID))
                 .thenReturn(resultOf(List.of(

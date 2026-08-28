@@ -72,32 +72,35 @@ public class AssessmentRecommendationService {
             return RecommendedProgramsResponse.empty(attemptId);
         }
 
-        // 취약 역량마다 "모집중(DRAFT) + 해당 역량 연계" 프로그램을 기존 학생용 목록 조회로 가져온다.
-        Map<Integer, List<ExtracurricularProgram>> candidatesByCompetency = new LinkedHashMap<>();
+        // 취약 역량마다 "모집중(DRAFT) + 해당 역량 연계" 프로그램을 기존 학생용 목록 조회로 가져온 뒤,
+        // 곧바로 무작위 표본(취약 역량당 최대 PROGRAMS_PER_COMPETENCY건)까지 확정한다. 이 표본이 그대로 응답에 쓰인다.
+        Map<Integer, List<ExtracurricularProgram>> sampledByCompetency = new LinkedHashMap<>();
         for (CompetencyResult weak : weakCompetencies) {
-            candidatesByCompetency.put(weak.competencyId(), programRepository.search(
+            List<ExtracurricularProgram> recruiting = programRepository.search(
                     ProgramStatus.DRAFT, null, weak.competencyId(),
-                    PageRequest.of(0, CANDIDATE_FETCH_LIMIT)).getContent());
+                    PageRequest.of(0, CANDIDATE_FETCH_LIMIT)).getContent();
+            sampledByCompetency.put(weak.competencyId(), sample(recruiting, PROGRAMS_PER_COMPETENCY));
         }
 
-        List<ExtracurricularProgram> allCandidates = candidatesByCompetency.values().stream()
+        // 정원 점유·본인 신청상태 배치 조회는 후보 전체가 아니라 최종 노출될 표본(전 역량 합쳐 최대 6건)에만 돌린다.
+        List<ExtracurricularProgram> exposedPrograms = sampledByCompetency.values().stream()
                 .flatMap(List::stream)
                 .toList();
-        Map<Integer, Long> applicantCounts = countActiveApplicants(allCandidates);
-        Map<Integer, String> myApplicationStatuses = findMyApplicationStatuses(allCandidates, studentId);
+        Map<Integer, Long> applicantCounts = countActiveApplicants(exposedPrograms);
+        Map<Integer, String> myApplicationStatuses = findMyApplicationStatuses(exposedPrograms, studentId);
 
         List<WeakCompetencyGroup> groups = weakCompetencies.stream()
-                .map(weak -> toGroup(weak, candidatesByCompetency.get(weak.competencyId()),
+                .map(weak -> toGroup(weak, sampledByCompetency.get(weak.competencyId()),
                         applicantCounts, myApplicationStatuses))
                 .toList();
 
         return new RecommendedProgramsResponse(attemptId, groups);
     }
 
-    private WeakCompetencyGroup toGroup(CompetencyResult weak, List<ExtracurricularProgram> programs,
+    private WeakCompetencyGroup toGroup(CompetencyResult weak, List<ExtracurricularProgram> sampledPrograms,
                                         Map<Integer, Long> applicantCounts,
                                         Map<Integer, String> myApplicationStatuses) {
-        List<RecommendedProgram> items = sample(programs, PROGRAMS_PER_COMPETENCY).stream()
+        List<RecommendedProgram> items = sampledPrograms.stream()
                 .map(program -> toProgram(program,
                         applicantCounts.getOrDefault(program.getProgramId(), 0L),
                         myApplicationStatuses.get(program.getProgramId())))
@@ -137,7 +140,7 @@ public class AssessmentRecommendationService {
                 myApplicationStatus != null ? ApplicationStatus.valueOf(myApplicationStatus).getLabel() : null);
     }
 
-    // 추천 후보 프로그램들의 정원 점유(신청완료/승인) 인원을 한 번의 GROUP BY 쿼리로 집계한다(N+1 방지).
+    // 최종 노출 프로그램들의 정원 점유(신청완료/승인) 인원을 한 번의 GROUP BY 쿼리로 집계한다(N+1 방지).
     private Map<Integer, Long> countActiveApplicants(List<ExtracurricularProgram> programs) {
         if (programs.isEmpty()) {
             return Map.of();
@@ -147,7 +150,7 @@ public class AssessmentRecommendationService {
                 .collect(Collectors.toMap(ProgramApplicantCount::getProgramId, ProgramApplicantCount::getCount));
     }
 
-    // 추천 후보 프로그램들에 대한 로그인 학생 본인의 신청 상태를 한 번의 쿼리로 배치 조회한다(N+1 방지).
+    // 최종 노출 프로그램들에 대한 로그인 학생 본인의 신청 상태를 한 번의 쿼리로 배치 조회한다(N+1 방지).
     // 취소(CANCELLED)는 "신청 안 한 것"과 동일하게 취급돼 결과에 안 담긴다(재신청 가능한데 버튼을 숨기면 안 되므로).
     private Map<Integer, String> findMyApplicationStatuses(List<ExtracurricularProgram> programs, Integer studentId) {
         if (programs.isEmpty()) {
