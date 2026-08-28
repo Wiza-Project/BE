@@ -142,6 +142,8 @@ public enum ErrorCode {
     SESSION_NOT_FOUND(HttpStatus.NOT_FOUND, "S007", "상담 회기를 찾을 수 없습니다."),
     SESSION_STATE_NOT_ALLOWED(HttpStatus.CONFLICT, "S008", "허용되지 않은 회기 상태입니다."),
     PRIVATE_RECORD_STATE_NOT_ALLOWED(HttpStatus.CONFLICT, "S009", "허용되지 않은 비공개 기록 상태입니다."),
+    PUBLIC_RESULT_STATE_NOT_ALLOWED(HttpStatus.CONFLICT, "S010", "허용되지 않은 공개 결과 상태입니다."),
+    PUBLIC_RESULT_NOT_FOUND(HttpStatus.NOT_FOUND, "S011", "공개된 상담 결과를 찾을 수 없습니다."),
 
     // ── 마일리지 ──────────────────────────────────────────────────
     MILEAGE_ITEM_NOT_FOUND(HttpStatus.NOT_FOUND, "M001", "마일리지 항목을 찾을 수 없습니다."),
@@ -174,6 +176,7 @@ public enum ErrorCode {
     DOCUMENT_VERSION_CONFLICT(HttpStatus.CONFLICT, "J016", "저장이 동시에 처리되어 실패했습니다. 다시 시도해주세요."),
     RESUME_NOT_FOUND(HttpStatus.NOT_FOUND, "J017", "이력서를 찾을 수 없습니다."),
     RESUME_ALREADY_EXISTS(HttpStatus.CONFLICT, "J018", "이미 작성된 이력서가 있습니다. 버전 관리 기능을 이용해주세요."),
+    RESUME_NOT_LATEST_VERSION(HttpStatus.CONFLICT, "J019", "최신 이력서 버전만 수정할 수 있습니다."),
     // ── 알림 ──────────────────────────────────────────────────────
     NOTIFICATION_NOT_FOUND(HttpStatus.NOT_FOUND, "N001", "알림을 찾을 수 없습니다."),
 
