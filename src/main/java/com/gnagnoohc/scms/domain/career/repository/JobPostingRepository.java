@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -42,6 +43,34 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, Integer>
             "LEFT JOIN FETCH jp.regionCode rc " +
             "WHERE jp.jobPostingId = :jobPostingId")
     Optional<JobPosting> findByIdWithDetails(@Param("jobPostingId") Integer jobPostingId);
+
+    /**
+     * 학생의 희망 직무(NCS 공통코드)에 매칭되는 유효 추천 공고 (Fetch Join 적용)
+     */
+    @Query("SELECT DISTINCT jp FROM JobPosting jp " +
+            "JOIN FETCH jp.companyAccount ca " +
+            "LEFT JOIN FETCH jp.ncsCode nc " +
+            "LEFT JOIN FETCH jp.regionCode rc " +
+            "WHERE jp.postingStatus = 'PUBLISHED' " +
+            "  AND (jp.applicationEndsAt IS NULL OR jp.applicationEndsAt >= :now) " +
+            "  AND (jp.ncsCode.codeId = :ncsCodeId) " +
+            "ORDER BY jp.createdAt DESC")
+    List<JobPosting> findRecommendedPostingsWithDetails(
+            @Param("ncsCodeId") Integer ncsCodeId,
+            @Param("now") Instant now
+    );
+
+    /**
+     * 기본 최신 공개 공고 목록 (Fallback / Fetch Join 적용)
+     */
+    @Query("SELECT DISTINCT jp FROM JobPosting jp " +
+            "JOIN FETCH jp.companyAccount ca " +
+            "LEFT JOIN FETCH jp.ncsCode nc " +
+            "LEFT JOIN FETCH jp.regionCode rc " +
+            "WHERE jp.postingStatus = 'PUBLISHED' " +
+            "  AND (jp.applicationEndsAt IS NULL OR jp.applicationEndsAt >= :now) " +
+            "ORDER BY jp.createdAt DESC")
+    List<JobPosting> findDefaultActivePostingsWithDetails(@Param("now") Instant now);
 
     /**
      * [스케줄러용] 마감 일시 지난 게시 공고 일괄 마감(CLOSED) 처리
