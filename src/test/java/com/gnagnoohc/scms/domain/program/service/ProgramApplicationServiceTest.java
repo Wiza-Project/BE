@@ -351,6 +351,70 @@ class ProgramApplicationServiceTest {
     }
 
     @Test
+    void confirm_whenWithinCapacity_succeeds() throws Exception {
+        Instant now = Instant.now();
+        ExtracurricularProgram program = buildProgramFixture(
+                1, now.minusSeconds(3600), now.plusSeconds(3600), 10);
+        ProgramApplication application = buildApplicationFixture(5, program, "WAITLISTED", 100);
+
+        mockValidProgramConsent(100, 900);
+        when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
+        when(applicationRepository.findByIdForUpdate(5)).thenReturn(Optional.of(application));
+        when(applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(1, List.of("APPLIED", "APPROVED")))
+                .thenReturn(9L);
+
+        ProgramApplicationDecisionResponseDTO response = programApplicationService.confirm(1, 5, 100);
+
+        assertThat(response.applicationStatus()).isEqualTo("APPROVED");
+        assertThat(response.applicationStatusLabel()).isEqualTo("승인");
+        assertThat(response.processedBy()).isEqualTo(100);
+    }
+
+    // 메서드 진입 시 게이트(hasAgreedAllRequired)는 통과했지만(동의 락은 잡음), 프로그램/신청 행 락 대기와
+    // 정원 계산으로 시간이 흐르는 사이 정책 유효기간이 만료되어 저장 직전 재검증에서 걸리는 경우를 재현한다.
+    // 동의 락은 동시 withdraw()만 막을 뿐 시간 경과에 따른 유효기간 만료까지는 막지 못하므로, applyDecision
+    // 직전에 hasAgreedAllRequired를 다시 확인하지 않으면 이미 만료된 동의로 승인이 저장되는 회귀가 생긴다.
+    @Test
+    void confirm_whenConsentNoLongerValidAtDecisionTime_throwsRequiredConsentNotAgreed() throws Exception {
+        Instant now = Instant.now();
+        ExtracurricularProgram program = buildProgramFixture(
+                1, now.minusSeconds(3600), now.plusSeconds(3600), 10);
+        ProgramApplication application = buildApplicationFixture(5, program, "WAITLISTED", 100);
+
+        // 첫 호출(메서드 진입 시 게이트) true, 두 번째 호출(applyDecision 직전 재검증) false 순으로 답하도록
+        // 스텁한다 — mockValidProgramConsent()의 hasAgreedAllRequired 스텁을 그대로 쓰면 이 시퀀스로
+        // 덮어써져 첫 스텁이 한 번도 안 쓰인 것으로 판정되어 UnnecessaryStubbingException이 나므로, 락
+        // 재검증에 필요한 나머지 동의 목만 여기서 직접 세팅한다.
+        Integer termsConsentId = 899;
+        Integer personalInfoConsentId = 900;
+        when(consentVerifier.hasAgreedAllRequired(eq(100), eq(ConsentModuleCode.PROGRAM), any()))
+                .thenReturn(true, false);
+        when(consentVerifier.findCurrentValidConsent(
+                eq(100), eq(ConsentModuleCode.PROGRAM), eq(ConsentType.TERMS_OF_SERVICE), any()))
+                .thenReturn(Optional.of(buildUserConsentFixture(termsConsentId)));
+        when(consentVerifier.requireOwnedValidConsent(
+                eq(termsConsentId), eq(100), eq(ConsentModuleCode.PROGRAM), eq(ConsentType.TERMS_OF_SERVICE), any()))
+                .thenReturn(buildUserConsentFixture(termsConsentId));
+        when(consentVerifier.findCurrentValidConsent(
+                eq(100), eq(ConsentModuleCode.PROGRAM), eq(ConsentType.PERSONAL_INFO), any()))
+                .thenReturn(Optional.of(buildUserConsentFixture(personalInfoConsentId)));
+        when(consentVerifier.requireOwnedValidConsent(
+                eq(personalInfoConsentId), eq(100), eq(ConsentModuleCode.PROGRAM), eq(ConsentType.PERSONAL_INFO), any()))
+                .thenReturn(buildUserConsentFixture(personalInfoConsentId));
+        when(programRepository.findByIdForUpdate(1)).thenReturn(Optional.of(program));
+        when(applicationRepository.findByIdForUpdate(5)).thenReturn(Optional.of(application));
+        when(applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(1, List.of("APPLIED", "APPROVED")))
+                .thenReturn(9L);
+
+        assertThatThrownBy(() -> programApplicationService.confirm(1, 5, 100))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.REQUIRED_CONSENT_NOT_AGREED);
+
+        verify(applicationRepository, never()).updateDecision(any(), any(), any(), any(), any());
+    }
+
+    @Test
     void approve_whenWithinCapacity_succeeds() throws Exception {
         ExtracurricularProgram program = buildProgramFixture(1, Instant.now(), Instant.now(), 10);
         ProgramApplication application = buildApplicationFixture(5, program, "WAITLISTED", 100);

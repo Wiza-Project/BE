@@ -331,6 +331,18 @@ public class ProgramApplicationService {
             throw new BusinessException(ErrorCode.APPLICATION_PERIOD_CLOSED);
         }
 
+        /**
+         * apply()의 (e)와 동일한 이유로 저장 직전 시각(now)에 동의를 한 번 더 게이트 체크한다. 위에서 잡은
+         * 동의 락은 동시 withdraw()는 막아주지만, 프로그램 행 락 대기·정원 계산 등으로 흐른 시간 동안
+         * 정책 유효기간(isCurrentlyEffective)이 만료됐을 가능성까지는 막지 못한다 — 락은 "누가 값을
+         * 바꾸는지"만 직렬화할 뿐 시간 경과 자체를 멈추지 못하기 때문이다. confirm()은 apply()와 달리
+         * user_consent_id를 갱신 저장하지 않으므로(updateDecision이 그 컬럼을 건드리지 않음), 증빙을
+         * 다시 조회할 필요 없이 게이트 체크(hasAgreedAllRequired)만 다시 수행하면 된다.
+         */
+        if (!consentVerifier.hasAgreedAllRequired(studentId, ConsentModuleCode.PROGRAM, now)) {
+            throw new BusinessException(ErrorCode.REQUIRED_CONSENT_NOT_AGREED);
+        }
+
         return applyDecision(application, ApplicationStatus.APPROVED, null, studentId);
     }
 
