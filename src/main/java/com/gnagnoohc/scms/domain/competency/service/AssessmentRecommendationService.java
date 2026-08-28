@@ -14,6 +14,7 @@ import com.gnagnoohc.scms.domain.program.repository.ProgramApplicationRepository
 import com.gnagnoohc.scms.domain.program.repository.ProgramApplicationRepository.ProgramApplicantCount;
 import com.gnagnoohc.scms.domain.program.service.ApplicationStatus;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,7 +24,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
 /**
@@ -35,6 +36,7 @@ import java.util.stream.Collectors;
  * 조회라 이벤트 방식이 맞지 않고, 다른 도메인의 조회 결과가 필요할 때 그 도메인 repository를 직접
  * 주입하는 관례를 따른다(MileageDashboardService가 CompetencyRepository를 주입하는 것과 같은 패턴).
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -49,7 +51,9 @@ public class AssessmentRecommendationService {
 
     /**
      * 역량 하나에 대해 무작위 추출 대상으로 끌어올 후보의 상한. 한 핵심역량에 동시 모집 중인 비교과
-     * 프로그램이 이보다 많을 일은 실무상 없으므로, 사실상 "그 역량의 모집중 프로그램 전부"를 뜻한다.
+     * 프로그램이 이보다 많을 일은 실무상 없다고 보고 정한 값이다. 초과하면 search의 기본 정렬
+     * (createdAt 내림차순) 상 최신 CANDIDATE_FETCH_LIMIT건만 표본 대상이 되고 나머지는 추천에서 빠진다
+     * (전체 후보에 대한 균등 무작위가 아님). 상한에 도달하면 recommend()에서 경고 로그를 남긴다.
      */
     private static final int CANDIDATE_FETCH_LIMIT = 200;
 
@@ -57,10 +61,6 @@ public class AssessmentRecommendationService {
     private final WeakCompetencySelector weakCompetencySelector;
     private final ExtracurricularProgramRepository programRepository;
     private final ProgramApplicationRepository programApplicationRepository;
-
-    // 역량별 후보가 상한보다 많을 때 무작위로 골라내는 데만 쓴다. 시드 고정이 필요 없어(테스트 단언이
-    // "후보 중 서로 다른 N개"라 시드와 무관) 주입하지 않고 그냥 둔다.
-    private final Random random = new Random();
 
     public RecommendedProgramsResponse recommend(Integer attemptId, Integer studentId) {
         // 결과 조회 로직을 그대로 재사용한다 — 응시 소유권 검증(Q014)·미채점 차단(Q018)과
@@ -79,6 +79,12 @@ public class AssessmentRecommendationService {
             List<ExtracurricularProgram> recruiting = programRepository.search(
                     ProgramStatus.DRAFT, null, weak.competencyId(),
                     PageRequest.of(0, CANDIDATE_FETCH_LIMIT)).getContent();
+            if (recruiting.size() == CANDIDATE_FETCH_LIMIT) {
+                // 상한에 걸림 = 이 역량의 모집중 프로그램이 그보다 많을 수 있고, 그 경우 표본이
+                // createdAt 최신순 앞 CANDIDATE_FETCH_LIMIT건으로 편향된다(균등 무작위 아님).
+                log.warn("추천 후보 조회가 상한({})에 도달했습니다. competencyId={} — 표본이 최신순 일부로 편향될 수 있습니다.",
+                        CANDIDATE_FETCH_LIMIT, weak.competencyId());
+            }
             sampledByCompetency.put(weak.competencyId(), sample(recruiting, PROGRAMS_PER_COMPETENCY));
         }
 
@@ -115,7 +121,7 @@ public class AssessmentRecommendationService {
             return programs;
         }
         List<ExtracurricularProgram> shuffled = new ArrayList<>(programs);
-        Collections.shuffle(shuffled, random);
+        Collections.shuffle(shuffled, ThreadLocalRandom.current());
         return shuffled.subList(0, max);
     }
 
