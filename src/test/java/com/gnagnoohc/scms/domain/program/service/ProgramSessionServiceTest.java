@@ -327,59 +327,30 @@ class ProgramSessionServiceTest {
                 .isEqualTo(ErrorCode.PROGRAM_INVALID_PERIOD);
     }
 
-    // resolveLocation()이 sessionNo 변경 시 자기 자신을 "직전 회차"로 잘못 조회하지 않는지 검증한다
-    // (1회차 -> 2회차로 번호를 바꾸는 경우, sessionNo=1 조회에서 수정 대상 자신이 걸리면 안 된다).
+    // 회차 번호는 1..N 연속만 허용되므로, 다른 회차를 함께 재배치하지 않는 단일 수정에서는
+    // sessionNo 변경 자체를 거부해야 한다 (허용하면 반드시 gap 또는 중복이 발생한다).
     @Test
-    void updateSession_whenSessionNoChangedToNext_excludesSelfFromPreviousSessionLookup() throws Exception {
+    void updateSession_whenSessionNoChanged_throwsProgramSessionNoNotContiguous() throws Exception {
         AppUser managerUser = mock(AppUser.class);
         when(managerUser.getUserId()).thenReturn(200);
         ExtracurricularProgram program = buildProgramFixture(1, managerUser);
-        ProgramSession session = buildSessionFixture(10, program, 1);
-        ProgramSession realPreviousSession = buildSessionFixture(9, program, 1);
-        ReflectionTestUtils.setField(realPreviousSession, "location", "본관 101호");
+        ProgramSession session = buildSessionFixture(10, program, 2);
         Instant startsAt = Instant.now().plusSeconds(3600);
         Instant endsAt = startsAt.plusSeconds(3600);
         ProgramSessionUpdateRequestDTO request = new ProgramSessionUpdateRequestDTO(
-                2, "2주차", startsAt, endsAt, SessionLocationType.SAME_AS_PREVIOUS, null);
+                3, "3주차", startsAt, endsAt, SessionLocationType.DIRECT_INPUT, "본관 101호");
 
         when(sessionRepository.findByProgramSessionIdAndProgram_ProgramId(10, 1))
                 .thenReturn(java.util.Optional.of(session));
         when(commonCodeRepository.findByCodeGroupAndActiveTrueOrderBySortOrderAsc("DEPARTMENT"))
                 .thenReturn(List.of(buildCommonCodeFixture(11, "DEPARTMENT", "D200")));
-        when(sessionRepository.findByProgram_ProgramIdAndSessionNoAndProgramSessionIdNot(1, 1, 10))
-                .thenReturn(java.util.Optional.of(realPreviousSession));
-        when(sessionRepository.updateSession(10, 1, 2, "2주차", startsAt, endsAt, "본관 101호"))
-                .thenReturn(1);
-
-        ProgramSessionResponseDTO response = programSessionService.updateSession(1, 10, request, 200, 11);
-
-        assertThat(response.location()).isEqualTo("본관 101호");
-    }
-
-    // 자기 자신을 제외하고 나면 진짜 직전 회차가 없는 경우(예: 1회차 하나뿐인 프로그램에서 2회차로 번호만 바꾸는 경우)
-    // 자기 자신의 옛 장소를 잘못 복사하지 않고 PREVIOUS_SESSION_LOCATION_NOT_FOUND로 거부해야 한다.
-    @Test
-    void updateSession_whenSessionNoChangedAndNoOtherPreviousSession_throwsPreviousSessionLocationNotFound() throws Exception {
-        AppUser managerUser = mock(AppUser.class);
-        when(managerUser.getUserId()).thenReturn(200);
-        ExtracurricularProgram program = buildProgramFixture(1, managerUser);
-        ProgramSession session = buildSessionFixture(10, program, 1);
-        Instant startsAt = Instant.now().plusSeconds(3600);
-        Instant endsAt = startsAt.plusSeconds(3600);
-        ProgramSessionUpdateRequestDTO request = new ProgramSessionUpdateRequestDTO(
-                2, "2주차", startsAt, endsAt, SessionLocationType.SAME_AS_PREVIOUS, null);
-
-        when(sessionRepository.findByProgramSessionIdAndProgram_ProgramId(10, 1))
-                .thenReturn(java.util.Optional.of(session));
-        when(commonCodeRepository.findByCodeGroupAndActiveTrueOrderBySortOrderAsc("DEPARTMENT"))
-                .thenReturn(List.of(buildCommonCodeFixture(11, "DEPARTMENT", "D200")));
-        when(sessionRepository.findByProgram_ProgramIdAndSessionNoAndProgramSessionIdNot(1, 1, 10))
-                .thenReturn(java.util.Optional.empty());
 
         assertThatThrownBy(() -> programSessionService.updateSession(1, 10, request, 200, 11))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(ErrorCode.PREVIOUS_SESSION_LOCATION_NOT_FOUND);
+                .isEqualTo(ErrorCode.PROGRAM_SESSION_NO_NOT_CONTIGUOUS);
+
+        verify(sessionRepository, never()).updateSession(any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -389,14 +360,14 @@ class ProgramSessionServiceTest {
         ExtracurricularProgram program = buildProgramFixture(1, managerUser);
         ProgramSession session = buildSessionFixture(10, program, 1);
         ProgramSessionUpdateRequestDTO request =
-                new ProgramSessionUpdateRequestDTO(2, null, Instant.now(), Instant.now().plusSeconds(3600),
+                new ProgramSessionUpdateRequestDTO(1, null, Instant.now(), Instant.now().plusSeconds(3600),
                         SessionLocationType.DIRECT_INPUT, "본관 101호");
 
         when(sessionRepository.findByProgramSessionIdAndProgram_ProgramId(10, 1))
                 .thenReturn(java.util.Optional.of(session));
         when(commonCodeRepository.findByCodeGroupAndActiveTrueOrderBySortOrderAsc("DEPARTMENT"))
                 .thenReturn(List.of(buildCommonCodeFixture(11, "DEPARTMENT", "D200")));
-        when(sessionRepository.updateSession(eq(10), eq(1), eq(2), any(), any(), any(), any()))
+        when(sessionRepository.updateSession(eq(10), eq(1), eq(1), any(), any(), any(), any()))
                 .thenThrow(new DataIntegrityViolationException("duplicate"));
 
         assertThatThrownBy(() -> programSessionService.updateSession(1, 10, request, 200, 11))

@@ -116,6 +116,12 @@ public class ProgramSessionService {
             throw new BusinessException(ErrorCode.PROGRAM_INVALID_PERIOD);
         }
 
+        // 회차 번호는 1..N 연속만 허용되는 정책이라, 다른 회차를 함께 재배치하지 않는 단일 수정에서는
+        // sessionNo 변경 자체를 금지한다 (변경을 허용하면 반드시 gap 또는 중복이 발생한다).
+        if (!request.sessionNo().equals(session.getSessionNo())) {
+            throw new BusinessException(ErrorCode.PROGRAM_SESSION_NO_NOT_CONTIGUOUS);
+        }
+
         String location = resolveLocation(programId, request.sessionNo(), request.locationType(), request.location(), sessionId);
 
         int updatedRows;
