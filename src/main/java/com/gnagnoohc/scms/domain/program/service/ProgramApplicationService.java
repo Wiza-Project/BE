@@ -266,6 +266,25 @@ public class ProgramApplicationService {
      */
     public ProgramApplicationDecisionResponseDTO confirm(Integer programId, Integer applicationId, Integer studentId) {
         /**
+         * 필수 동의 재확인 -----------------------------------------------------------
+         * 확정은 정원 슬롯을 새로 점유해 참여를 확정짓는 행위라 apply()의 (0)단계와 성격이 같다.
+         * 대기를 건 시점과 자리가 나 확정하는 시점 사이에 동의를 철회했을 수 있는데, 락 없는 게이트
+         * 체크(hasAgreedAllRequired)만으로는 이 체크 이후 다른 트랜잭션의 withdraw()가 끼어들어
+         * 커밋되는 것을 막지 못한다. apply()의 (0)과 마찬가지로 lockAndVerifyRequiredConsent()로
+         * 비관적 락을 걸어 재검증해야 withdraw()와 직렬화되어 이 경합이 막힌다 — confirm()이
+         * user_consent_id를 새로 쓰지 않는 것(updateDecision이 그 컬럼을 건드리지 않음)과는 별개 이유다.
+         * 이 동의 락은 반드시 아래 프로그램 행 락보다 먼저 잡아야 한다 — apply()가 동의 락(0) →
+         * 프로그램 행 락(a) 순서로 잠그므로, 순서가 엇갈리면 같은 학생이 동시에 apply()/confirm()을
+         * 호출할 때(예: 신청 후 응답 전 재시도) DB 데드락이 날 수 있다.
+         */
+        Instant now = Instant.now();
+        if (!consentVerifier.hasAgreedAllRequired(studentId, ConsentModuleCode.PROGRAM, now)) {
+            throw new BusinessException(ErrorCode.REQUIRED_CONSENT_NOT_AGREED);
+        }
+        lockAndVerifyRequiredConsent(studentId, ConsentType.TERMS_OF_SERVICE, now);
+        lockAndVerifyRequiredConsent(studentId, ConsentType.PERSONAL_INFO, now);
+
+        /**
          * apply()/approve()와 같은 이유로 프로그램 행을 신청 행보다 먼저 잠가, 아래 정원 확인과 실제
          * 확정 반영 사이에 다른 요청(다른 대기자의 확정, 운영부서의 승인 등)이 끼어들어 정원을 초과하는
          * 경쟁 조건을 막는다. apply()/approve()/reject()/cancel()과 반드시 같은 순서로 잠가야 데드락을 피한다.
@@ -290,19 +309,8 @@ public class ProgramApplicationService {
             throw new BusinessException(ErrorCode.APPLICATION_ALREADY_PROCESSED);
         }
 
-        /**
-         * 필수 동의 재확인 -----------------------------------------------------------
-         * 확정은 정원 슬롯을 새로 점유해 참여를 확정짓는 행위라 apply()의 (0)단계와 성격이 같다.
-         * 대기를 건 시점과 자리가 나 확정하는 시점 사이에 동의를 철회했을 수 있으므로 다시 게이트로
-         * 체크한다. 다만 confirm()은 user_consent_id를 새로 쓰지 않으므로(updateDecision이 그
-         * 컬럼을 건드리지 않음), apply()처럼 비관적 락으로 재검증하며 증빙을 갱신할 필요는 없다.
-         */
-        Instant now = Instant.now();
-        if (!consentVerifier.hasAgreedAllRequired(studentId, ConsentModuleCode.PROGRAM, now)) {
-            throw new BusinessException(ErrorCode.REQUIRED_CONSENT_NOT_AGREED);
-        }
-
         // apply()/cancel()과 같은 이유로, programStatus 컬럼을 믿지 않고 지금 시각을 모집 종료 시각과 직접 비교한다.
+        now = Instant.now();
         if (!now.isBefore(program.getRecruitmentEndsAt())) {
             throw new BusinessException(ErrorCode.APPLICATION_PERIOD_CLOSED);
         }
@@ -312,6 +320,15 @@ public class ProgramApplicationService {
                 programId, List.of(ApplicationStatus.APPLIED.name(), ApplicationStatus.APPROVED.name()));
         if (occupiedCount >= program.getCapacity()) {
             throw new BusinessException(ErrorCode.PROGRAM_CAPACITY_EXCEEDED);
+        }
+
+        /**
+         * apply()의 (e)와 동일한 이유로, 정원 확인 등으로 시간이 흐를 수 있으므로 실제 반영
+         * (applyDecision) 직전 시각으로 마감 여부를 한 번 더 확인한다.
+         */
+        now = Instant.now();
+        if (!now.isBefore(program.getRecruitmentEndsAt())) {
+            throw new BusinessException(ErrorCode.APPLICATION_PERIOD_CLOSED);
         }
 
         return applyDecision(application, ApplicationStatus.APPROVED, null, studentId);
