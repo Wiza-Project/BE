@@ -2,17 +2,16 @@ package com.gnagnoohc.scms.domain.career.service;
 
 import com.gnagnoohc.scms.domain.career.dto.posting.JobPostingSummaryResponseDTO;
 import com.gnagnoohc.scms.domain.career.entity.JobPosting;
-import com.gnagnoohc.scms.domain.career.entity.JobPreference;
 import com.gnagnoohc.scms.domain.career.entity.StudentProfile;
 import com.gnagnoohc.scms.domain.career.repository.JobPostingRepository;
-import com.gnagnoohc.scms.domain.career.repository.JobPreferenceRepository;
+import com.gnagnoohc.scms.domain.career.repository.StudentProfileRepository;
 import com.gnagnoohc.scms.domain.user.service.consent.ConsentModuleCode;
 import com.gnagnoohc.scms.domain.user.service.consent.ConsentType;
 import com.gnagnoohc.scms.domain.user.service.consent.ConsentVerifier;
-import com.gnagnoohc.scms.global.common.entity.CommonCode;
 import com.gnagnoohc.scms.global.common.util.DateTimeUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,25 +30,20 @@ import java.util.List;
 @Transactional(readOnly = true)
 public class JobMatchingService {
 
+    @Value("${app.career.matching.top-k:10}")
+    private int topKMatchLimit;
+
     private final JobPostingRepository jobPostingRepository;
-    private final JobPreferenceRepository jobPreferenceRepository;
+    private final StudentProfileRepository studentProfileRepository;
     private final ConsentVerifier consentVerifier;
 
     /**
-     * [학생] pgvector 코사인 유사도 연산 기반 맞춤 추천 채용공고 목록 조회
-     *
-     * <p><strong>[처리 흐름]</strong></p>
-     * <ul>
-     *   <li>1. AI 맞춤 추천(PROFILING) 선택 동의 여부 검증 (미동의 시 기본 최신 공고 서빙)</li>
-     *   <li>2. 학생 프로필(student_profile)의 임베딩 벡터 로드</li>
-     *   <li>3. pgvector 코사인 거리 연산자(&lt;=&gt;)를 통한 상위 유사 직무 채용공고 조회</li>
-     *   <li>4. 매칭 결과 부재 또는 프로필 미설정 시 최신 유효 공고 Fallback 반환</li>
-     * </ul>
+     * [학생] 맞춤 추천 채용공고 목록 조회 (PROFILING 선택 동의 분기 + 희망직무 NCS 매칭)
      */
     public List<JobPostingSummaryResponseDTO> getRecommendedPostingsForStudent(Integer studentUserId) {
         Instant now = Instant.now();
 
-        // 1. AI 맞춤 추천(PROFILING) 선택 동의 여부 확인
+        // 1. 개인정보 PROFILING 동의 여부 확인
         boolean hasProfilingConsent = consentVerifier.hasValidConsent(
                 studentUserId, ConsentModuleCode.CAREER, ConsentType.PROFILING, now);
 
@@ -57,19 +51,17 @@ public class JobMatchingService {
             return getFallbackPostings(now);
         }
 
-        // 2. 학생의 임베딩 벡터 조회
+        // 2. 학생 벡터 조회
         StudentProfile profile = studentProfileRepository.findByUserId(studentUserId).orElse(null);
         if (profile == null || profile.getEmbeddingVector() == null || profile.getEmbeddingVector().length == 0) {
-            log.debug("[JobMatchingService] 학생(userId: {})의 임베딩 벡터가 존재하지 않아 기본 공고를 반환합니다.", studentUserId);
+            log.debug("[JobMatchingService] 학생(userId: {}) 벡터 부재로 기본 공고 반환", studentUserId);
             return getFallbackPostings(now);
         }
 
-        // 3. float[] -> PostgreSQL vector 문자열 포맷 변환 (예: "[0.123, -0.456, ...]")
+        // 3. PostgreSQL vector 문자열 변환 후 코사인 유사도 매칭 실행
         String vectorString = Arrays.toString(profile.getEmbeddingVector());
-
-        // 4. pgvector 코사인 유사도 기반 상위 추천 공고 조회
         List<JobPosting> matchedPostings = jobPostingRepository.findVectorRecommendedPostings(
-                vectorString, TOP_K_MATCH_LIMIT, now
+                vectorString, topKMatchLimit, now
         );
 
         if (matchedPostings.isEmpty()) {
@@ -77,6 +69,13 @@ public class JobMatchingService {
         }
 
         return matchedPostings.stream()
+                .map(this::convertToSummaryDTO)
+                .toList();
+    }
+
+    private List<JobPostingSummaryResponseDTO> getFallbackPostings(Instant now) {
+        return jobPostingRepository.findDefaultActivePostingsWithDetails(now)
+                .stream()
                 .map(this::convertToSummaryDTO)
                 .toList();
     }

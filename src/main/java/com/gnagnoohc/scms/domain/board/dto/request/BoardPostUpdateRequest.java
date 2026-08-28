@@ -14,7 +14,9 @@ public record BoardPostUpdateRequest(
         @Size(max = 300) String title,
         String content,
         @Size(max = 40) String categoryCode,
-        boolean clearCategoryCode,
+        // PATCH 요청에서는 필드가 생략될 수 있으므로 primitive boolean 대신 nullable wrapper를 쓴다.
+        // null은 카테고리 연결을 유지한다는 뜻이고, true일 때만 명시적으로 연결을 해제한다.
+        Boolean clearCategoryCode,
         @Size(max = 30) String moduleCode,
         Boolean pinned,
         String postStatus,

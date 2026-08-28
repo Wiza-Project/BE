@@ -181,7 +181,18 @@ public class CommonCodeSeeder implements CommandLineRunner {
             new Seed("ACADEMIC_CHANGE_REASON", "AR600", "군복학", 6, "ACADEMIC_CHANGE_TYPE", "AC300"),
             new Seed("ACADEMIC_CHANGE_REASON", "AR700", "졸업", 7, "ACADEMIC_CHANGE_TYPE", "AC400"),
             new Seed("ACADEMIC_CHANGE_REASON", "AR800", "미등록제적", 8, "ACADEMIC_CHANGE_TYPE", "AC500"),
-            new Seed("ACADEMIC_CHANGE_REASON", "AR900", "자퇴", 9, "ACADEMIC_CHANGE_TYPE", "AC600")
+            new Seed("ACADEMIC_CHANGE_REASON", "AR900", "자퇴", 9, "ACADEMIC_CHANGE_TYPE", "AC600"),
+
+            // FAQ 카테고리(FAQ_CATEGORY)
+            // 접두어(FC)+100단위. 초안이라 실제 문의 유형에 맞춰 이름/개수 조정 필요.
+            new Seed("FAQ_CATEGORY", "FC100", "계정/로그인", 1),
+            new Seed("FAQ_CATEGORY", "FC200", "비교과 프로그램", 2),
+            new Seed("FAQ_CATEGORY", "FC300", "핵심역량진단", 3),
+            new Seed("FAQ_CATEGORY", "FC400", "마일리지/장학", 4),
+            new Seed("FAQ_CATEGORY", "FC500", "상담", 5),
+            new Seed("FAQ_CATEGORY", "FC600", "취업/진로", 6),
+            new Seed("FAQ_CATEGORY", "FC700", "이용방법", 7),
+            new Seed("FAQ_CATEGORY", "FC800", "기타", 8)
     );
 
     @Override
