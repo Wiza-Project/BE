@@ -14,6 +14,7 @@ import org.springframework.http.HttpStatus;
  *   S###  상담            (P3100)
  *   M###  마일리지        (P4100)
  *   J###  취창업          (P5100)
+ *   B###  공통 게시판(공지/FAQ)
  *
  * 새 코드를 추가하면 프론트 담당자에게 반드시 공유하세요.
  */
@@ -183,7 +184,19 @@ public enum ErrorCode {
     RESUME_ALREADY_EXISTS(HttpStatus.CONFLICT, "J018", "이미 작성된 이력서가 있습니다. 버전 관리 기능을 이용해주세요."),
     RESUME_NOT_LATEST_VERSION(HttpStatus.CONFLICT, "J019", "최신 이력서 버전만 수정할 수 있습니다."),
     // ── 알림 ──────────────────────────────────────────────────────
-    NOTIFICATION_NOT_FOUND(HttpStatus.NOT_FOUND, "N001", "알림을 찾을 수 없습니다.");
+    NOTIFICATION_NOT_FOUND(HttpStatus.NOT_FOUND, "N001", "알림을 찾을 수 없습니다."),
+
+    // ── 공통 게시판(공지/FAQ) ─────────────────────────────────────
+    // 카테고리(=common_code FAQ_CATEGORY 그룹의 code)가 존재하지 않을 때 사용하는 에러코드.
+    BOARD_CATEGORY_NOT_FOUND(HttpStatus.NOT_FOUND, "B001", "카테고리를 찾을 수 없습니다."),
+    BOARD_CATEGORY_INACTIVE(HttpStatus.BAD_REQUEST, "B002", "비활성화된 카테고리입니다."),
+    BOARD_POST_NOT_FOUND(HttpStatus.NOT_FOUND, "B003", "게시글을 찾을 수 없습니다."),
+    // URL의 boardType과 게시글이 실제로 속한 board_type이 다를 때 사용하는 에러코드(타 게시판 글 접근 차단).
+    BOARD_POST_BOARD_MISMATCH(HttpStatus.NOT_FOUND, "B004", "해당 게시판의 게시글이 아닙니다."),
+    BOARD_PIN_NOT_SUPPORTED(HttpStatus.BAD_REQUEST, "B005", "상단 고정을 사용하지 않는 게시판입니다."),
+    BOARD_ATTACHMENT_COUNT_EXCEEDED(HttpStatus.BAD_REQUEST, "B006", "첨부파일 개수가 허용치를 초과했습니다."),
+    // removeFileIds로 지정한 storedFileId가 이 게시글의 첨부파일이 아닐 때 사용하는 에러코드.
+    BOARD_ATTACHMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "B007", "게시글에 첨부된 파일이 아닙니다.");
 
     private final HttpStatus status;
     private final String code;
