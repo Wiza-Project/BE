@@ -42,6 +42,9 @@ public class JobPreferenceService {
     private final CareerBindingHelper careerBindingHelper;
     private final JdbcUpsertHelper jdbcUpsertHelper;
 
+    // 학생 희망 조건값 벡터화 처리를 위한 서비스단 주입
+    private final StudentProfileService studentProfileService;
+
     /**
      * [학생] 본인의 등록된 취업 희망조건 단건을 조회
      *
