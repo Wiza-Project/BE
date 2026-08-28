@@ -143,6 +143,7 @@ public enum ErrorCode {
     PRIVATE_RECORD_STATE_NOT_ALLOWED(HttpStatus.CONFLICT, "S009", "허용되지 않은 비공개 기록 상태입니다."),
     PUBLIC_RESULT_STATE_NOT_ALLOWED(HttpStatus.CONFLICT, "S010", "허용되지 않은 공개 결과 상태입니다."),
     PUBLIC_RESULT_NOT_FOUND(HttpStatus.NOT_FOUND, "S011", "공개된 상담 결과를 찾을 수 없습니다."),
+    PUBLIC_RESULT_NO_CHANGES(HttpStatus.CONFLICT, "S012", "수정한 내역이 없습니다."),
 
     // ── 마일리지 ──────────────────────────────────────────────────
     MILEAGE_ITEM_NOT_FOUND(HttpStatus.NOT_FOUND, "M001", "마일리지 항목을 찾을 수 없습니다."),
