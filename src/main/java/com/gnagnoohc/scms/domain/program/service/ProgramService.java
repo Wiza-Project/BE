@@ -1,6 +1,7 @@
 package com.gnagnoohc.scms.domain.program.service;
 
-import com.gnagnoohc.scms.domain.program.dto.response.CompetencyOptionResponseDTO;
+import com.gnagnoohc.scms.domain.competency.dto.CompetencySummary;
+import com.gnagnoohc.scms.domain.competency.service.CompetencyQueryService;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramAdminDetailResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramAdminListItemResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramDetailResponseDTO;
@@ -14,7 +15,7 @@ import com.gnagnoohc.scms.domain.program.dto.response.ProgramUpdateResponseDTO;
 import com.gnagnoohc.scms.domain.program.entity.ExtracurricularProgram;
 import com.gnagnoohc.scms.domain.program.entity.ProgramApplication;
 import com.gnagnoohc.scms.domain.program.entity.ProgramStatus;
-import com.gnagnoohc.scms.domain.program.repository.CompetencyOptionRepository;
+import com.gnagnoohc.scms.domain.program.entity.SessionLocationType;
 import com.gnagnoohc.scms.domain.program.repository.ExtracurricularProgramRepository;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramFileUploadResponseDTO;
 import com.gnagnoohc.scms.domain.program.repository.ProgramApplicationRepository;
@@ -36,10 +37,13 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -67,7 +71,7 @@ public class ProgramService {
     private static final Set<String> OPERATION_PLAN_EXTENSIONS = Set.of("pdf");
 
     private final ExtracurricularProgramRepository programRepository;
-    private final CompetencyOptionRepository competencyOptionRepository;
+    private final CompetencyQueryService competencyQueryService;
     private final CommonCodeRepository commonCodeRepository;
     private final ProgramSessionRepository programSessionRepository;
     private final ProgramApplicationRepository applicationRepository;
@@ -178,17 +182,52 @@ public class ProgramService {
          * 위 (a-1-1)에서 이미 1개 이상임을 확인했으므로, 요청에 담긴 회차를 그대로 순회하며 생성한다.
          * ProgramSessionService.registerSession()과 동일한 리포지토리 메서드를 재사용한다.
          * createdBy는 등록 담당자(managerUserId), 생성 시각은 프로그램 생성에 쓴 now를 그대로 재사용한다.
+         *
+         * locationType=SAME_AS_PREVIOUS인 회차는 아직 DB에 없는(같은 요청 안의) 직전 회차 장소를
+         * 참조해야 하므로, sessionNo 오름차순으로 정렬한 뒤 지금까지 확정된 location을
+         * resolvedLocations에 누적해가며 순서대로 처리한다.
          */
-        for (ProgramSessionRegisterRequestDTO session : request.sessions()) {
+        List<ProgramSessionRegisterRequestDTO> sortedSessions = request.sessions().stream()
+                .sorted(Comparator.comparing(ProgramSessionRegisterRequestDTO::sessionNo))
+                .toList();
+        /**
+         * 회차 번호는 DB 유니크 제약(중복 방지)만 있을 뿐 연속성을 강제하는 제약이 없어서, 이 검증이
+         * 없으면 예를 들어 1회차만 두고 3회차를 SAME_AS_PREVIOUS로 보내는 요청에서 sessionNo=2가
+         * 없다는 이유로 위 SAME_AS_PREVIOUS 처리가 (실제로는 정책 위반인데) 엉뚱한 에러코드
+         * (PREVIOUS_SESSION_LOCATION_NOT_FOUND)로 거절해버린다. 회차 번호는 1부터 빈 번호 없이
+         * 연속되어야 한다는 정책을 여기서 명시적으로 검증해, 이후 SAME_AS_PREVIOUS 처리가 항상
+         * sessionNo - 1을 안전하게 참조할 수 있도록 보장한다(요청 내 중복 번호도 함께 걸러진다).
+         */
+        for (int i = 0; i < sortedSessions.size(); i++) {
+            if (!sortedSessions.get(i).sessionNo().equals(i + 1)) {
+                throw new BusinessException(ErrorCode.PROGRAM_SESSION_NO_NOT_CONTIGUOUS);
+            }
+        }
+        Map<Integer, String> resolvedLocations = new HashMap<>();
+        for (ProgramSessionRegisterRequestDTO session : sortedSessions) {
+            String location;
+            if (session.locationType() == SessionLocationType.DIRECT_INPUT) {
+                if (!StringUtils.hasText(session.location())) {
+                    throw new BusinessException(ErrorCode.SESSION_LOCATION_REQUIRED);
+                }
+                location = session.location();
+            } else {
+                location = resolvedLocations.get(session.sessionNo() - 1);
+                if (!StringUtils.hasText(location)) {
+                    throw new BusinessException(ErrorCode.PREVIOUS_SESSION_LOCATION_NOT_FOUND);
+                }
+            }
+
             try {
                 programSessionRepository.insertSession(
                         programId, session.sessionNo(), session.sessionName(),
-                        session.startsAt(), session.endsAt(), session.location(),
+                        session.startsAt(), session.endsAt(), location,
                         managerUserId, now);
             } catch (DataIntegrityViolationException e) {
                 // uq_program_session_program_no 위반 = 요청 안에서 같은 회차번호가 중복된 경우.
                 throw new BusinessException(ErrorCode.DUPLICATE_SESSION_NO);
             }
+            resolvedLocations.put(session.sessionNo(), location);
         }
 
         // 등록에 성공했으니, 방금 저장한 값들을 그대로 담아 응답 DTO를 만들어 돌려준다.
@@ -583,12 +622,9 @@ public class ProgramService {
                         ProgramApplicationRepository.MyApplicationStatusProjection::getStatus));
     }
 
-    // 프로그램 등록 폼의 핵심역량 드롭다운용 옵션 목록. 최상위(하위 역량 없음) + 활성 상태만 노출한다.
-    public List<CompetencyOptionResponseDTO> getCompetencyOptions() {
-        return competencyOptionRepository.findByParentCompetencyIsNullAndActiveTrueOrderByDisplayOrderAsc()
-                .stream()
-                .map(CompetencyOptionResponseDTO::from)
-                .toList();
+    // 핵심역량 드롭다운용 옵션 목록. 학생용 화면(StudentProgramController)에서 사용 — 실제 조회는 핵심역량 도메인에 위임한다.
+    public List<CompetencySummary> getCompetencyOptions() {
+        return competencyQueryService.getActiveTopLevelCompetencies();
     }
 
     /**
