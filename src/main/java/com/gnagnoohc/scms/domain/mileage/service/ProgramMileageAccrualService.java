@@ -19,6 +19,8 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 
 /** 비교과 이수 완료 건에 연결된 정책 점수만 마일리지 원장에 적립한다. */
@@ -54,6 +56,11 @@ public class ProgramMileageAccrualService {
     /** 특정 비교과 신청이 이수 완료된 경우 고정 정책 점수로 한 번만 적립한다. */
     @Transactional
     public boolean accrueProgramCompletion(Integer applicationId) {
+        return accrueProgramCompletion(applicationId, null);
+    }
+
+    private boolean accrueProgramCompletion(Integer applicationId,
+                                            Map<PolicyLookupKey, MileagePolicy> policyCache) {
         if (applicationId == null) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "비교과 신청 번호가 올바르지 않습니다.");
         }
@@ -81,7 +88,7 @@ public class ProgramMileageAccrualService {
                 ? LocalDate.now(BUSINESS_ZONE)
                 : application.getCompletedAt().atZone(BUSINESS_ZONE).toLocalDate();
         Competency programCompetency = application.getProgram().getCompetency();
-        MileagePolicy policy = resolvePolicy(application, programCompetency, completionDate);
+        MileagePolicy policy = resolvePolicy(application, programCompetency, completionDate, policyCache);
         validatePolicy(policy, programCompetency, completionDate);
 
         mileageTransactionRepository.save(
@@ -94,11 +101,12 @@ public class ProgramMileageAccrualService {
     public int accruePendingProgramCompletions() {
         var applications = programApplicationRepository.findCompletedWithoutMileage(
                 PageRequest.of(0, BATCH_SIZE));
+        Map<PolicyLookupKey, MileagePolicy> policyCache = new HashMap<>();
         int accruedCount = 0;
 
         for (ProgramApplication application : applications) {
             try {
-                if (accrueProgramCompletion(application.getApplicationId())) {
+                if (accrueProgramCompletion(application.getApplicationId(), policyCache)) {
                     accruedCount++;
                 }
             } catch (RuntimeException exception) {
@@ -111,7 +119,8 @@ public class ProgramMileageAccrualService {
 
     private MileagePolicy resolvePolicy(ProgramApplication application,
                                         Competency programCompetency,
-                                        LocalDate completionDate) {
+                                        LocalDate completionDate,
+                                        Map<PolicyLookupKey, MileagePolicy> policyCache) {
         MileagePolicy linkedPolicy = application.getProgram().getMileagePolicy();
         if (linkedPolicy != null
                 && !ExtracurricularMileagePolicyDefinition.isExtracurricular(linkedPolicy.getActivityType())) {
@@ -127,7 +136,14 @@ public class ProgramMileageAccrualService {
             return null;
         }
 
-        return mileagePolicyRepository.findActiveExtracurricularPoliciesByCompetencyOn(
+        PolicyLookupKey lookupKey = new PolicyLookupKey(
+                programCompetency.getCompetencyId(), completionDate);
+        if (policyCache != null && policyCache.containsKey(lookupKey)) {
+            return policyCache.get(lookupKey);
+        }
+
+        MileagePolicy resolvedPolicy = mileagePolicyRepository
+                .findActiveExtracurricularPoliciesByCompetencyOn(
                         programCompetency.getCompetencyId(),
                         ExtracurricularMileagePolicyDefinition.CATEGORY_CODE,
                         ExtracurricularMileagePolicyDefinition.EARNING_ROUTE,
@@ -136,6 +152,14 @@ public class ProgramMileageAccrualService {
                 .filter(policy -> isUsablePolicy(policy, programCompetency, completionDate))
                 .findFirst()
                 .orElse(null);
+
+        if (policyCache != null) {
+            policyCache.put(lookupKey, resolvedPolicy);
+        }
+        return resolvedPolicy;
+    }
+
+    private record PolicyLookupKey(Integer competencyId, LocalDate completionDate) {
     }
 
     private boolean isUsablePolicy(MileagePolicy policy,
