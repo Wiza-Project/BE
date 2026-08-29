@@ -1,5 +1,7 @@
 package com.gnagnoohc.scms.domain.counsel.controller;
 
+import com.gnagnoohc.scms.domain.counsel.dto.CounselingPublicResultCorrectionRequest;
+import com.gnagnoohc.scms.domain.counsel.dto.CounselingPublicResultHistoryResponse;
 import com.gnagnoohc.scms.domain.counsel.dto.CounselingPublicResultSaveRequest;
 import com.gnagnoohc.scms.domain.counsel.dto.CounselorCounselingPublicResultResponse;
 import com.gnagnoohc.scms.domain.counsel.service.CounselingPublicResultService;
@@ -11,10 +13,13 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 /**
  * 상담사가 자신의 배정에 딸린 회기의 공개 상담 결과를 조회·초안 저장·일반 공개하고, 마지막 회기
@@ -76,5 +81,33 @@ public class CounselorCounselingPublicResultController {
             @AuthenticationPrincipal AuthUser authUser
     ) {
         return ApiResponse.ok(counselingPublicResultService.complete(sessionId, authUser.getId()));
+    }
+
+    /**
+     * 이미 공개된 최신 결과를 새 버전으로 정정한다. 원본 행은 수정하지 않고 versionNo+1을 즉시
+     * 공개한다. 배정이 끝난 원래 담당자도 요청할 수 있다(설계 문서 3절의 유일한 쓰기 예외).
+     */
+    @PostMapping("/counseling-sessions/{sessionId}/public-result/corrections")
+    public ApiResponse<CounselorCounselingPublicResultResponse> correct(
+            @PathVariable Integer sessionId,
+            @Valid @RequestBody CounselingPublicResultCorrectionRequest request,
+            @AuthenticationPrincipal AuthUser authUser
+    ) {
+        return ApiResponse.ok(counselingPublicResultService.correct(
+                sessionId, request.expectedVersionNo(), request.resultSummary(),
+                request.actionPlan(), request.correctionReason(), authUser.getId()
+        ));
+    }
+
+    /**
+     * 공개된 모든 버전을 versionNo 내림차순으로 반환한다(정정 사유·작성자 포함, 학생에게는 노출 안 함).
+     * 페이지 래퍼 없이 배열 그대로 내려준다.
+     */
+    @GetMapping("/counseling-sessions/{sessionId}/public-result/history")
+    public ApiResponse<List<CounselingPublicResultHistoryResponse>> getHistory(
+            @PathVariable Integer sessionId,
+            @AuthenticationPrincipal AuthUser authUser
+    ) {
+        return ApiResponse.ok(counselingPublicResultService.getHistory(sessionId, authUser.getId()));
     }
 }

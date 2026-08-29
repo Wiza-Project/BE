@@ -1,5 +1,6 @@
 package com.gnagnoohc.scms.domain.counsel.service;
 
+import com.gnagnoohc.scms.domain.counsel.dto.CounselingPublicResultHistoryResponse;
 import com.gnagnoohc.scms.domain.counsel.dto.CounselorCounselingPublicResultResponse;
 import com.gnagnoohc.scms.domain.counsel.dto.StudentCounselingPublicResultResponse;
 import com.gnagnoohc.scms.domain.counsel.dto.StudentCounselingPublicResultRow;
@@ -66,7 +67,7 @@ public class CounselingPublicResultService {
         }
         CounselingReservation reservation = assignment.getCounselingReservation();
         CounselingPublicResult result = counselingPublicResultRepository
-                .findByCounselingSessionCounselingSessionId(sessionId)
+                .findTopByCounselingSessionCounselingSessionIdOrderByVersionNoDesc(sessionId)
                 .orElse(null);
         return buildCounselorResponse(session, assignment, reservation, result, Instant.now());
     }
@@ -99,7 +100,7 @@ public class CounselingPublicResultService {
         }
 
         CounselingPublicResult result = counselingPublicResultRepository
-                .findByCounselingSessionCounselingSessionId(sessionId)
+                .findTopByCounselingSessionCounselingSessionIdOrderByVersionNoDesc(sessionId)
                 .orElse(null);
         if (result == null) {
             result = CounselingPublicResult.createDraft(session, resultSummary, actionPlan, counselorId);
@@ -137,7 +138,7 @@ public class CounselingPublicResultService {
             throw new BusinessException(ErrorCode.PUBLIC_RESULT_STATE_NOT_ALLOWED);
         }
         CounselingPublicResult result = counselingPublicResultRepository
-                .findByCounselingSessionCounselingSessionId(sessionId)
+                .findTopByCounselingSessionCounselingSessionIdOrderByVersionNoDesc(sessionId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PUBLIC_RESULT_STATE_NOT_ALLOWED));
 
         Instant now = Instant.now();
@@ -195,7 +196,7 @@ public class CounselingPublicResultService {
             throw new BusinessException(ErrorCode.PUBLIC_RESULT_STATE_NOT_ALLOWED);
         }
         CounselingPublicResult result = counselingPublicResultRepository
-                .findByCounselingSessionCounselingSessionId(sessionId)
+                .findTopByCounselingSessionCounselingSessionIdOrderByVersionNoDesc(sessionId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PUBLIC_RESULT_STATE_NOT_ALLOWED));
 
         if (!result.isPublished()) {
@@ -207,6 +208,82 @@ public class CounselingPublicResultService {
         assignment.end(now);
 
         return buildCounselorResponse(session, assignment, reservation, result, now);
+    }
+
+    /**
+     * 정정. 원래 담당 상담사가 학생에게 공개된 최신 결과를 새 버전으로 바로잡는다. 배정이 이미
+     * 끝났어도(종료된 배정) 원래 담당자면 허용하는 것이 "종료된 배정은 읽기 전용"이라는 기존 규칙의
+     * 유일한 쓰기 예외다(설계 문서 3절) — 그래서 saveDraft/publish와 달리 assignment.isActive()를
+     * 검사하지 않는다.
+     * 잠금은 회기(CounselingSession) 행 하나만 건다. 정정은 예약·배정 상태를 바꾸지 않으므로 그
+     * 행들까지 잠글 필요가 없고, 같은 회기를 겨냥한 모든 정정 요청은 이 회기 잠금 하나로 직렬화된다
+     * (설계 문서 7절) — 두 요청이 같은 expectedVersionNo로 동시에 들어와도 먼저 잠근 쪽이 새 버전을
+     * 만들어 커밋한 뒤에야 다음 요청이 잠금을 얻고, 그때는 이미 최신 버전이 바뀌어 있어 S010으로 실패한다.
+     */
+    @Transactional
+    public CounselorCounselingPublicResultResponse correct(
+            Integer sessionId,
+            Integer expectedVersionNo,
+            String resultSummary,
+            String actionPlan,
+            String correctionReason,
+            Integer counselorId
+    ) {
+        ensureActiveCounselor(counselorId);
+        CounselingSession session = counselingSessionRepository.findByIdForUpdate(sessionId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.SESSION_NOT_FOUND));
+        CounselingAssignment assignment = session.getCounselingAssignment();
+        if (!assignment.isOwnedBy(counselorId)) {
+            throw new BusinessException(ErrorCode.SESSION_NOT_FOUND);
+        }
+
+        CounselingPublicResult latest = counselingPublicResultRepository
+                .findTopByCounselingSessionCounselingSessionIdAndPublishedAtIsNotNullOrderByVersionNoDesc(sessionId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PUBLIC_RESULT_STATE_NOT_ALLOWED));
+        // S010 vs S012 분기: 회기 잠금을 얻은 뒤 다시 읽은 최신 버전이 요청의 기준 버전과 다르면(동시
+        // 정정 경쟁 포함) "버전이 어긋난 것"이라 S010이다. 버전은 맞는데 정규화한 내용이 완전히 같으면
+        // "정정할 필요가 없는 것"이라 별도로 S012다(엔티티 createCorrection 내부에서 판정).
+        if (!latest.getVersionNo().equals(expectedVersionNo)) {
+            throw new BusinessException(ErrorCode.PUBLIC_RESULT_STATE_NOT_ALLOWED);
+        }
+
+        Instant now = Instant.now();
+        CounselingPublicResult correction = CounselingPublicResult.createCorrection(
+                latest, resultSummary, actionPlan, correctionReason, counselorId, now
+        );
+        counselingPublicResultRepository.save(correction);
+
+        CounselingReservation reservation = assignment.getCounselingReservation();
+        return buildCounselorResponse(session, assignment, reservation, correction, now);
+    }
+
+    /**
+     * 정정 이력 조회. 상태를 바꾸지 않으므로 회기 행을 잠그지 않는다(클래스 기본값인
+     * readOnly 트랜잭션을 그대로 쓴다). 공개된 버전이 없으면 빈 리스트를 돌려준다.
+     * 작성자 표시명은 findAllById로 한 번에 배치 조회해 버전 수만큼 N+1 쿼리가 나가지 않게 한다.
+     */
+    public List<CounselingPublicResultHistoryResponse> getHistory(Integer sessionId, Integer counselorId) {
+        ensureActiveCounselor(counselorId);
+        CounselingSession session = counselingSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.SESSION_NOT_FOUND));
+        CounselingAssignment assignment = session.getCounselingAssignment();
+        if (!assignment.isOwnedBy(counselorId)) {
+            throw new BusinessException(ErrorCode.SESSION_NOT_FOUND);
+        }
+
+        List<CounselingPublicResult> versions = counselingPublicResultRepository
+                .findByCounselingSessionCounselingSessionIdAndPublishedAtIsNotNullOrderByVersionNoDesc(sessionId);
+        if (versions.isEmpty()) {
+            return List.of();
+        }
+        Map<Integer, String> namesByCreatorId = appUserRepository.findAllById(
+                versions.stream().map(CounselingPublicResult::getCreatedBy).distinct().toList()
+        ).stream().collect(Collectors.toMap(AppUser::getUserId, AppUser::getUserName));
+        return versions.stream()
+                .map(version -> CounselingPublicResultHistoryResponse.from(
+                        version, namesByCreatorId.get(version.getCreatedBy())
+                ))
+                .toList();
     }
 
     /** 학생 본인의 공개 결과 목록. 회기별 최신 공개 버전만, publishedAt DESC, publicResultId DESC로 반환한다. */
@@ -282,6 +359,13 @@ public class CounselingPublicResultService {
                 && result != null
                 && privateConfirmed;
 
+        // canCorrect: result는 항상 회기의 "최신" 행이고(각 조회 지점이 findTop...OrderByVersionNoDesc로
+        // 가져온 값), 정정은 공개 후에만 새 버전을 추가하므로 공개 이후에는 항상 "최신 행 == 최신 공개 행"
+        // 관계가 유지된다(초안은 v1 하나뿐이고, 공개 이후 v2 이상은 전부 정정이 즉시 공개해서 만든다).
+        // 그래서 최신 행이 PUBLISHED인지만 보면 충분하다. 소유권은 이미 이 메서드를 호출하기 전에
+        // isOwnedBy로 확인된 상태다.
+        boolean canCorrect = result != null && result.isPublished();
+
         String createdByName = result == null
                 ? null
                 : appUserRepository.findById(result.getCreatedBy())
@@ -291,7 +375,7 @@ public class CounselingPublicResultService {
         return CounselorCounselingPublicResultResponse.from(
                 sessionId, reservationId, assignmentId, result,
                 createdByName, reservation.getReservationStatus(), assignment.isActive(),
-                privateConfirmed, finalResult, canSaveDraft, canPublish, canCompleteReservation
+                privateConfirmed, finalResult, canSaveDraft, canPublish, canCompleteReservation, canCorrect
         );
     }
 

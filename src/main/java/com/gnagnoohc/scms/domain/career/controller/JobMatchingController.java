@@ -16,7 +16,7 @@ import java.util.List;
 
 @Tag(name = "Career - Job Matching", description = "학생 맞춤 채용공고 추천 API")
 @RestController
-@RequestMapping("/api/v1/career/matching")
+@RequestMapping("/api/students/career/matching")
 @RequiredArgsConstructor
 public class JobMatchingController {
 

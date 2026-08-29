@@ -40,7 +40,7 @@ import org.springframework.web.bind.annotation.*;
  */
 @Tag(name = "[학생] 채용공고 API", description = "학생 사용자 전용 채용공고 탐색 및 상세 조회")
 @RestController
-@RequestMapping("/api/v1/job-postings")
+@RequestMapping("/api/students/career/job-postings")
 @RequiredArgsConstructor
 public class JobPostingStudentController {
 
@@ -62,7 +62,7 @@ public class JobPostingStudentController {
     @GetMapping("/{jobPostingId}")
     public ResponseEntity<JobPostingDetailResponseDTO> getJobPostingDetail(
             @Parameter(description = "채용공고 식별자 (PK)", example = "1")
-            @PathVariable("jobPostingId") Integer jobPostingId) {
+            @PathVariable Integer jobPostingId) {
 
         JobPostingDetailResponseDTO response = jobPostingService.getJobPostingDetail(jobPostingId);
         return ResponseEntity.ok(response);

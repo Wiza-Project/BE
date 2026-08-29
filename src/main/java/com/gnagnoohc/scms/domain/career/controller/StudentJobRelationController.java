@@ -15,22 +15,14 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 /**
  * 학생 전용 채용공고 관계 컨트롤러 (온라인 지원, 관심 공고 스크랩, 지원 현황 조회)
  *
  * <p><strong>[인가 및 보안 규칙]</strong></p>
  * <ul>
- *   <li>{@code ROLE_STUDENT(SD100)} 권한을 가진 학생 사용자만 접근 가능</li>
  *   <li>로그인 사용자 식별자는 {@link AuthenticationPrincipal}의 {@link AuthUser}에서 안전하게 추출</li>
  * </ul>
  *
@@ -38,9 +30,8 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @Tag(name = "학생 - 취창업 관계 관리 API", description = "온라인 채용 지원, 관심 공고 스크랩 토글 및 지원 현황 조회 API")
 @RestController
-@RequestMapping("/api/v1/career")
+@RequestMapping("/api/students/career")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('SD100')")
 public class StudentJobRelationController {
 
     private final StudentJobRelationService relationService;

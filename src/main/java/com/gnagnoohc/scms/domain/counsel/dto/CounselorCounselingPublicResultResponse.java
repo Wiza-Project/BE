@@ -26,7 +26,8 @@ public record CounselorCounselingPublicResultResponse(
         boolean finalResult,
         boolean canSaveDraft,
         boolean canPublish,
-        boolean canCompleteReservation
+        boolean canCompleteReservation,
+        boolean canCorrect
 ) {
     public static CounselorCounselingPublicResultResponse from(
             Integer sessionId,
@@ -40,7 +41,8 @@ public record CounselorCounselingPublicResultResponse(
             boolean finalResult,
             boolean canSaveDraft,
             boolean canPublish,
-            boolean canCompleteReservation
+            boolean canCompleteReservation,
+            boolean canCorrect
     ) {
         if (result == null) {
             return new CounselorCounselingPublicResultResponse(
@@ -48,7 +50,7 @@ public record CounselorCounselingPublicResultResponse(
                     null, null, null, null, "EMPTY",
                     null, null,
                     reservationStatus, assignmentActive, privateRecordConfirmed,
-                    finalResult, canSaveDraft, canPublish, canCompleteReservation
+                    finalResult, canSaveDraft, canPublish, canCompleteReservation, false
             );
         }
         return new CounselorCounselingPublicResultResponse(
@@ -58,7 +60,7 @@ public record CounselorCounselingPublicResultResponse(
                 result.isPublished() ? "PUBLISHED" : "DRAFT",
                 createdByName, result.getPublishedAt(),
                 reservationStatus, assignmentActive, privateRecordConfirmed,
-                finalResult, canSaveDraft, canPublish, canCompleteReservation
+                finalResult, canSaveDraft, canPublish, canCompleteReservation, canCorrect
         );
     }
 }

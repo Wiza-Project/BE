@@ -1,6 +1,6 @@
 package com.gnagnoohc.scms.domain.program.controller;
 
-import com.gnagnoohc.scms.domain.program.dto.response.CompetencyOptionResponseDTO;
+import com.gnagnoohc.scms.domain.competency.dto.CompetencySummary;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramDetailResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramListItemResponseDTO;
 import com.gnagnoohc.scms.domain.program.entity.ProgramStatus;
@@ -60,7 +60,7 @@ public class StudentProgramController {
 
     @Operation(summary = "핵심역량 옵션 조회", description = "핵심역량 목록을 조회합니다")
     @GetMapping("/competencies")
-    public ApiResponse<List<CompetencyOptionResponseDTO>> listCompetencyOptions() {
+    public ApiResponse<List<CompetencySummary>> listCompetencyOptions() {
         return ApiResponse.ok(programService.getCompetencyOptions());
     }
 

@@ -4,6 +4,7 @@ import com.gnagnoohc.scms.domain.program.dto.request.ProgramSessionRegisterReque
 import com.gnagnoohc.scms.domain.program.dto.request.ProgramSessionUpdateRequestDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramSessionResponseDTO;
 import com.gnagnoohc.scms.domain.program.entity.ProgramSession;
+import com.gnagnoohc.scms.domain.program.entity.SessionLocationType;
 import com.gnagnoohc.scms.domain.program.repository.ExtracurricularProgramRepository;
 import com.gnagnoohc.scms.domain.program.repository.ProgramSessionRepository;
 import com.gnagnoohc.scms.global.common.repository.CommonCodeRepository;
@@ -13,9 +14,11 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -48,12 +51,24 @@ public class ProgramSessionService {
             throw new BusinessException(ErrorCode.PROGRAM_INVALID_PERIOD);
         }
 
+        /**
+         * 회차 번호는 1부터 빈 번호 없이 연속되어야 한다(ProgramService.register()의 일괄 등록과 동일한
+         * 정책). 그래야 SAME_AS_PREVIOUS가 참조하는 sessionNo - 1이 항상 존재를 보장받는다. 새 회차는
+         * 항상 "현재 회차 수 + 1" 번호로만 추가할 수 있다(중간에 끼워넣거나 건너뛸 수 없음, append만 허용).
+         */
+        long existingCount = sessionRepository.countByProgram_ProgramId(programId);
+        if (!request.sessionNo().equals((int) existingCount + 1)) {
+            throw new BusinessException(ErrorCode.PROGRAM_SESSION_NO_NOT_CONTIGUOUS);
+        }
+
+        String location = resolveLocation(programId, request.sessionNo(), request.locationType(), request.location(), null);
+
         Instant now = Instant.now();
         Integer sessionId;
         try {
             sessionId = sessionRepository.insertSession(
                     programId, request.sessionNo(), request.sessionName(),
-                    request.startsAt(), request.endsAt(), request.location(), staffId, now);
+                    request.startsAt(), request.endsAt(), location, staffId, now);
         } catch (DataIntegrityViolationException e) {
             // uq_program_session_program_no 유니크 제약 위반 = 이미 존재하는 회차 번호.
             throw new BusinessException(ErrorCode.DUPLICATE_SESSION_NO);
@@ -61,7 +76,7 @@ public class ProgramSessionService {
 
         return new ProgramSessionResponseDTO(
                 sessionId, programId, request.sessionNo(), request.sessionName(),
-                request.startsAt(), request.endsAt(), request.location());
+                request.startsAt(), request.endsAt(), location);
     }
 
     public List<ProgramSessionResponseDTO> listSessions(Integer programId) {
@@ -101,11 +116,19 @@ public class ProgramSessionService {
             throw new BusinessException(ErrorCode.PROGRAM_INVALID_PERIOD);
         }
 
+        // 회차 번호는 1..N 연속만 허용되는 정책이라, 다른 회차를 함께 재배치하지 않는 단일 수정에서는
+        // sessionNo 변경 자체를 금지한다 (변경을 허용하면 반드시 gap 또는 중복이 발생한다).
+        if (!request.sessionNo().equals(session.getSessionNo())) {
+            throw new BusinessException(ErrorCode.PROGRAM_SESSION_NO_NOT_CONTIGUOUS);
+        }
+
+        String location = resolveLocation(programId, request.sessionNo(), request.locationType(), request.location(), sessionId);
+
         int updatedRows;
         try {
             updatedRows = sessionRepository.updateSession(
                     sessionId, programId, request.sessionNo(), request.sessionName(),
-                    request.startsAt(), request.endsAt(), request.location());
+                    request.startsAt(), request.endsAt(), location);
         } catch (DataIntegrityViolationException e) {
             // uq_program_session_program_no 유니크 제약 위반 = 다른 회차가 이미 쓰고 있는 회차 번호.
             throw new BusinessException(ErrorCode.DUPLICATE_SESSION_NO);
@@ -117,7 +140,37 @@ public class ProgramSessionService {
 
         return new ProgramSessionResponseDTO(
                 sessionId, programId, request.sessionNo(), request.sessionName(),
-                request.startsAt(), request.endsAt(), request.location());
+                request.startsAt(), request.endsAt(), location);
+    }
+
+    /**
+     * 회차 장소 입력 방식(locationType)에 따라 실제로 저장할 location 값을 확정한다.
+     *   DIRECT_INPUT      : location이 비어있으면 안 된다.
+     *   SAME_AS_PREVIOUS  : 직전 회차(sessionNo - 1)를 DB에서 찾아 그 location을 그대로 복사한다.
+     *                       직전 회차가 없거나(예: 1회차) 직전 회차의 location도 비어있으면 복사할 값이 없으므로 거부한다.
+     *
+     * excludeSessionId : updateSession()에서 회차 번호를 바꾸는 경우, 이 시점엔 아직 UPDATE가 실행되기 전이라
+     *                    DB에는 수정 대상 회차 자신이 옛 sessionNo를 가진 채로 남아있다. 그냥 sessionNo로만
+     *                    "직전 회차"를 찾으면 자기 자신이 조회될 수 있어, 그 회차의 PK를 넘겨 제외한다.
+     *                    registerSession()은 신규 회차라 자기 자신이 존재할 수 없으므로 null을 넘긴다.
+     */
+    private String resolveLocation(Integer programId, Integer sessionNo, SessionLocationType locationType,
+                                    String location, Integer excludeSessionId) {
+        if (locationType == SessionLocationType.DIRECT_INPUT) {
+            if (!StringUtils.hasText(location)) {
+                throw new BusinessException(ErrorCode.SESSION_LOCATION_REQUIRED);
+            }
+            return location;
+        }
+
+        Optional<ProgramSession> previousSession = excludeSessionId == null
+                ? sessionRepository.findByProgram_ProgramIdAndSessionNo(programId, sessionNo - 1)
+                : sessionRepository.findByProgram_ProgramIdAndSessionNoAndProgramSessionIdNot(
+                        programId, sessionNo - 1, excludeSessionId);
+        return previousSession
+                .map(ProgramSession::getLocation)
+                .filter(StringUtils::hasText)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PREVIOUS_SESSION_LOCATION_NOT_FOUND));
     }
 
     /**

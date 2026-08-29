@@ -61,6 +61,15 @@ public class ProgramApplicationController {
         return ApiResponse.ok(programApplicationService.cancel(programId, applicationId, authUser.getId(), reason));
     }
 
+    @Operation(summary = "대기 신청 확정", description = "정원에 자리가 난 경우, 본인의 대기(WAITLISTED) 신청을 다시 정원 내 신청(APPLIED)으로 전환합니다. 최종 승인은 운영부서가 별도로 처리합니다.")
+    @PostMapping("/{programId}/applications/{applicationId}/confirm")
+    public ApiResponse<ProgramApplyResponseDTO> confirm(
+            @PathVariable Integer programId,
+            @PathVariable Integer applicationId,
+            @AuthenticationPrincipal AuthUser authUser) {
+        return ApiResponse.ok(programApplicationService.confirm(programId, applicationId, authUser.getId()));
+    }
+
     @Operation(summary = "내 신청 현황 조회", description = "로그인한 학생 본인의 프로그램 참여 신청 현황을 최신 신청순으로 페이지 단위 조회합니다.")
     @GetMapping("/applications")
     public ApiResponse<PageResponse<ProgramApplicationSummaryResponseDTO>> listMyApplications(

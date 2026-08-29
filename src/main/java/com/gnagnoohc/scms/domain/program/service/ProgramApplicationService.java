@@ -257,6 +257,115 @@ public class ProgramApplicationService {
     }
 
     /**
+     * 학생이 자신의 대기(WAITLISTED) 신청을 스스로 확정한다. 대기 중 자리가 났다는 알림을 받은 뒤,
+     * 운영부서 승인을 기다리지 않고 본인이 직접 "정원 내 신청(APPLIED)"으로 다시 들어갈 수 있게 한다.
+     * 학생이 직접 최종 승인(APPROVED)까지 하는 것은 아니다 — 최종 승인은 여전히 운영부서가 approve()를
+     * 호출해야만 이뤄진다. apply()를 그대로 재호출하면 (c) 기존 신청 이력 확인에서 ALREADY_APPLIED로
+     * 막히므로(WAITLISTED는 CANCELLED가 아님), 별도의 경로로 둔다. approve()와 정원 검사 로직(APPLIED+
+     * APPROVED 합산 기준)은 같다 — APPLIED도 이미 정원을 차지한 상태이므로 계산식을 바꿀 필요가 없다.
+     * 처리 주체가 운영부서(staffId)가 아니라 신청 본인(studentId)이라는 점과, 대상 상태를 WAITLISTED로만
+     * 한정한다는 점이 findApplicationForUpdate()(승인/반려 양쪽에 APPLIED까지 허용)와 다르다 — 확정은
+     * 이미 정원 내로 확보된 APPLIED 건에는 의미가 없다.
+     */
+    public ProgramApplyResponseDTO confirm(Integer programId, Integer applicationId, Integer studentId) {
+        /**
+         * 필수 동의 재확인 -----------------------------------------------------------
+         * 확정은 정원 슬롯을 새로 점유해 참여를 확정짓는 행위라 apply()의 (0)단계와 성격이 같다.
+         * 대기를 건 시점과 자리가 나 확정하는 시점 사이에 동의를 철회했을 수 있는데, 락 없는 게이트
+         * 체크(hasAgreedAllRequired)만으로는 이 체크 이후 다른 트랜잭션의 withdraw()가 끼어들어
+         * 커밋되는 것을 막지 못한다. apply()의 (0)과 마찬가지로 lockAndVerifyRequiredConsent()로
+         * 비관적 락을 걸어 재검증해야 withdraw()와 직렬화되어 이 경합이 막힌다 — confirm()이
+         * user_consent_id를 새로 쓰지 않는 것(updateDecision이 그 컬럼을 건드리지 않음)과는 별개 이유다.
+         * 이 동의 락은 반드시 아래 프로그램 행 락보다 먼저 잡아야 한다 — apply()가 동의 락(0) →
+         * 프로그램 행 락(a) 순서로 잠그므로, 순서가 엇갈리면 같은 학생이 동시에 apply()/confirm()을
+         * 호출할 때(예: 신청 후 응답 전 재시도) DB 데드락이 날 수 있다.
+         */
+        Instant now = Instant.now();
+        if (!consentVerifier.hasAgreedAllRequired(studentId, ConsentModuleCode.PROGRAM, now)) {
+            throw new BusinessException(ErrorCode.REQUIRED_CONSENT_NOT_AGREED);
+        }
+        lockAndVerifyRequiredConsent(studentId, ConsentType.TERMS_OF_SERVICE, now);
+        lockAndVerifyRequiredConsent(studentId, ConsentType.PERSONAL_INFO, now);
+
+        /**
+         * apply()/approve()와 같은 이유로 프로그램 행을 신청 행보다 먼저 잠가, 아래 정원 확인과 실제
+         * 확정 반영 사이에 다른 요청(다른 대기자의 확정, 운영부서의 승인 등)이 끼어들어 정원을 초과하는
+         * 경쟁 조건을 막는다. apply()/approve()/reject()/cancel()과 반드시 같은 순서로 잠가야 데드락을 피한다.
+         */
+        ExtracurricularProgram program = programRepository.findByIdForUpdate(programId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PROGRAM_NOT_FOUND));
+
+        ProgramApplication application = applicationRepository.findByIdForUpdate(applicationId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.APPLICATION_NOT_FOUND));
+
+        // cancel()과 같은 이유로, programId·학생 본인 소유가 아니면 존재 여부를 구분하지 않고 APPLICATION_NOT_FOUND로 처리한다.
+        if (!application.getProgram().getProgramId().equals(programId)) {
+            throw new BusinessException(ErrorCode.APPLICATION_NOT_FOUND);
+        }
+        if (!application.getStudent().getUserId().equals(studentId)) {
+            throw new BusinessException(ErrorCode.APPLICATION_NOT_FOUND);
+        }
+
+        // 확정은 대기(WAITLISTED) 상태에서만 의미가 있다. 이미 APPLIED/APPROVED면 확정할 게 없고,
+        // REJECTED/CANCELLED면 이미 종결된 상태다.
+        if (!ApplicationStatus.WAITLISTED.name().equals(application.getApplicationStatus())) {
+            throw new BusinessException(ErrorCode.APPLICATION_ALREADY_PROCESSED);
+        }
+
+        // apply()/cancel()과 같은 이유로, programStatus 컬럼을 믿지 않고 지금 시각을 모집 종료 시각과 직접 비교한다.
+        now = Instant.now();
+        if (!now.isBefore(program.getRecruitmentEndsAt())) {
+            throw new BusinessException(ErrorCode.APPLICATION_PERIOD_CLOSED);
+        }
+
+        // WAITLISTED -> APPROVED는 새 슬롯을 점유하는 전이이므로, approve()와 동일한 기준으로 정원을 검사한다.
+        long occupiedCount = applicationRepository.countByProgram_ProgramIdAndApplicationStatusIn(
+                programId, List.of(ApplicationStatus.APPLIED.name(), ApplicationStatus.APPROVED.name()));
+        if (occupiedCount >= program.getCapacity()) {
+            throw new BusinessException(ErrorCode.PROGRAM_CAPACITY_EXCEEDED);
+        }
+
+        /**
+         * apply()의 (e)와 동일한 이유로, 정원 확인 등으로 시간이 흐를 수 있으므로 실제 반영
+         * (applyDecision) 직전 시각으로 마감 여부를 한 번 더 확인한다.
+         */
+        now = Instant.now();
+        if (!now.isBefore(program.getRecruitmentEndsAt())) {
+            throw new BusinessException(ErrorCode.APPLICATION_PERIOD_CLOSED);
+        }
+
+        /**
+         * apply()의 (e)와 동일한 이유로 저장 직전 시각(now)에 동의를 한 번 더 게이트 체크한다. 위에서 잡은
+         * 동의 락은 동시 withdraw()는 막아주지만, 프로그램 행 락 대기·정원 계산 등으로 흐른 시간 동안
+         * 정책 유효기간(isCurrentlyEffective)이 만료됐을 가능성까지는 막지 못한다 — 락은 "누가 값을
+         * 바꾸는지"만 직렬화할 뿐 시간 경과 자체를 멈추지 못하기 때문이다. confirm()은 apply()와 달리
+         * user_consent_id를 갱신 저장하지 않으므로(confirmWaitlisted가 그 컬럼을 건드리지 않음), 증빙을
+         * 다시 조회할 필요 없이 게이트 체크(hasAgreedAllRequired)만 다시 수행하면 된다.
+         */
+        if (!consentVerifier.hasAgreedAllRequired(studentId, ConsentModuleCode.PROGRAM, now)) {
+            throw new BusinessException(ErrorCode.REQUIRED_CONSENT_NOT_AGREED);
+        }
+
+        /**
+         * applyDecision()(승인/반려 전용)을 재사용하지 않는다 — WAITLISTED -> APPLIED는 아직 "결정"이
+         * 아니라 다시 승인 대기열로 들어가는 것뿐이라, processed_by/processed_at/decision_reason을
+         * 채우면 안 되고(그 컬럼들은 approve()가 실제로 호출될 때만 의미가 있다), ApplicationDecidedEvent
+         * (승인/반려 알림)도 발행하면 안 된다 — 그 알림은 나중에 운영부서가 실제로 approve()를 호출할 때
+         * 정상적으로 나간다. updatedRows == 0은 이미 application 행에 비관적 락을 잡고 있어 이 트랜잭션
+         * 안에서는 사실상 도달할 수 없지만, updateCancellation/reviveApplication과 동일하게 방어적으로
+         * WHERE 조건 + 결과 확인 패턴을 맞춘다.
+         */
+        int updatedRows = applicationRepository.confirmWaitlisted(applicationId, now);
+        if (updatedRows == 0) {
+            throw new BusinessException(ErrorCode.APPLICATION_ALREADY_PROCESSED);
+        }
+
+        return new ProgramApplyResponseDTO(
+                applicationId, programId, ApplicationStatus.APPLIED.name(), ApplicationStatus.APPLIED.getLabel(),
+                null, now);
+    }
+
+    /**
      * 운영부서가 신청 건을 반려한다. 반려 사유(reason)는 컨트롤러 단 @NotBlank 검증으로 항상 채워져 있다.
      * approve()와 동일한 이유로 프로그램 행을 신청 행보다 먼저 잠근다 — apply()가 정원을 확인하는 사이
      * reject()가 프로그램 행 락 없이 자리를 비우면, apply()가 그 빈 자리를 보지 못하고 대기자로

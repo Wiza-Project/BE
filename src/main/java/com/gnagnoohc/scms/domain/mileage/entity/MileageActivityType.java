@@ -20,4 +20,17 @@ public class MileageActivityType extends BaseTimeEntity {
     @Column(name = "earning_route", nullable = false, length = 30) private String earningRoute;
     @Column(name = "is_active", nullable = false) private boolean active = true;
     @Column(name = "created_by", nullable = false) private Integer createdBy;
+
+    public static MileageActivityType create(Competency competency, String activityCode,
+                                             String categoryCode, String activityName,
+                                             String earningRoute, Integer createdBy) {
+        MileageActivityType activityType = new MileageActivityType();
+        activityType.competency = competency;
+        activityType.activityCode = activityCode;
+        activityType.categoryCode = categoryCode;
+        activityType.activityName = activityName;
+        activityType.earningRoute = earningRoute;
+        activityType.createdBy = createdBy;
+        return activityType;
+    }
 }
