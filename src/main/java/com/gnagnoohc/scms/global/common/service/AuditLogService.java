@@ -129,6 +129,9 @@ public class AuditLogService {
         if (action == null || result == null) {
             throw new IllegalArgumentException("감사 로그 행위와 처리 결과는 필수입니다.");
         }
+        if (result == AuditResult.SUCCESS && actorUserId == null) {
+            throw new IllegalArgumentException("성공 로그는 actorUserId가 필수입니다.");
+        }
     }
 
     private String truncate(String value, int maxLength) {
