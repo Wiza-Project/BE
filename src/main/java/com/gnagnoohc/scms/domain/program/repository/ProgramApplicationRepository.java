@@ -203,6 +203,29 @@ public interface ProgramApplicationRepository extends JpaRepository<ProgramAppli
                         @Param("now") Instant now);
 
     /**
+     * ── 여기부터 "대기신청 확정(Update)" 기능 ──────────────────────────────────────
+     *
+     * 학생이 자신의 대기(WAITLISTED) 신청을 스스로 확정할 때, WAITLISTED -> APPLIED로만 되돌린다
+     * (최종 승인 APPROVED는 여전히 운영부서가 approve()를 호출해야만 이뤄진다). updateDecision()과
+     * 달리 processed_by/processed_at/decision_reason은 건드리지 않는다 — APPLIED는 아직 "결정"이
+     * 난 상태가 아니라 승인 대기 상태이므로, 이 컬럼들은 나중에 approve()가 호출될 때만 채워지는 게
+     * 맞다(apply()가 신규 신청을 insertApplication()으로 만들 때도 이 컬럼들을 채우지 않는 것과 동일한 이유).
+     * WHERE 절의 application_status = 'WAITLISTED' 조건은 reviveApplication/updateCancellation과
+     * 동일한 방어적 재확인 패턴이다(서비스 계층이 이미 비관적 락으로 같은 트랜잭션 안에서 확인했으므로
+     * 사실상 도달할 수 없지만, 동일한 코드 스타일을 맞춘다).
+     */
+    @Modifying(clearAutomatically = true)
+    @Query(value = """
+        UPDATE program_application
+        SET application_status = 'APPLIED',
+            waitlist_order = NULL,
+            updated_at = :now
+        WHERE application_id = :applicationId
+          AND application_status = 'WAITLISTED'
+        """, nativeQuery = true)
+    int confirmWaitlisted(@Param("applicationId") Integer applicationId, @Param("now") Instant now);
+
+    /**
      * ── 여기부터 "출석 기반 이수 판정" 기능 ──────────────────────────────────────
      *
      * ExtracurricularProgramRepository.transitionOperatingToClosed와 같은 스타일의 벌크 native UPDATE.
