@@ -57,7 +57,7 @@ import org.springframework.web.bind.annotation.*;
  */
 @Tag(name = "[교직원] 채용공고 관리 API", description = "취창업지원과 관리자 전용 구인 등록, 검수, 수정, 삭제")
 @RestController
-@RequestMapping("/api/v1/admin/job-postings")
+@RequestMapping("/api/admin/career/job-postings")
 @RequiredArgsConstructor
 @PreAuthorize("@careerSecurity.isCareerStaff(principal)")
 public class JobPostingAdminController {
@@ -90,7 +90,7 @@ public class JobPostingAdminController {
     @PutMapping("/{jobPostingId}")
     public ResponseEntity<Void> updateJobPosting(
             @Parameter(description = "채용공고 식별자 (PK)", example = "1")
-            @PathVariable("jobPostingId") Integer jobPostingId,
+            @PathVariable Integer jobPostingId,
             @Valid @RequestBody JobPostingUpdateRequestDTO requestDTO) {
 
         jobPostingService.updateJobPosting(jobPostingId, requestDTO);
@@ -102,7 +102,7 @@ public class JobPostingAdminController {
     @PatchMapping("/{jobPostingId}/review")
     public ResponseEntity<Void> reviewJobPosting(
             @Parameter(description = "채용공고 식별자 (PK)", example = "1")
-            @PathVariable("jobPostingId") Integer jobPostingId,
+            @PathVariable Integer jobPostingId,
             @AuthenticationPrincipal AuthUser authUser,
             @Valid @RequestBody JobPostingReviewRequestDTO requestDTO) {
 
@@ -115,7 +115,7 @@ public class JobPostingAdminController {
     @DeleteMapping("/{jobPostingId}")
     public ResponseEntity<Void> deleteJobPosting(
             @Parameter(description = "채용공고 식별자 (PK)", example = "1")
-            @PathVariable("jobPostingId") Integer jobPostingId) {
+            @PathVariable Integer jobPostingId) {
 
         jobPostingService.deleteJobPosting(jobPostingId);
         return ResponseEntity.noContent().build();
