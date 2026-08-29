@@ -2,6 +2,7 @@ package com.gnagnoohc.scms.domain.career.repository;
 
 import com.gnagnoohc.scms.domain.career.dto.posting.JobPostingSearchConditionDTO;
 import com.gnagnoohc.scms.domain.career.entity.JobPosting;
+import com.gnagnoohc.scms.global.common.entity.QCommonCode;
 import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.jpa.impl.JPAQuery;
 import com.querydsl.jpa.impl.JPAQueryFactory;
@@ -66,14 +67,16 @@ import static com.gnagnoohc.scms.global.common.entity.QCommonCode.commonCode;
 public class JobPostingRepositoryImpl implements JobPostingRepositoryCustom {
 
     private final JPAQueryFactory queryFactory;
+    private final QCommonCode ncsCommonCode = new QCommonCode("ncsCommonCode");
+    private final QCommonCode regionCommonCode = new QCommonCode("regionCommonCode");
 
     @Override
     public Page<JobPosting> searchStudentPostings(JobPostingSearchConditionDTO cond, Pageable pageable) {
         List<JobPosting> content = queryFactory
                 .selectFrom(jobPosting)
                 .join(jobPosting.companyAccount, companyAccount).fetchJoin()
-                .leftJoin(jobPosting.ncsCode, commonCode).fetchJoin()      // 공통코드 받는 - 엔티티에서 - ncsCode 필드 참조
-                .leftJoin(jobPosting.regionCode, commonCode).fetchJoin()   // 공통코드 받는 - 엔티티에서 - regionCode 필드 참조
+                .leftJoin(jobPosting.ncsCode, ncsCommonCode).fetchJoin()         // 공통코드 받는 - 엔티티에서 - ncsCode 필드 참조
+                .leftJoin(jobPosting.regionCode, regionCommonCode).fetchJoin()   // 공통코드 받는 - 엔티티에서 - regionCode 필드 참조
                 .where(
                         jobPosting.postingStatus.eq("PUBLISHED"),
                         jobPosting.applicationEndsAt.goe(Instant.now()),
@@ -109,8 +112,8 @@ public class JobPostingRepositoryImpl implements JobPostingRepositoryCustom {
         List<JobPosting> content = queryFactory
                 .selectFrom(jobPosting)
                 .join(jobPosting.companyAccount, companyAccount).fetchJoin()
-                .leftJoin(jobPosting.ncsCode, commonCode).fetchJoin()      // ncsCode 필드 참조
-                .leftJoin(jobPosting.regionCode, commonCode).fetchJoin()   // regionCode 필드 참조
+                .leftJoin(jobPosting.ncsCode, ncsCommonCode).fetchJoin()         // ncsCode 필드 참조
+                .leftJoin(jobPosting.regionCode, regionCommonCode).fetchJoin()   // regionCode 필드 참조
                 .where(
                         reviewStatusEq(cond.getReviewStatus()),
                         postingTypeEq(cond.getPostingType()),

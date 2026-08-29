@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.*;
  * <ul>
  *   <li><b>접근 권한:</b> SecurityConfig의 {@code /api/students/**} 규칙에 의해 STUDENT 역할 자동 인가</li>
  *   <li><b>사용자 식별:</b> 파라미터 조작 방지를 위해 {@code @AuthenticationPrincipal AuthUser}에서 학생 PK 추출</li>
- *   <li><b>엔드포인트:</b> {@code /api/students/career/preferences} (취창업 도메인 표준)</li>
+ *   <li><b>엔드포인트:</b> {@code /api/students/career/preference} (취창업 도메인 표준)</li>
  * </ul>
  *
  * @author YUN
