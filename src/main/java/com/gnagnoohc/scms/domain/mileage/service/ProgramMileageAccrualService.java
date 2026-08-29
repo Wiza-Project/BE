@@ -70,6 +70,13 @@ public class ProgramMileageAccrualService {
                         ErrorCode.NOT_COMPLETED,
                         "이수 완료된 비교과 프로그램 신청을 찾을 수 없습니다."));
 
+        // 신청 건을 잠근 뒤 다시 확인해 동시 실행된 적립 요청을 멱등 처리한다.
+        if (mileageTransactionRepository
+                .findBySourceProgramApplication_ApplicationId(applicationId)
+                .isPresent()) {
+            return false;
+        }
+
         LocalDate completionDate = application.getCompletedAt() == null
                 ? LocalDate.now(BUSINESS_ZONE)
                 : application.getCompletedAt().atZone(BUSINESS_ZONE).toLocalDate();
