@@ -12,6 +12,8 @@ import java.util.Optional;
 
 public interface MileageActivityTypeRepository extends JpaRepository<MileageActivityType, Integer> {
 
+    boolean existsByActivityCode(String activityCode);
+
     List<MileageActivityType> findAllByActiveTrueOrderByActivityNameAsc();
 
     /**

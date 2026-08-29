@@ -14,11 +14,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 /**
  * 교직원/관리자 전용 채용공고 관계 컨트롤러 (공고별 지원자 목록 조회 및 전형 단계 관리)
@@ -32,7 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @Tag(name = "교직원 - 취창업 관계 관리 API", description = "공고별 지원자 목록 및 전형 진행 상태 관리 API")
 @RestController
-@RequestMapping("/api/v1/admin/career")
+@RequestMapping("/api/admin/career")
 @RequiredArgsConstructor
 @PreAuthorize("@careerSecurity.isCareerStaff(principal)")
 public class StaffJobRelationController {
