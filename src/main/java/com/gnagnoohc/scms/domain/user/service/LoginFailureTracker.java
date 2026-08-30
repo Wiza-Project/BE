@@ -1,7 +1,11 @@
 package com.gnagnoohc.scms.domain.user.service;
 
 import com.gnagnoohc.scms.domain.user.repository.AppUserRepository;
+import com.gnagnoohc.scms.global.common.service.AuditAction;
+import com.gnagnoohc.scms.global.common.service.AuditLogService;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,12 +25,22 @@ import java.time.Instant;
 @RequiredArgsConstructor
 public class LoginFailureTracker {
 
+    private static final Logger log = LoggerFactory.getLogger(LoginFailureTracker.class);
+
     private final AppUserRepository appUserRepository;
+    private final AuditLogService auditLogService;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void registerFailure(Integer userId, int newFailedCount, boolean shouldLock) {
         if (shouldLock) {
             appUserRepository.lockAccount(userId, newFailedCount, Instant.now());
+            // 실제로 LOCKED 로 전환되는 이 트랜잭션에만 기록해 중복 저장을 막는다.
+            // 감사 로그 실패로 이 트랜잭션(계정 잠금)이 롤백되면 안 되므로 별도로 격리한다.
+            try {
+                auditLogService.recordChange(userId, "AUTH", null, AuditAction.LOCK);
+            } catch (RuntimeException e) {
+                log.warn("계정 잠금 감사 로그 기록 중 예외가 발생했습니다. userId={}", userId, e);
+            }
         } else {
             appUserRepository.updateFailedLoginCount(userId, newFailedCount);
         }
