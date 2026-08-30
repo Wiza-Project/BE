@@ -29,8 +29,12 @@ public class DormantAccountLocker {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void lock(Integer userId) {
-        appUserRepository.markDormant(userId);
-        // 실제로 DORMANT 로 전환되는 이 트랜잭션에만 기록해 중복 저장을 막는다.
+        int updatedRows = appUserRepository.markDormant(userId);
+        if (updatedRows == 0) {
+            // 동시에 들어온 다른 요청이 이미 DORMANT 로 전환시켰다는 뜻이므로 중복 기록하지 않는다.
+            return;
+        }
+        // 실제로 이 호출이 DORMANT 전환을 일으킨 경우에만 기록해 중복 저장을 막는다.
         // 감사 로그 실패로 이 트랜잭션(휴면 전환)이 롤백되면 안 되므로 별도로 격리한다.
         try {
             auditLogService.recordChange(userId, "AUTH", null, AuditAction.DORMANT);
