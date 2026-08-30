@@ -37,6 +37,7 @@ public class UserConsent extends BaseCreatedAtEntity {
         consent.consentPolicy = consentPolicy;
         consent.consentedAt = consentedAt;
         return consent;
+
     }
 
     /**
