@@ -1,6 +1,7 @@
 package com.gnagnoohc.scms.domain.program.controller;
 
 import com.gnagnoohc.scms.domain.program.dto.request.ProgramRegisterRequestDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramMileagePolicyPreviewResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramStaffDetailResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramStaffListItemResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramFileUploadResponseDTO;
@@ -83,6 +84,13 @@ public class ProgramController {
             @AuthenticationPrincipal AuthUser authUser) {
         return ApiResponse.ok(programService.uploadOperationPlan(
                 file, authUser.getId(), authUser.getDepartmentCodeId()));
+    }
+
+    @Operation(summary = "마일리지 정책 미리보기", description = "선택한 프로그램 유형(programTypeCodeId)에 매핑되는 현재 활성 마일리지 정책을 실시간으로 조회합니다. 매핑되는 정책이 없으면 관련 필드가 비어 내려갑니다.")
+    @GetMapping("/mileage-policy-preview")
+    public ApiResponse<ProgramMileagePolicyPreviewResponseDTO> previewMileagePolicy(
+            @RequestParam(required = false) Integer programTypeCodeId) {
+        return ApiResponse.ok(programService.previewMileagePolicy(programTypeCodeId));
     }
 
     @Operation(summary = "프로그램 상세 조회", description = "담당 프로그램의 상세정보, 회차 목록, 수정/삭제 가능 여부를 조회합니다 (등록자 본인만 가능)")

@@ -1,5 +1,6 @@
 package com.gnagnoohc.scms.domain.program.service;
 
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramMileagePolicyPreviewResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramStaffDetailResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramStaffListItemResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramDetailResponseDTO;
@@ -49,6 +50,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -699,6 +701,15 @@ public class ProgramService {
      * 최신 상태를 미리 채워두는 최적화일 뿐 필수 로직이 아니다.
      */
     private Integer resolveMileagePolicyId(Integer programTypeCodeId) {
+        return findActiveExtracurricularPolicy(programTypeCodeId)
+                .map(MileagePolicy::getMileagePolicyId)
+                .orElse(null);
+    }
+
+    private Optional<MileagePolicy> findActiveExtracurricularPolicy(Integer programTypeCodeId) {
+        if (programTypeCodeId == null) {
+            return Optional.empty();
+        }
         return commonCodeRepository.findById(programTypeCodeId)
                 .flatMap(programTypeCode -> mileagePolicyRepository
                         .findActiveExtracurricularPoliciesByProgramTypeOn(
@@ -707,9 +718,20 @@ public class ProgramService {
                                 ExtracurricularMileagePolicyDefinition.EARNING_ROUTE,
                                 LocalDate.now())
                         .stream()
-                        .findFirst())
-                .map(MileagePolicy::getMileagePolicyId)
-                .orElse(null);
+                        .findFirst());
+    }
+
+    /**
+     * WP-261 자동 매핑 로직(resolveMileagePolicyId)과 동일한 조건으로 조회하되, 등록/수정을 실행하지 않고도
+     * 프론트 폼에서 programTypeCodeId 선택 시점에 매핑 결과를 미리 확인할 수 있게 한다.
+     */
+    @Transactional(readOnly = true)
+    public ProgramMileagePolicyPreviewResponseDTO previewMileagePolicy(Integer programTypeCodeId) {
+        if (programTypeCodeId == null) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "programTypeCodeId는 필수입니다.");
+        }
+        MileagePolicy policy = findActiveExtracurricularPolicy(programTypeCodeId).orElse(null);
+        return ProgramMileagePolicyPreviewResponseDTO.from(programTypeCodeId, policy);
     }
 
     /**
