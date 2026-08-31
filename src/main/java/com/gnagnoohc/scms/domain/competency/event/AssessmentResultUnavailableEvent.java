@@ -1,6 +1,7 @@
 package com.gnagnoohc.scms.domain.competency.event;
 
 import java.time.Instant;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -16,6 +17,14 @@ public record AssessmentResultUnavailableEvent(
         String reason,
         Instant occurredAt
 ) {
+    // 네 필드 모두 필수 — 특히 requestId가 null이면 취창업이 재시도 요청과 이 응답을 연결하지 못한다.
+    public AssessmentResultUnavailableEvent {
+        Objects.requireNonNull(studentId, "studentId는 필수입니다");
+        Objects.requireNonNull(requestId, "requestId는 필수입니다");
+        Objects.requireNonNull(reason, "reason은 필수입니다");
+        Objects.requireNonNull(occurredAt, "occurredAt은 필수입니다");
+    }
+
     /** 현재 유일한 사유값 — 학생의 완료 진단 자체가 하나도 없는 경우. */
     public static final String REASON_NO_COMPLETED_ASSESSMENT = "NO_COMPLETED_ASSESSMENT";
 }

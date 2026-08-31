@@ -3,6 +3,7 @@ package com.gnagnoohc.scms.domain.competency.event;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -31,11 +32,34 @@ public record AssessmentResultReadyEvent(
         List<CompetencyScore> scores,
         UUID requestId
 ) {
+    // requestId만 nullable(일반 제출·백필 경로에서 null). 나머지는 취창업 읽기 모델의 필수 컬럼이라
+    // 조립 단계 버그를 구독자에게 넘기지 않도록 발행 시점에 막는다.
+    public AssessmentResultReadyEvent {
+        Objects.requireNonNull(studentId, "studentId는 필수입니다");
+        Objects.requireNonNull(attemptId, "attemptId는 필수입니다");
+        Objects.requireNonNull(assessmentRoundId, "assessmentRoundId는 필수입니다");
+        Objects.requireNonNull(assessmentName, "assessmentName은 필수입니다");
+        Objects.requireNonNull(academicYear, "academicYear는 필수입니다");
+        Objects.requireNonNull(semesterCode, "semesterCode는 필수입니다");
+        Objects.requireNonNull(semesterLabel, "semesterLabel은 필수입니다");
+        Objects.requireNonNull(assessmentPhase, "assessmentPhase는 필수입니다");
+        Objects.requireNonNull(submittedAt, "submittedAt은 필수입니다");
+        Objects.requireNonNull(overallAverageScore, "overallAverageScore는 필수입니다");
+        Objects.requireNonNull(scores, "scores는 필수입니다");
+    }
+
     /** 역량별 환산점수. {@code displayOrder} 오름차순으로 담는다. */
     public record CompetencyScore(
             Integer competencyId,
             String competencyName,
             Integer displayOrder,
             BigDecimal convertedScore
-    ) {}
+    ) {
+        public CompetencyScore {
+            Objects.requireNonNull(competencyId, "competencyId는 필수입니다");
+            Objects.requireNonNull(competencyName, "competencyName은 필수입니다");
+            Objects.requireNonNull(displayOrder, "displayOrder는 필수입니다");
+            Objects.requireNonNull(convertedScore, "convertedScore는 필수입니다");
+        }
+    }
 }

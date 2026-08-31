@@ -1,6 +1,7 @@
 package com.gnagnoohc.scms.domain.career.event;
 
 import java.time.Instant;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -24,4 +25,11 @@ public record ResumeCompetencySyncRequestedEvent(
         UUID requestId,
         Instant requestedAt
 ) {
+    // 계약상 세 필드 모두 필수. requestId가 null이면 재연동 응답(Ready/Unavailable)의 상관관계가 깨진다.
+    // (취창업 확인 필요) 최종 검증 방식은 실제 발행부를 구현하는 취창업이 확정한다.
+    public ResumeCompetencySyncRequestedEvent {
+        Objects.requireNonNull(studentId, "studentId는 필수입니다");
+        Objects.requireNonNull(requestId, "requestId는 필수입니다");
+        Objects.requireNonNull(requestedAt, "requestedAt은 필수입니다");
+    }
 }

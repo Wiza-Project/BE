@@ -57,11 +57,32 @@ class ResumeCompetencySyncRequestedEventListenerTest {
         when(assessmentAttemptRepository
                 .findFirstByStudent_UserIdAndSubmittedAtIsNotNullOrderBySubmittedAtDescAttemptIdDesc(STUDENT_ID))
                 .thenReturn(Optional.of(attemptWithId(ATTEMPT_ID)));
+        when(assessmentResultReadyEventPublisher.publish(ATTEMPT_ID, requestId)).thenReturn(true);
 
         listener.handle(new ResumeCompetencySyncRequestedEvent(STUDENT_ID, requestId, Instant.now()));
 
         verify(assessmentResultReadyEventPublisher).publish(ATTEMPT_ID, requestId);
         verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    // 완료 attempt는 있으나 환산점수가 없어 결과 준비 이벤트가 발행되지 않은 경우(publish=false) —
+    // 요청이 종료되도록 결과 없음 이벤트로 대체해야 한다.
+    @Test
+    void handle_whenAttemptExistsButReadyEventNotPublished_fallsBackToUnavailableEvent() throws Exception {
+        UUID requestId = UUID.randomUUID();
+        when(assessmentAttemptRepository
+                .findFirstByStudent_UserIdAndSubmittedAtIsNotNullOrderBySubmittedAtDescAttemptIdDesc(STUDENT_ID))
+                .thenReturn(Optional.of(attemptWithId(ATTEMPT_ID)));
+        when(assessmentResultReadyEventPublisher.publish(ATTEMPT_ID, requestId)).thenReturn(false);
+
+        listener.handle(new ResumeCompetencySyncRequestedEvent(STUDENT_ID, requestId, Instant.now()));
+
+        ArgumentCaptor<AssessmentResultUnavailableEvent> captor =
+                ArgumentCaptor.forClass(AssessmentResultUnavailableEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertThat(captor.getValue().requestId()).isEqualTo(requestId);
+        assertThat(captor.getValue().reason())
+                .isEqualTo(AssessmentResultUnavailableEvent.REASON_NO_COMPLETED_ASSESSMENT);
     }
 
     @Test

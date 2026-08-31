@@ -111,7 +111,7 @@ class AssessmentResultReadyEventPublisherTest {
 
         when(commonCodeService.getCodeName("SEMESTER", "SPRING")).thenReturn("1학기");
 
-        publisher.publishFromSubmit(attempt, calculated);
+        assertThat(publisher.publishFromSubmit(attempt, calculated)).isTrue();
 
         AssessmentResultReadyEvent event = capturePublished();
         assertThat(event.studentId()).isEqualTo(STUDENT_ID);
@@ -134,13 +134,13 @@ class AssessmentResultReadyEventPublisherTest {
     }
 
     // 문항 0개 회차를 제출하면 계산 점수 리스트가 비는데, 전체 평균 산식이 0으로 나누기라 예외가 난다.
-    // 빈 리스트면 이벤트를 발행하지 않고 조용히 넘어가야 한다(제출 트랜잭션을 깨지 않음).
+    // 빈 리스트면 이벤트를 발행하지 않고 false를 돌려줘야 한다(제출 트랜잭션을 깨지 않음).
     @Test
-    void publishFromSubmit_whenNoScores_doesNotPublishAnyEventAndDoesNotThrow() throws Exception {
+    void publishFromSubmit_whenNoScores_doesNotPublishAnyEventAndReturnsFalse() throws Exception {
         AssessmentRound round = buildRound();
         AssessmentAttempt attempt = buildAttempt(round, buildStudent(STUDENT_ID));
 
-        publisher.publishFromSubmit(attempt, List.of());
+        assertThat(publisher.publishFromSubmit(attempt, List.of())).isFalse();
 
         verify(eventPublisher, never()).publishEvent(any());
     }
@@ -161,7 +161,7 @@ class AssessmentResultReadyEventPublisherTest {
         when(assessmentScoreRepository.findByAttemptIdFetchCompetencyOrderByDisplayOrder(ATTEMPT_ID)).thenReturn(scores);
         when(commonCodeService.getCodeName("SEMESTER", "SPRING")).thenReturn("1학기");
 
-        publisher.publish(ATTEMPT_ID, requestId);
+        assertThat(publisher.publish(ATTEMPT_ID, requestId)).isTrue();
 
         AssessmentResultReadyEvent event = capturePublished();
         assertThat(event.requestId()).isEqualTo(requestId);
@@ -171,7 +171,7 @@ class AssessmentResultReadyEventPublisherTest {
     }
 
     @Test
-    void publish_whenNoScores_doesNotPublishAnyEvent() throws Exception {
+    void publish_whenNoScores_doesNotPublishAnyEventAndReturnsFalse() throws Exception {
         AssessmentRound round = buildRound();
         AssessmentAttempt attempt = buildAttempt(round, buildStudent(STUDENT_ID));
         lenient().when(commonCodeService.getCodeName(any(), any())).thenReturn("1학기");
@@ -180,7 +180,7 @@ class AssessmentResultReadyEventPublisherTest {
         when(assessmentScoreRepository.findByAttemptIdFetchCompetencyOrderByDisplayOrder(ATTEMPT_ID))
                 .thenReturn(List.of());
 
-        publisher.publish(ATTEMPT_ID, null);
+        assertThat(publisher.publish(ATTEMPT_ID, null)).isFalse();
 
         verify(eventPublisher, never()).publishEvent(any());
     }

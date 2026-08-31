@@ -17,6 +17,10 @@ import java.util.Optional;
 /**
  * 취창업의 이력서 재연동 요청({@link ResumeCompetencySyncRequestedEvent})을 받아,
  * 학생의 완료 진단 최신 1건이 있으면 결과 준비 이벤트를, 없으면 결과 없음 이벤트를 requestId를 달아 재발행한다.
+ *
+ * <p>재연동 요청은 반드시 두 이벤트 중 하나로 끝맺어야 한다(그렇지 않으면 취창업 화면이 "결과 없음"과
+ * "처리 지연·실패"를 구분하지 못한다). 완료 attempt를 찾았더라도 환산점수가 없어 결과 준비 이벤트가
+ * 발행되지 않으면, 이 리스너가 결과 없음 이벤트로 대체해 요청을 종료시킨다.</p>
  */
 @Component
 @RequiredArgsConstructor
@@ -42,9 +46,12 @@ public class ResumeCompetencySyncRequestedEventListener {
         Optional<AssessmentAttempt> latestCompleted = assessmentAttemptRepository
                 .findFirstByStudent_UserIdAndSubmittedAtIsNotNullOrderBySubmittedAtDescAttemptIdDesc(event.studentId());
 
-        if (latestCompleted.isPresent()) {
-            assessmentResultReadyEventPublisher.publish(latestCompleted.get().getAttemptId(), event.requestId());
-        } else {
+        boolean readyEventPublished = latestCompleted.isPresent()
+                && assessmentResultReadyEventPublisher.publish(latestCompleted.get().getAttemptId(), event.requestId());
+
+        // 완료 attempt가 없거나, 있어도 환산점수가 없어 결과 준비 이벤트가 발행되지 않은 경우 —
+        // 취창업이 무한 대기하지 않도록 결과 없음 이벤트로 요청을 종료시킨다.
+        if (!readyEventPublished) {
             eventPublisher.publishEvent(new AssessmentResultUnavailableEvent(
                     event.studentId(),
                     event.requestId(),

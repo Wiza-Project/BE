@@ -35,6 +35,7 @@ public class AssessmentResultBackfillRunner implements CommandLineRunner {
     public void run(String... args) {
         int page = 0;
         long published = 0;
+        long skipped = 0;
         long failed = 0;
         Slice<Integer> slice;
         do {
@@ -43,8 +44,12 @@ public class AssessmentResultBackfillRunner implements CommandLineRunner {
                 try {
                     // publish는 @Transactional이라 attemptId마다 독립 트랜잭션에서 발행된다 —
                     // 한 건 실패가 다른 건 발행을 막지 않도록 건별로 예외를 삼킨다.
-                    assessmentResultReadyEventPublisher.publish(attemptId, null);
-                    published++;
+                    // 환산점수가 없어 발행하지 않은 건(false)은 실패가 아니라 스킵으로 따로 센다.
+                    if (assessmentResultReadyEventPublisher.publish(attemptId, null)) {
+                        published++;
+                    } else {
+                        skipped++;
+                    }
                 } catch (Exception e) {
                     failed++;
                     log.warn("이력서 연동 백필 발행 실패 — attemptId={}, 건너뜀", attemptId, e);
@@ -53,6 +58,6 @@ public class AssessmentResultBackfillRunner implements CommandLineRunner {
             page++;
         } while (slice.hasNext());
 
-        log.info("이력서 핵심역량 연동 백필 완료 — 발행 {}건, 실패 {}건", published, failed);
+        log.info("이력서 핵심역량 연동 백필 완료 — 발행 {}건, 스킵(점수 없음) {}건, 실패 {}건", published, skipped, failed);
     }
 }
