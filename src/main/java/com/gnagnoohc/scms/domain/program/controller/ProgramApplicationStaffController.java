@@ -64,8 +64,10 @@ public class ProgramApplicationStaffController {
             @RequestParam(required = false) String status,
             // 학생 이름/학번 부분 일치 검색. 생략하면 검색 없이 전체 신청자를 조회한다.
             @RequestParam(required = false) String keyword,
-            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
-        return ApiResponse.ok(programApplicationService.listByProgram(programId, status, keyword, pageable));
+            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable,
+            @AuthenticationPrincipal AuthUser authUser) {
+        return ApiResponse.ok(programApplicationService.listByProgram(
+                programId, status, keyword, pageable, authUser.getId(), authUser.getDepartmentCodeId()));
     }
 
     @Operation(summary = "참여 신청 일괄 승인", description = "선택한 여러 신청 건을 한 번에 승인합니다. 정원 초과 등으로 일부만 실패할 수 있습니다.")

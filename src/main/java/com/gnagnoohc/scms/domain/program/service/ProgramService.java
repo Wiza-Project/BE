@@ -71,6 +71,12 @@ public class ProgramService {
      */
     private static final String DEPARTMENT_GROUP = "DEPARTMENT";
     private static final String DEFAULT_DEPARTMENT_CODE = "D200"; // 비교과운영부서
+    /**
+     * findActiveExtracurricularPolicy()에서 programTypeCodeId로 조회한 CommonCode가 실제로
+     * 프로그램 유형 그룹인지 검증할 때 쓰는 값. MileagePolicyRepository.findActiveExtracurricularPoliciesByProgramTypeOn()의
+     * JPQL이 검사하는 codeGroup 리터럴과 동일해야 한다.
+     */
+    private static final String PROGRAM_TYPE_GROUP = "PROGRAM_TYPE";
     // 운영계획서는 문서 1개(PDF)만 받는다 — FileUploadValidator의 기본 허용 확장자(이미지+PDF)보다 좁게 검증한다.
     private static final Set<String> OPERATION_PLAN_EXTENSIONS = Set.of("pdf");
 
@@ -417,6 +423,8 @@ public class ProgramService {
          * (e) 실제 DB 반영 -------------------------------------------------------------
          * updatedRows는 이번 UPDATE 문으로 실제 몇 개의 row가 바뀌었는지를 담는다(보통 0 또는 1).
          */
+        Optional<MileagePolicy> resolvedMileagePolicy = findActiveExtracurricularPolicy(request.programTypeCodeId());
+
         int updatedRows;
         try {
             updatedRows = programRepository.updateProgram(
@@ -425,7 +433,7 @@ public class ProgramService {
                     operatingUnitCodeId,
                     request.programTypeCodeId(),
                     request.competencyId(),
-                    resolveMileagePolicyId(request.programTypeCodeId()),
+                    resolvedMileagePolicy.map(MileagePolicy::getMileagePolicyId).orElse(null),
                     request.programName(),
                     request.description(),
                     request.recruitmentStartsAt(),
@@ -467,6 +475,9 @@ public class ProgramService {
                 program.getProgramStatus().getLabel(),
                 request.capacity(),
                 completionRate,
+                resolvedMileagePolicy.map(MileagePolicy::getMileagePolicyId).orElse(null),
+                resolvedMileagePolicy.map(MileagePolicy::getPoints).orElse(null),
+                resolvedMileagePolicy.map(policy -> policy.getActivityType().getActivityName()).orElse(null),
                 request.recruitmentStartsAt(),
                 request.recruitmentEndsAt(),
                 request.operationStartsAt(),
@@ -711,6 +722,7 @@ public class ProgramService {
             return Optional.empty();
         }
         return commonCodeRepository.findById(programTypeCodeId)
+                .filter(programTypeCode -> PROGRAM_TYPE_GROUP.equals(programTypeCode.getCodeGroup()))
                 .flatMap(programTypeCode -> mileagePolicyRepository
                         .findActiveExtracurricularPoliciesByProgramTypeOn(
                                 programTypeCode.getCode(),

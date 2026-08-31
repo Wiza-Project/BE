@@ -9,6 +9,7 @@ import com.gnagnoohc.scms.domain.program.entity.ProgramSession;
 import com.gnagnoohc.scms.domain.program.repository.ProgramApplicationRepository;
 import com.gnagnoohc.scms.domain.program.repository.ProgramAttendanceRepository;
 import com.gnagnoohc.scms.domain.program.repository.ProgramSessionRepository;
+import com.gnagnoohc.scms.global.common.repository.CommonCodeRepository;
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -26,9 +27,17 @@ import java.util.stream.Collectors;
 @Transactional
 public class ProgramAttendanceService {
 
+    /**
+     * 로그인한 사용자가 비교과운영부서 소속인지 검증(isOperatingDepartment)할 때 기준이 되는 CommonCode 값.
+     * ProgramService.isOperatingDepartment()와 동일한 기준(CommonCodeSeeder 기준 비교과운영부서=D200)이다.
+     */
+    private static final String DEPARTMENT_GROUP = "DEPARTMENT";
+    private static final String DEFAULT_DEPARTMENT_CODE = "D200"; // 비교과운영부서
+
     private final ProgramSessionRepository sessionRepository;
     private final ProgramApplicationRepository applicationRepository;
     private final ProgramAttendanceRepository attendanceRepository;
+    private final CommonCodeRepository commonCodeRepository;
 
     /**
      * 운영부서가 특정 회차에 대해 학생 한 명의 출석 여부를 기록(이미 기록이 있으면 정정)한다. 매개변수 5개의 의미:
@@ -70,9 +79,17 @@ public class ProgramAttendanceService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.INTERNAL_ERROR));
     }
 
-    public List<ProgramAttendanceResponseDTO> listAttendance(Integer programId, Integer sessionId) {
+    public List<ProgramAttendanceResponseDTO> listAttendance(
+            Integer programId, Integer sessionId, Integer currentUserId, Integer departmentCodeId) {
         ProgramSession session = sessionRepository.findByProgramSessionIdAndProgram_ProgramId(sessionId, programId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PROGRAM_SESSION_NOT_FOUND));
+
+        if (!isOperatingDepartment(departmentCodeId)) {
+            throw new BusinessException(ErrorCode.DEPARTMENT_FORBIDDEN);
+        }
+        if (!session.getProgram().getManagerUser().getUserId().equals(currentUserId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
 
         return attendanceRepository.findByProgramSession_ProgramSessionId(session.getProgramSessionId())
                 .stream()
@@ -105,6 +122,21 @@ public class ProgramAttendanceService {
                 .map(session -> ProgramMyAttendanceResponseDTO.of(
                         session, attendanceBySessionId.get(session.getProgramSessionId())))
                 .toList();
+    }
+
+    /**
+     * 로그인한 사용자의 부서 codeId가 비교과운영부서(D200)의 codeId와 같은지 검사한다.
+     * departmentCodeId가 null이면(부서 미배정) 당연히 비교과운영부서가 아니므로 false.
+     * ProgramService.isOperatingDepartment()와 동일한 로직이다.
+     */
+    private boolean isOperatingDepartment(Integer departmentCodeId) {
+        if (departmentCodeId == null) {
+            return false;
+        }
+        return commonCodeRepository.findByCodeGroupAndActiveTrueOrderBySortOrderAsc(DEPARTMENT_GROUP)
+                .stream()
+                .filter(commonCode -> commonCode.getCode().equals(DEFAULT_DEPARTMENT_CODE))
+                .anyMatch(commonCode -> commonCode.getCodeId().equals(departmentCodeId));
     }
 
     private AttendanceStatus parseAttendanceStatus(String value) {

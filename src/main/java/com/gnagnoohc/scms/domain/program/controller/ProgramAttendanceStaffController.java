@@ -38,7 +38,9 @@ public class ProgramAttendanceStaffController {
     @GetMapping
     public ApiResponse<List<ProgramAttendanceResponseDTO>> listAttendance(
             @PathVariable Integer programId,
-            @PathVariable Integer sessionId) {
-        return ApiResponse.ok(programAttendanceService.listAttendance(programId, sessionId));
+            @PathVariable Integer sessionId,
+            @AuthenticationPrincipal AuthUser authUser) {
+        return ApiResponse.ok(programAttendanceService.listAttendance(
+                programId, sessionId, authUser.getId(), authUser.getDepartmentCodeId()));
     }
 }

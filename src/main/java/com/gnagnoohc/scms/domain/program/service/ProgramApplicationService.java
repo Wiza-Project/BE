@@ -20,6 +20,7 @@ import com.gnagnoohc.scms.domain.user.service.consent.ConsentModuleCode;
 import com.gnagnoohc.scms.domain.user.service.consent.ConsentType;
 import com.gnagnoohc.scms.domain.user.service.consent.ConsentVerifier;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;
+import com.gnagnoohc.scms.global.common.repository.CommonCodeRepository;
 import com.gnagnoohc.scms.global.common.notification.ModuleCode;
 import com.gnagnoohc.scms.global.common.notification.NotificationRequest;
 import com.gnagnoohc.scms.global.common.notification.NotificationSender;
@@ -56,6 +57,13 @@ import java.util.stream.Collectors;
 @Slf4j
 public class ProgramApplicationService {
 
+    /**
+     * 로그인한 사용자가 비교과운영부서 소속인지 검증(isOperatingDepartment)할 때 기준이 되는 CommonCode 값.
+     * ProgramService.isOperatingDepartment()와 동일한 기준(CommonCodeSeeder 기준 비교과운영부서=D200)이다.
+     */
+    private static final String DEPARTMENT_GROUP = "DEPARTMENT";
+    private static final String DEFAULT_DEPARTMENT_CODE = "D200"; // 비교과운영부서
+
     private final ExtracurricularProgramRepository programRepository;
     private final ProgramApplicationRepository applicationRepository;
     private final ProgramAttendanceRepository attendanceRepository;
@@ -64,6 +72,7 @@ public class ProgramApplicationService {
     private final ApplicationEventPublisher eventPublisher;
     private final PlatformTransactionManager transactionManager;
     private final ConsentVerifier consentVerifier;
+    private final CommonCodeRepository commonCodeRepository;
 
     /**
      * 학생의 프로그램 참여 신청을 접수한다. 매개변수 2개의 의미:
@@ -588,10 +597,18 @@ public class ProgramApplicationService {
      */
     @Transactional(readOnly = true)
     public PageResponse<ProgramApplicationStaffListItemResponseDTO> listByProgram(
-            Integer programId, String status, String keyword, Pageable pageable) {
-        if (!programRepository.existsById(programId)) {
-            throw new BusinessException(ErrorCode.PROGRAM_NOT_FOUND);
+            Integer programId, String status, String keyword, Pageable pageable,
+            Integer currentUserId, Integer departmentCodeId) {
+        ExtracurricularProgram program = programRepository.findById(programId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PROGRAM_NOT_FOUND));
+
+        if (!isOperatingDepartment(departmentCodeId)) {
+            throw new BusinessException(ErrorCode.DEPARTMENT_FORBIDDEN);
         }
+        if (!program.getManagerUser().getUserId().equals(currentUserId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+
         String normalizedKeyword = StringUtils.hasText(keyword) ? escapeLikeKeyword(keyword.trim()) : null;
         Page<ProgramApplication> applications = applicationRepository.findAllByProgramIdAndStatus(
                 programId, status, normalizedKeyword, pageable);
@@ -605,6 +622,21 @@ public class ProgramApplicationService {
      */
     private static String escapeLikeKeyword(String keyword) {
         return keyword.replace("!", "!!").replace("%", "!%").replace("_", "!_");
+    }
+
+    /**
+     * 로그인한 사용자의 부서 codeId가 비교과운영부서(D200)의 codeId와 같은지 검사한다.
+     * departmentCodeId가 null이면(부서 미배정) 당연히 비교과운영부서가 아니므로 false.
+     * ProgramService.isOperatingDepartment()와 동일한 로직이다.
+     */
+    private boolean isOperatingDepartment(Integer departmentCodeId) {
+        if (departmentCodeId == null) {
+            return false;
+        }
+        return commonCodeRepository.findByCodeGroupAndActiveTrueOrderBySortOrderAsc(DEPARTMENT_GROUP)
+                .stream()
+                .filter(commonCode -> commonCode.getCode().equals(DEFAULT_DEPARTMENT_CODE))
+                .anyMatch(commonCode -> commonCode.getCodeId().equals(departmentCodeId));
     }
 
     /**
