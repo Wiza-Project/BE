@@ -1,6 +1,5 @@
 package com.gnagnoohc.scms.domain.program.controller;
 
-import com.gnagnoohc.scms.domain.program.dto.response.CompetencyOptionResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.request.ProgramRegisterRequestDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramAdminDetailResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramAdminListItemResponseDTO;
@@ -84,12 +83,6 @@ public class ProgramController {
             @AuthenticationPrincipal AuthUser authUser) {
         return ApiResponse.ok(programService.uploadOperationPlan(
                 file, authUser.getId(), authUser.getDepartmentCodeId()));
-    }
-
-    @Operation(summary = "핵심역량 옵션 조회", description = "프로그램 등록 폼에서 사용할 핵심역량 목록을 조회합니다")
-    @GetMapping("/competencies")
-    public ApiResponse<List<CompetencyOptionResponseDTO>> listCompetencyOptions() {
-        return ApiResponse.ok(programService.getCompetencyOptions());
     }
 
     @Operation(summary = "프로그램 상세 조회", description = "담당 프로그램의 상세정보, 회차 목록, 수정/삭제 가능 여부를 조회합니다 (등록자 본인만 가능)")

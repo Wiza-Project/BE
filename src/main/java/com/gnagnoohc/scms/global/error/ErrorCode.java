@@ -92,6 +92,12 @@ public enum ErrorCode {
     PROGRAM_SESSION_REQUIRED(HttpStatus.BAD_REQUEST, "P022", "회차는 최소 1개 이상 등록해야 합니다."),
     // update() 요청에 fileGroupId와 clearFileGroup=true가 동시에 담겨왔을 때(모순된 요청) 사용하는 에러코드.
     PROGRAM_FILE_GROUP_CONFLICT(HttpStatus.BAD_REQUEST, "P023", "fileGroupId와 clearFileGroup을 동시에 지정할 수 없습니다."),
+    // 회차 등록/수정 시 locationType=DIRECT_INPUT인데 location이 비어있을 때 사용하는 에러코드.
+    SESSION_LOCATION_REQUIRED(HttpStatus.BAD_REQUEST, "P024", "회차 장소를 입력해주세요."),
+    // 회차 등록/수정 시 locationType=SAME_AS_PREVIOUS인데 참조할 이전 회차(또는 그 장소)가 없을 때 사용하는 에러코드.
+    PREVIOUS_SESSION_LOCATION_NOT_FOUND(HttpStatus.BAD_REQUEST, "P025", "복사할 이전 회차의 장소 정보가 없습니다."),
+    // 회차 등록 시 회차 번호가 1부터 빈 번호 없이 연속되지 않을 때 사용하는 에러코드.
+    PROGRAM_SESSION_NO_NOT_CONTIGUOUS(HttpStatus.BAD_REQUEST, "P026", "회차 번호는 1부터 빠짐없이 연속되어야 합니다."),
 
     // ── 핵심역량/진단 ─────────────────────────────────────────────
     COMPETENCY_NOT_FOUND(HttpStatus.NOT_FOUND, "Q001", "핵심역량 정보를 찾을 수 없습니다."),
@@ -145,6 +151,10 @@ public enum ErrorCode {
     PUBLIC_RESULT_STATE_NOT_ALLOWED(HttpStatus.CONFLICT, "S010", "허용되지 않은 공개 결과 상태입니다."),
     PUBLIC_RESULT_NOT_FOUND(HttpStatus.NOT_FOUND, "S011", "공개된 상담 결과를 찾을 수 없습니다."),
     PUBLIC_RESULT_NO_CHANGES(HttpStatus.CONFLICT, "S012", "수정한 내역이 없습니다."),
+    // 학생이 예약 일정 변경 화면을 연 뒤 다른 요청이 먼저 같은 예약의 일정을 바꿔, 요청의
+    // expectedScheduleId(화면이 기억하던 예약 당시 일정)와 DB의 실제 현재 일정이 달라졌을 때 사용하는
+    // 에러코드. 새 일정의 마감·정원 문제(S002)와는 원인이 다르므로 별도 코드로 구분한다.
+    RESERVATION_SCHEDULE_CONFLICT(HttpStatus.CONFLICT, "S013", "예약 일정이 이미 변경되었습니다. 최신 예약 정보를 확인해 주세요."),
 
     // ── 마일리지 ──────────────────────────────────────────────────
     MILEAGE_ITEM_NOT_FOUND(HttpStatus.NOT_FOUND, "M001", "마일리지 항목을 찾을 수 없습니다."),
