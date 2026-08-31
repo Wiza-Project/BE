@@ -18,6 +18,9 @@ import com.gnagnoohc.scms.domain.program.repository.ExtracurricularProgramReposi
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramFileUploadResponseDTO;
 import com.gnagnoohc.scms.domain.program.repository.ProgramApplicationRepository;
 import com.gnagnoohc.scms.domain.program.repository.ProgramSessionRepository;
+import com.gnagnoohc.scms.domain.mileage.entity.MileagePolicy;
+import com.gnagnoohc.scms.domain.mileage.repository.MileagePolicyRepository;
+import com.gnagnoohc.scms.domain.mileage.service.ExtracurricularMileagePolicyDefinition;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;
 import com.gnagnoohc.scms.global.common.entity.FileGroup;
 import com.gnagnoohc.scms.global.common.entity.StoredFile;
@@ -40,6 +43,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -70,6 +74,7 @@ public class ProgramService {
 
     private final ExtracurricularProgramRepository programRepository;
     private final CommonCodeRepository commonCodeRepository;
+    private final MileagePolicyRepository mileagePolicyRepository;
     private final ProgramSessionRepository programSessionRepository;
     private final ProgramApplicationRepository applicationRepository;
     private final FileGroupService fileGroupService;
@@ -150,7 +155,7 @@ public class ProgramService {
                     operatingUnitCodeId,
                     programTypeCodeId,
                     request.competencyId(),
-                    request.mileagePolicyId(),
+                    resolveMileagePolicyId(programTypeCodeId),
                     // managerUserId는 요청 DTO가 아니라 이 메서드의 매개변수(로그인한 사용자)로 채운다.
                     managerUserId,
                     request.programName(),
@@ -418,7 +423,7 @@ public class ProgramService {
                     operatingUnitCodeId,
                     request.programTypeCodeId(),
                     request.competencyId(),
-                    request.mileagePolicyId(),
+                    resolveMileagePolicyId(request.programTypeCodeId()),
                     request.programName(),
                     request.description(),
                     request.recruitmentStartsAt(),
@@ -684,6 +689,27 @@ public class ProgramService {
                 .stream()
                 .filter(commonCode -> commonCode.getCode().equals(DEFAULT_DEPARTMENT_CODE))
                 .anyMatch(commonCode -> commonCode.getCodeId().equals(departmentCodeId));
+    }
+
+    /**
+     * 프로그램 유형(programTypeCodeId)에 대응하는 비교과 마일리지 정책을 자동으로 찾아 그 id를 반환한다.
+     * WP-261: 등록/수정 시점에 마일리지 정책을 수동으로 고르지 않고, 프로그램 유형 선택만으로 자동 매핑되게 한다.
+     * 여기서 못 찾아도(시드 데이터 미존재, 유효기간 밖 등) 등록 자체를 막지 않고 null로 둔다 — 이수 완료 후
+     * 마일리지 적립 시점에 ProgramMileageAccrualService가 같은 조건으로 다시 동적 조회하기 때문에, 이 값은
+     * 최신 상태를 미리 채워두는 최적화일 뿐 필수 로직이 아니다.
+     */
+    private Integer resolveMileagePolicyId(Integer programTypeCodeId) {
+        return commonCodeRepository.findById(programTypeCodeId)
+                .flatMap(programTypeCode -> mileagePolicyRepository
+                        .findActiveExtracurricularPoliciesByProgramTypeOn(
+                                programTypeCode.getCode(),
+                                ExtracurricularMileagePolicyDefinition.CATEGORY_CODE,
+                                ExtracurricularMileagePolicyDefinition.EARNING_ROUTE,
+                                LocalDate.now())
+                        .stream()
+                        .findFirst())
+                .map(MileagePolicy::getMileagePolicyId)
+                .orElse(null);
     }
 
     /**
