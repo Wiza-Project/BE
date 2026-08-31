@@ -12,5 +12,6 @@ public enum NotificationType {
     RESERVATION_CONFIRMED,       // 상담확정
     MILEAGE_EARNED,              // 마일리지 적립완료
     EVIDENCE_SUPPLEMENT_NEEDED,  // 증빙보완 필요
-    WAITLIST_SLOT_OPENED         // 대기 자리 발생
+    WAITLIST_SLOT_OPENED,        // 대기 자리 발생
+    APPLICATION_SUBMITTED,       // 지원/신청 접수완료 (채용공고/프로그램 등)
 }

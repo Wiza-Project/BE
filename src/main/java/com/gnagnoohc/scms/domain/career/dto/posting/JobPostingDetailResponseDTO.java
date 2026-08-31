@@ -45,6 +45,9 @@ public class JobPostingDetailResponseDTO {
     @Schema(description = "근무 지역명 (common_code 조인)", example = "서울시 강남구")
     private String regionCodeName;
 
+    @Schema(description = "공통 파일 스토리지 포스터 파일그룹 PK (이미지/PDF 뷰어 렌더링용)", example = "10")
+    private Integer fileGroupId;
+
     @Schema(description = "내부 사용자(검토자) 참조 식별자 (reviewed_by)", example = "5")
     private Integer reviewedBy;
 
