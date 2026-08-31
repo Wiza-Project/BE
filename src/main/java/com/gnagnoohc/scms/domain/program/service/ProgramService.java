@@ -1,7 +1,5 @@
 package com.gnagnoohc.scms.domain.program.service;
 
-import com.gnagnoohc.scms.domain.competency.dto.CompetencySummary;
-import com.gnagnoohc.scms.domain.competency.service.CompetencyQueryService;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramAdminDetailResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramAdminListItemResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramDetailResponseDTO;
@@ -71,7 +69,6 @@ public class ProgramService {
     private static final Set<String> OPERATION_PLAN_EXTENSIONS = Set.of("pdf");
 
     private final ExtracurricularProgramRepository programRepository;
-    private final CompetencyQueryService competencyQueryService;
     private final CommonCodeRepository commonCodeRepository;
     private final ProgramSessionRepository programSessionRepository;
     private final ProgramApplicationRepository applicationRepository;
@@ -620,11 +617,6 @@ public class ProgramService {
                 .collect(Collectors.toMap(
                         ProgramApplicationRepository.MyApplicationStatusProjection::getProgramId,
                         ProgramApplicationRepository.MyApplicationStatusProjection::getStatus));
-    }
-
-    // 핵심역량 드롭다운용 옵션 목록. 학생용 화면(StudentProgramController)에서 사용 — 실제 조회는 핵심역량 도메인에 위임한다.
-    public List<CompetencySummary> getCompetencyOptions() {
-        return competencyQueryService.getActiveTopLevelCompetencies();
     }
 
     /**
