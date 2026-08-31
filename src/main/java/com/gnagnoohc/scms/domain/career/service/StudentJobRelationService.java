@@ -21,7 +21,6 @@ import com.gnagnoohc.scms.global.common.notification.ModuleCode;
 import com.gnagnoohc.scms.global.common.notification.NotificationRequest;
 import com.gnagnoohc.scms.global.common.notification.NotificationSender;
 import com.gnagnoohc.scms.global.common.notification.NotificationType;
-import com.gnagnoohc.scms.global.common.service.NotificationService;
 import com.gnagnoohc.scms.global.common.util.DateTimeUtils;
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
@@ -33,8 +32,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.OffsetDateTime;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 /**
@@ -140,9 +140,13 @@ public class StudentJobRelationService {
      * [스케줄러 호출용] D-3 마감 임박 관심 공고 알림 일괄 발송
      */
     public void sendDeadlineApproachingNotifications() {
-        Instant now = Instant.now();
-        Instant d3Start = now.plus(3, ChronoUnit.DAYS).truncatedTo(ChronoUnit.DAYS);
-        Instant d3End = d3Start.plus(1, ChronoUnit.DAYS).minusNanos(1);
+        // KST 기준 오늘로부터 3일 뒤 일자(LocalDate) 계산
+        LocalDate targetDate = LocalDate.now(DateTimeUtils.KST_ZONE).plusDays(3);
+        // KST 자정(00:00:00) -> UTC Instant 변환
+        Instant d3Start = targetDate.atStartOfDay(DateTimeUtils.KST_ZONE).toInstant();
+
+        // KST 하루 끝(23:59:59.999999999) -> UTC Instant 변환
+        Instant d3End = targetDate.atTime(LocalTime.MAX).atZone(DateTimeUtils.KST_ZONE).toInstant();
 
         List<StudentJobRelation> targets = relationRepository.findScrappedPostingsEndingBetween(d3Start, d3End);
 
