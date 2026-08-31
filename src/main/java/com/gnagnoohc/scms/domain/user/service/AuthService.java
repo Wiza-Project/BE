@@ -6,11 +6,15 @@ import com.gnagnoohc.scms.domain.user.dto.UserSummaryResponse;
 import com.gnagnoohc.scms.domain.user.entity.AppUser;
 import com.gnagnoohc.scms.domain.user.repository.AppUserRepository;
 import com.gnagnoohc.scms.domain.user.repository.UserRoleRepository;
+import com.gnagnoohc.scms.global.common.service.AuditAction;
+import com.gnagnoohc.scms.global.common.service.AuditLogService;
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
 import com.gnagnoohc.scms.global.security.AuthUser;
 import com.gnagnoohc.scms.global.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -85,6 +89,8 @@ public class AuthService {
 
     private static final long DORMANT_THRESHOLD_MONTHS = 6;
     private static final int MAX_FAILED_LOGIN_ATTEMPTS = 5;
+    private static final String AUDIT_RESOURCE_TYPE_AUTH = "AUTH";
+    private static final Logger log = LoggerFactory.getLogger(AuthService.class);
 
     /**
      * 존재하지 않는 아이디로 로그인 시도 시에도 이 해시에 대해 BCrypt 검증을 한 번 실행해서
@@ -100,6 +106,7 @@ public class AuthService {
     private final JwtTokenProvider jwtTokenProvider;
     private final DormantAccountLocker dormantAccountLocker;
     private final LoginFailureTracker loginFailureTracker;
+    private final AuditLogService auditLogService;
 
     @Transactional
     public AuthResult login(String universityNo, String rawPassword) {
@@ -110,6 +117,7 @@ public class AuthService {
             // 더미 해시로라도 BCrypt 연산을 태워서 "존재하는 아이디 + 틀린 비밀번호" 경로와
             // 소요 시간을 비슷하게 맞춥니다 (결과는 어차피 버립니다).
             passwordEncoder.matches(rawPassword, DUMMY_PASSWORD_HASH);
+            recordLoginFailure(null);
             throw new BusinessException(ErrorCode.PASSWORD_MISMATCH);
         }
 
@@ -119,6 +127,7 @@ public class AuthService {
 
         if (!passwordEncoder.matches(rawPassword, user.getPasswordHash())) {
             LoginFailureResponse failureInfo = registerLoginFailure(user);
+            recordLoginFailure(user.getUserId());
             throw BusinessException.withData(ErrorCode.PASSWORD_MISMATCH, failureInfo);
         }
 
@@ -126,6 +135,8 @@ public class AuthService {
         rejectIfNewlyDormant(user);
 
         appUserRepository.recordSuccessfulLogin(user.getUserId(), Instant.now());
+        // 업무 트랜잭션 커밋 후에만 실제 기록되므로, 이 아래에서 예외가 나 롤백되면 남지 않습니다.
+        safeAudit(() -> auditLogService.recordLogin(user.getUserId()));
 
         return issueTokens(user);
     }
@@ -155,12 +166,15 @@ public class AuthService {
     private void rejectIfAlreadyBlocked(AppUser user) {
         String status = user.getAccountStatus();
         if ("DORMANT".equals(status)) {
+            recordLoginFailure(user.getUserId());
             throw new BusinessException(ErrorCode.ACCOUNT_DORMANT);
         }
         if ("LOCKED".equals(status)) {
+            recordLoginFailure(user.getUserId());
             throw new BusinessException(ErrorCode.ACCOUNT_LOCKED);
         }
         if ("WITHDRAWN".equals(status)) {
+            recordLoginFailure(user.getUserId());
             throw new BusinessException(ErrorCode.ACCOUNT_WITHDRAWN);
         }
     }
@@ -175,8 +189,24 @@ public class AuthService {
                 .minusMonths(DORMANT_THRESHOLD_MONTHS)
                 .toInstant();
         if (lastActivity != null && lastActivity.isBefore(dormantSince)) {
+            // DORMANT/SUCCESS 감사 로그는 이 안에서 상태 전환과 같은 트랜잭션으로 남는다.
             dormantAccountLocker.lock(user.getUserId());
+            recordLoginFailure(user.getUserId());
             throw new BusinessException(ErrorCode.ACCOUNT_DORMANT);
+        }
+    }
+
+    /** 로그인 실패 이력을 원래 트랜잭션 롤백과 무관하게 즉시 남긴다. */
+    private void recordLoginFailure(Integer actorUserId) {
+        safeAudit(() -> auditLogService.recordFailure(actorUserId, AUDIT_RESOURCE_TYPE_AUTH, null, AuditAction.LOGIN));
+    }
+
+    /** 감사 로그 기록 중 예외가 나도 로그인 처리 결과(응답 코드·데이터)에는 영향을 주지 않는다. */
+    private void safeAudit(Runnable action) {
+        try {
+            action.run();
+        } catch (RuntimeException e) {
+            log.warn("감사 로그 기록 중 예외가 발생했습니다.", e);
         }
     }
 

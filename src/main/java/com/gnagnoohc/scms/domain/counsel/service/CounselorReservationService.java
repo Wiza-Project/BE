@@ -7,7 +7,6 @@ import com.gnagnoohc.scms.domain.counsel.entity.CounselingAssignment;
 import com.gnagnoohc.scms.domain.counsel.entity.CounselingReservation;
 import com.gnagnoohc.scms.domain.counsel.entity.CounselingSchedule;
 import com.gnagnoohc.scms.domain.counsel.entity.CounselingSession;
-import com.gnagnoohc.scms.domain.counsel.repository.CounselUserRepository;
 import com.gnagnoohc.scms.domain.counsel.repository.CounselingAssignmentRepository;
 import com.gnagnoohc.scms.domain.counsel.repository.CounselingReservationRepository;
 import com.gnagnoohc.scms.domain.counsel.repository.CounselingSessionRepository;
@@ -31,27 +30,38 @@ import java.time.Instant;
 @Transactional(readOnly = true)
 public class CounselorReservationService {
 
-    private final CounselUserRepository counselUserRepository;
     private final CounselingReservationRepository counselingReservationRepository;
     private final CounselingAssignmentRepository counselingAssignmentRepository;
     private final CounselingSessionRepository counselingSessionRepository;
+    private final CounselManagementAccessPolicy counselManagementAccessPolicy;
 
+    /**
+     * ST200+ST300 상담사는 자신의 CS200 예약만 대기 목록에서 봐야 하므로, 조회 조건 자체에
+     * careerOnly를 넘겨 다른 유형의 예약 행을 애초에 읽지 않는다.
+     */
     public PageResponse<CounselorPendingReservationResponse> getPending(
             Integer counselorId,
             int page,
             int size
     ) {
-        ensureActiveCounselor(counselorId);
+        CounselManagementAccessPolicy.Scope scope = counselManagementAccessPolicy.requireScope(counselorId);
+        boolean careerOnly = scope == CounselManagementAccessPolicy.Scope.CAREER_ONLY;
         return PageResponse.from(counselingReservationRepository
-                .findPendingByCounselor(counselorId, PageRequest.of(page, size))
+                .findPendingByCounselor(counselorId, careerOnly, PageRequest.of(page, size))
                 .map(CounselorPendingReservationResponse::from));
     }
 
+    /**
+     * 상세 조회는 단건이라 조회 조건에서 걸러도 실익이 크지 않지만, 소유권 확인 이후 유형까지
+     * 정책으로 검사해 다른 유형 예약이면 담당자가 아닌 예약과 동일하게 RESERVATION_NOT_FOUND로
+     * 응답한다(존재 여부를 노출하지 않는 기존 계약을 유지).
+     */
     public CounselorReservationDetailResponse getReservation(Integer reservationId, Integer counselorId) {
-        ensureActiveCounselor(counselorId);
+        CounselManagementAccessPolicy.Scope scope = counselManagementAccessPolicy.requireScope(counselorId);
         CounselingReservation reservation = counselingReservationRepository
                 .findByIdAndCounselor(reservationId, counselorId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESERVATION_NOT_FOUND));
+        ensureTypeInScope(scope, reservation);
         return CounselorReservationDetailResponse.from(reservation);
     }
 
@@ -63,9 +73,12 @@ public class CounselorReservationService {
      */
     @Transactional
     public CounselorReservationDecisionResponse approve(Integer reservationId, Integer counselorId) {
-        ensureActiveCounselor(counselorId);
+        CounselManagementAccessPolicy.Scope scope = counselManagementAccessPolicy.requireScope(counselorId);
         Instant now = Instant.now();
         CounselingReservation reservation = getOwnedReservationForUpdate(reservationId, counselorId);
+        // 예약 행을 잠근 뒤, 상태를 바꾸거나 배정·회기를 만들기 전에 유형 범위부터 확정한다.
+        // 여기서 걸리면 예약·배정·회기 중 어떤 행도 아직 바뀌지 않은 상태다.
+        ensureTypeInScope(scope, reservation);
 
         // CLOSED는 신규 예약만 막는 상태이므로 여기서 schedule.isOpen()은 검사하지 않는다.
         // 이미 걸린 REQUESTED 예약은 일정이 마감됐어도 승인 가능해야 close()의 의미가 유지된다.
@@ -81,7 +94,7 @@ public class CounselorReservationService {
         reservation.approve(counselorId, now);
 
         // 최초 배정 대상은 이 일정의 담당 상담사이며, 위 소유권 검사로 요청자 본인과 동일함이 이미
-        // 확인됐고 요청자는 ensureActiveCounselor로 활성 ST200 상담사임도 확인됐다.
+        // 확인됐고 요청자는 requireScope로 활성 STAFF+ST200 상담사임도 확인됐다.
         // 즉 배정 대상의 활성·역할 검증을 별도로 다시 하지 않아도 이미 충족된 상태다.
         CounselingAssignment assignment = CounselingAssignment.create(
                 reservation,
@@ -109,9 +122,11 @@ public class CounselorReservationService {
             Integer counselorId,
             String decisionReason
     ) {
-        ensureActiveCounselor(counselorId);
+        CounselManagementAccessPolicy.Scope scope = counselManagementAccessPolicy.requireScope(counselorId);
         Instant now = Instant.now();
         CounselingReservation reservation = getOwnedReservationForUpdate(reservationId, counselorId);
+        // 상태를 REJECTED로 바꾸기 전에 유형 범위를 먼저 확인해, 걸리면 아무 것도 바뀌지 않게 한다.
+        ensureTypeInScope(scope, reservation);
         reservation.reject(decisionReason, counselorId, now);
         return CounselorPendingReservationResponse.from(reservation);
     }
@@ -132,11 +147,19 @@ public class CounselorReservationService {
         return reservation;
     }
 
-    // URL 인가를 통과한 뒤에도 계정 상태나 ST200 역할이 변경될 수 있으므로,
-    // 상태 변경 직전에 활성 상담사 여부를 다시 확인한다.
-    private void ensureActiveCounselor(Integer counselorId) {
-        if (!counselUserRepository.isActiveCounselor(counselorId)) {
-            throw new BusinessException(ErrorCode.FORBIDDEN);
+    /**
+     * 잠근 예약이 현재 역할 범위가 허용하는 유형인지 확인한다. 다른 유형 예약임을 알려주면
+     * "내 담당 예약인데 유형이 안 맞는다"는 사실 자체가 노출되므로, 소유권 실패와 동일하게
+     * RESERVATION_NOT_FOUND로 응답을 통일한다.
+     */
+    private void ensureTypeInScope(CounselManagementAccessPolicy.Scope scope, CounselingReservation reservation) {
+        boolean allowed = counselManagementAccessPolicy.allows(
+                scope,
+                reservation.getCounselingType().getTypeCode(),
+                reservation.getCounselingType().getApplicationRoute()
+        );
+        if (!allowed) {
+            throw new BusinessException(ErrorCode.RESERVATION_NOT_FOUND);
         }
     }
 }

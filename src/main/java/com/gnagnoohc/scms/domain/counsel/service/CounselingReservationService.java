@@ -48,6 +48,7 @@ public class CounselingReservationService {
     private final CounselingReservationRepository counselingReservationRepository;
     private final CounselingAssignmentRepository counselingAssignmentRepository;
     private final ConsentVerifier consentVerifier;
+    private final CounselManagementAccessPolicy counselManagementAccessPolicy;
 
     /**
      * 학생 행을 먼저 잠가 같은 학생의 서로 다른 일정 예약도 순서대로 검증한다.
@@ -295,8 +296,17 @@ public class CounselingReservationService {
                 || schedule.getBookingDeadline().isAfter(now);
         boolean capacityAvailable = counselingReservationRepository
                 .countOccupiedReservations(scheduleId) < schedule.getCapacity();
+        // 활성·ST200 여부에 더해, 담당 상담사의 현재 역할 범위가 이 유형을 허용하는지 확인한다.
+        // ST200+ST300 상담사의 일정은 CS200일 때만 예약을 받는다(학생 노출 목록과 같은 기준).
+        // 권한 예외를 학생에게 그대로 노출하지 않도록 isEligibleForType는 boolean만 돌려주고,
+        // 실패하면 아래에서 다른 조건들과 함께 동일한 SCHEDULE_NOT_AVAILABLE(S002)로 처리한다.
         boolean activeCounselor = "ACTIVE".equals(schedule.getCounselor().getAccountStatus())
-                && counselUserRepository.hasCounselorRole(schedule.getCounselor().getUserId());
+                && counselUserRepository.hasCounselorRole(schedule.getCounselor().getUserId())
+                && counselManagementAccessPolicy.isEligibleForType(
+                        schedule.getCounselor().getUserId(),
+                        counselingType.getTypeCode(),
+                        counselingType.getApplicationRoute()
+                );
         // 학생의 예약 일정 변경에서는 아직 옛 일정을 참조 중인 이 예약 자기 자신을 겹침 비교에서 빼야 한다.
         // 그렇지 않으면 옛 일정과 항상 겹쳐 새 일정으로 절대 바꿀 수 없다.
         boolean overlapsActiveReservation = excludeReservationId == null

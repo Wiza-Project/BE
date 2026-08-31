@@ -38,18 +38,29 @@ public interface AppUserRepository extends JpaRepository<AppUser, Integer> {
     /**
      * 휴면 전환. AuthService.DormantAccountLocker 가 별도 트랜잭션(REQUIRES_NEW)으로 호출해서,
      * 이 업데이트 직후 로그인 거부 예외를 던지더라도(원 트랜잭션은 롤백) 휴면 전환 자체는 커밋되도록 합니다.
+     * 이미 DORMANT면 조건에 걸려 영향받은 행이 0건이 되므로, 동시에 들어온 다른 요청이 먼저
+     * 전환시킨 경우 뒤이은 호출은 중복으로 반영되지 않습니다(중복 감사 로그 방지용 — DormantAccountLocker 참고).
+     * account_status='ACTIVE' 단정 대신 '<> DORMANT'로 걸어, rejectIfAlreadyBlocked 가 통과시키는
+     * 비정상적으로 비어있는 값도 기존과 동일하게 전환 대상으로 남겨둡니다.
      */
     @Modifying(clearAutomatically = true)
-    @Query("UPDATE AppUser u SET u.accountStatus = 'DORMANT' WHERE u.userId = :userId")
-    void markDormant(@Param("userId") Integer userId);
+    @Query("UPDATE AppUser u SET u.accountStatus = 'DORMANT' WHERE u.userId = :userId AND u.accountStatus <> 'DORMANT'")
+    int markDormant(@Param("userId") Integer userId);
 
     /** 비밀번호 실패 횟수 갱신(잠금 임계치 미도달). LoginFailureTracker 참고. */
     @Modifying(clearAutomatically = true)
     @Query("UPDATE AppUser u SET u.failedLoginCount = :count WHERE u.userId = :userId")
     void updateFailedLoginCount(@Param("userId") Integer userId, @Param("count") Integer count);
 
-    /** 실패 횟수가 임계치에 도달해 계정을 잠글 때. LoginFailureTracker 참고. */
+    /**
+     * 실패 횟수가 임계치에 도달해 계정을 잠글 때. LoginFailureTracker 참고.
+     * 이미 LOCKED면 조건에 걸려 영향받은 행이 0건이 되므로, 동시에 들어온 다른 요청이 먼저
+     * 잠근 경우 뒤이은 호출은 중복으로 반영되지 않습니다(중복 감사 로그 방지용).
+     * account_status='ACTIVE' 단정 대신 '<> LOCKED'로 걸어 markDormant 와 동일한 이유로
+     * 비정상적으로 비어있는 값도 기존과 동일하게 잠금 대상으로 남겨둡니다.
+     */
     @Modifying(clearAutomatically = true)
-    @Query("UPDATE AppUser u SET u.accountStatus = 'LOCKED', u.failedLoginCount = :count, u.lockedAt = :lockedAt WHERE u.userId = :userId")
-    void lockAccount(@Param("userId") Integer userId, @Param("count") Integer count, @Param("lockedAt") Instant lockedAt);
+    @Query("UPDATE AppUser u SET u.accountStatus = 'LOCKED', u.failedLoginCount = :count, u.lockedAt = :lockedAt "
+            + "WHERE u.userId = :userId AND u.accountStatus <> 'LOCKED'")
+    int lockAccount(@Param("userId") Integer userId, @Param("count") Integer count, @Param("lockedAt") Instant lockedAt);
 }
