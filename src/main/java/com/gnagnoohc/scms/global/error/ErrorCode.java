@@ -137,6 +137,8 @@ public enum ErrorCode {
     // 사전·사후 비교 대상 두 응시가 같은 학년도의 사전(PRE)·사후(POST) 한 쌍이 아닐 때 사용.
     // 같은 구분 2건이거나 학년도가 다르면 변화량 방향을 정할 근거가 없어 비교를 거부한다.
     ASSESSMENT_COMPARISON_NOT_PRE_POST_PAIR(HttpStatus.BAD_REQUEST, "Q023", "사전·사후 비교는 같은 학년도의 사전·사후 응시 한 쌍이어야 합니다."),
+    // 문항이 하나도 매핑되지 않은 회차를 제출하려고 할 때 사용. 채점 대상이 없어 결과를 만들 수 없다.
+    ASSESSMENT_ROUND_NO_QUESTIONS(HttpStatus.BAD_REQUEST, "Q024", "문항이 없는 회차는 제출할 수 없습니다."),
 
     // ── 상담 ──────────────────────────────────────────────────────
     COUNSELOR_NOT_FOUND(HttpStatus.NOT_FOUND, "S001", "상담사를 찾을 수 없습니다."),
