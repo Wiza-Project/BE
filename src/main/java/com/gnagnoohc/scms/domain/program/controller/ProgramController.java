@@ -53,7 +53,8 @@ public class ProgramController {
             @RequestParam(required = false) Integer competencyId,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable,
             @AuthenticationPrincipal AuthUser authUser) {
-        return ApiResponse.ok(programService.listMine(authUser.getId(), status, keyword, competencyId, pageable));
+        return ApiResponse.ok(programService.listMine(
+                authUser.getId(), status, keyword, competencyId, pageable, authUser.getDepartmentCodeId()));
     }
 
     @Operation(summary = "프로그램 등록", description = "비교과 프로그램을 신규 등록합니다 (모집중 상태로 시작)")
@@ -98,7 +99,7 @@ public class ProgramController {
     public ApiResponse<ProgramStaffDetailResponseDTO> getDetail(
             @PathVariable Integer programId,
             @AuthenticationPrincipal AuthUser authUser) {
-        return ApiResponse.ok(programService.getMyDetail(programId, authUser.getId()));
+        return ApiResponse.ok(programService.getMyDetail(programId, authUser.getId(), authUser.getDepartmentCodeId()));
     }
 
     @Operation(summary = "프로그램 수정", description = "모집중 상태의 비교과 프로그램을 전체 필드 수정합니다 (등록자 본인만 가능)")

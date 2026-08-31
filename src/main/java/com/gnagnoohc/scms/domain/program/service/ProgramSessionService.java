@@ -3,6 +3,7 @@ package com.gnagnoohc.scms.domain.program.service;
 import com.gnagnoohc.scms.domain.program.dto.request.ProgramSessionRegisterRequestDTO;
 import com.gnagnoohc.scms.domain.program.dto.request.ProgramSessionUpdateRequestDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramSessionResponseDTO;
+import com.gnagnoohc.scms.domain.program.entity.ExtracurricularProgram;
 import com.gnagnoohc.scms.domain.program.entity.ProgramSession;
 import com.gnagnoohc.scms.domain.program.entity.SessionLocationType;
 import com.gnagnoohc.scms.domain.program.repository.ExtracurricularProgramRepository;
@@ -41,10 +42,19 @@ public class ProgramSessionService {
      *   programId : 회차를 등록할 프로그램의 PK (URL 경로에서 옴)
      *   request   : 등록할 회차 내용 (요청 바디에서 옴)
      *   staffId   : 지금 로그인해서 이 요청을 보낸 운영부서 담당자의 id (인증 정보에서 옴)
+     *   departmentCodeId : 로그인한 사용자가 소속된 부서의 CommonCode PK (인증 정보에서 옴)
+     *                    → updateSession()과 동일하게, 비교과운영부서(D200) 소속 + 프로그램 등록자 본인인지 검증한다.
      */
-    public ProgramSessionResponseDTO registerSession(Integer programId, ProgramSessionRegisterRequestDTO request, Integer staffId) {
-        if (!programRepository.existsById(programId)) {
-            throw new BusinessException(ErrorCode.PROGRAM_NOT_FOUND);
+    public ProgramSessionResponseDTO registerSession(Integer programId, ProgramSessionRegisterRequestDTO request,
+                                                       Integer staffId, Integer departmentCodeId) {
+        ExtracurricularProgram program = programRepository.findById(programId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PROGRAM_NOT_FOUND));
+
+        if (!isOperatingDepartment(departmentCodeId)) {
+            throw new BusinessException(ErrorCode.DEPARTMENT_FORBIDDEN);
+        }
+        if (!program.getManagerUser().getUserId().equals(staffId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
         }
 
         if (!request.startsAt().isBefore(request.endsAt())) {

@@ -508,11 +508,17 @@ public class ProgramService {
      * ── "staff용 목록 조회(List)" 기능 ──────────────────────────────────────
      *
      * list()와 거의 같지만, 로그인한 staff 본인이 담당(managerUser)한 프로그램으로만 범위를 좁힌다.
+     *   departmentCodeId : 로그인한 사용자가 소속된 부서의 CommonCode PK (인증 정보에서 옴)
+     *                    → register()와 동일하게, 비교과운영부서(D200) 소속인지 검증한다.
      */
     @Transactional(readOnly = true)
     public PageResponse<ProgramStaffListItemResponseDTO> listMine(Integer managerUserId, ProgramStatus status,
                                                                     String keyword, Integer competencyId,
-                                                                    Pageable pageable) {
+                                                                    Pageable pageable, Integer departmentCodeId) {
+        if (!isOperatingDepartment(departmentCodeId)) {
+            throw new BusinessException(ErrorCode.DEPARTMENT_FORBIDDEN);
+        }
+
         Page<ExtracurricularProgram> page = programRepository.searchByManager(
                 managerUserId, status, keyword, competencyId, pageable);
         Map<Integer, Long> applicantCounts = countApplicantsByProgram(page.getContent());
@@ -589,12 +595,17 @@ public class ProgramService {
      *
      * getDetail()과 거의 같지만, 등록자 본인만 조회 가능하도록 소유자 검증을 추가하고
      * 수정/삭제 가능 여부(isEditable/isDeletable)를 함께 계산해 내려준다.
+     *   departmentCodeId : 로그인한 사용자가 소속된 부서의 CommonCode PK (인증 정보에서 옴)
+     *                    → update()와 동일하게, 비교과운영부서(D200) 소속 + 등록자 본인인지 검증한다.
      */
     @Transactional(readOnly = true)
-    public ProgramStaffDetailResponseDTO getMyDetail(Integer programId, Integer currentUserId) {
+    public ProgramStaffDetailResponseDTO getMyDetail(Integer programId, Integer currentUserId, Integer departmentCodeId) {
         ExtracurricularProgram program = programRepository.findDetailById(programId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PROGRAM_NOT_FOUND));
 
+        if (!isOperatingDepartment(departmentCodeId)) {
+            throw new BusinessException(ErrorCode.DEPARTMENT_FORBIDDEN);
+        }
         if (!program.getManagerUser().getUserId().equals(currentUserId)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }

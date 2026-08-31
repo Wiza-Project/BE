@@ -31,7 +31,8 @@ public class ProgramSessionStaffController {
             @PathVariable Integer programId,
             @Valid @RequestBody ProgramSessionRegisterRequestDTO request,
             @AuthenticationPrincipal AuthUser authUser) {
-        return ApiResponse.ok(programSessionService.registerSession(programId, request, authUser.getId()));
+        return ApiResponse.ok(programSessionService.registerSession(
+                programId, request, authUser.getId(), authUser.getDepartmentCodeId()));
     }
 
     @Operation(summary = "회차 목록 조회", description = "프로그램에 등록된 회차 목록을 회차 번호 순으로 조회합니다.")

@@ -236,7 +236,8 @@ public class ProgramApplicationService {
      * 운영부서가 신청 건을 승인한다. 정원(capacity) 내에서만 승인할 수 있다 —
      * 신청 시점에 대기(WAITLISTED)로 분류됐던 건이라도, 다른 신청이 반려되어 자리가 나면 승인할 수 있다.
      */
-    public ProgramApplicationDecisionResponseDTO approve(Integer programId, Integer applicationId, Integer staffId) {
+    public ProgramApplicationDecisionResponseDTO approve(
+            Integer programId, Integer applicationId, Integer staffId, Integer departmentCodeId) {
         /**
          * 프로그램 row에 락을 걸어, "현재 승인 건수 확인"과 "실제 승인 반영" 사이에
          * 다른 승인 요청이 끼어들어 정원을 초과하는 경쟁 조건을 막는다 (apply()와 동일한 이유).
@@ -245,6 +246,13 @@ public class ProgramApplicationService {
          */
         ExtracurricularProgram program = programRepository.findByIdForUpdate(programId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PROGRAM_NOT_FOUND));
+
+        if (!isOperatingDepartment(departmentCodeId)) {
+            throw new BusinessException(ErrorCode.DEPARTMENT_FORBIDDEN);
+        }
+        if (!program.getManagerUser().getUserId().equals(staffId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
 
         ProgramApplication application = findApplicationForUpdate(programId, applicationId);
 
@@ -380,9 +388,17 @@ public class ProgramApplicationService {
      * reject()가 프로그램 행 락 없이 자리를 비우면, apply()가 그 빈 자리를 보지 못하고 대기자로
      * 잘못 접수하는 경쟁 조건이 있었다.
      */
-    public ProgramApplicationDecisionResponseDTO reject(Integer programId, Integer applicationId, String reason, Integer staffId) {
-        programRepository.findByIdForUpdate(programId)
+    public ProgramApplicationDecisionResponseDTO reject(
+            Integer programId, Integer applicationId, String reason, Integer staffId, Integer departmentCodeId) {
+        ExtracurricularProgram program = programRepository.findByIdForUpdate(programId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PROGRAM_NOT_FOUND));
+
+        if (!isOperatingDepartment(departmentCodeId)) {
+            throw new BusinessException(ErrorCode.DEPARTMENT_FORBIDDEN);
+        }
+        if (!program.getManagerUser().getUserId().equals(staffId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
 
         ProgramApplication application = findApplicationForUpdate(programId, applicationId);
         String previousStatus = application.getApplicationStatus();
@@ -409,13 +425,15 @@ public class ProgramApplicationService {
      * 그 건에서만 잡아 실패 목록에 담고 계속 진행한다. 이 메서드 전체가 하나의 트랜잭션이라, 실패한 건은
      * 애초에 UPDATE가 실행되지 않았을 뿐이므로 별도의 트랜잭션 분리(REQUIRES_NEW) 없이도 부분 성공이 자연스럽게 성립한다.
      */
-    public ProgramApplicationBulkDecisionResponseDTO bulkApprove(Integer programId, List<Integer> applicationIds, Integer staffId) {
-        return bulkDecide(applicationIds, id -> approve(programId, id, staffId));
+    public ProgramApplicationBulkDecisionResponseDTO bulkApprove(
+            Integer programId, List<Integer> applicationIds, Integer staffId, Integer departmentCodeId) {
+        return bulkDecide(applicationIds, id -> approve(programId, id, staffId, departmentCodeId));
     }
 
     // 운영부서가 여러 신청 건을 한 번에 반려한다. bulkApprove와 동일한 방식이며, 반려 사유는 선택된 모든 건에 공통 적용된다.
-    public ProgramApplicationBulkDecisionResponseDTO bulkReject(Integer programId, List<Integer> applicationIds, String reason, Integer staffId) {
-        return bulkDecide(applicationIds, id -> reject(programId, id, reason, staffId));
+    public ProgramApplicationBulkDecisionResponseDTO bulkReject(
+            Integer programId, List<Integer> applicationIds, String reason, Integer staffId, Integer departmentCodeId) {
+        return bulkDecide(applicationIds, id -> reject(programId, id, reason, staffId, departmentCodeId));
     }
 
     private ProgramApplicationBulkDecisionResponseDTO bulkDecide(

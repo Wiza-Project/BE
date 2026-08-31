@@ -40,19 +40,28 @@ public class ProgramAttendanceService {
     private final CommonCodeRepository commonCodeRepository;
 
     /**
-     * 운영부서가 특정 회차에 대해 학생 한 명의 출석 여부를 기록(이미 기록이 있으면 정정)한다. 매개변수 5개의 의미:
+     * 운영부서가 특정 회차에 대해 학생 한 명의 출석 여부를 기록(이미 기록이 있으면 정정)한다. 매개변수 6개의 의미:
      *   programId   : 회차가 속한 프로그램의 PK (URL 경로에서 옴)
      *   sessionId   : 출석을 기록할 회차의 PK (URL 경로에서 옴)
      *   applicationId : 출석 대상 학생의 신청 건 PK (URL 경로에서 옴)
      *   request     : 출석 상태 등 기록할 내용 (요청 바디에서 옴)
      *   staffId     : 지금 로그인해서 이 요청을 보낸 운영부서 담당자의 id (인증 정보에서 옴)
+     *   departmentCodeId : 로그인한 사용자가 소속된 부서의 CommonCode PK (인증 정보에서 옴)
+     *                    → listAttendance()와 동일하게, 비교과운영부서(D200) 소속 + 프로그램 등록자 본인인지 검증한다.
      */
     public ProgramAttendanceResponseDTO recordAttendance(
             Integer programId, Integer sessionId, Integer applicationId,
-            ProgramAttendanceRecordRequestDTO request, Integer staffId) {
+            ProgramAttendanceRecordRequestDTO request, Integer staffId, Integer departmentCodeId) {
 
         ProgramSession session = sessionRepository.findByProgramSessionIdAndProgram_ProgramId(sessionId, programId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PROGRAM_SESSION_NOT_FOUND));
+
+        if (!isOperatingDepartment(departmentCodeId)) {
+            throw new BusinessException(ErrorCode.DEPARTMENT_FORBIDDEN);
+        }
+        if (!session.getProgram().getManagerUser().getUserId().equals(staffId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
 
         ProgramApplication application = applicationRepository.findById(applicationId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.APPLICATION_NOT_FOUND));
