@@ -151,6 +151,10 @@ public enum ErrorCode {
     PUBLIC_RESULT_STATE_NOT_ALLOWED(HttpStatus.CONFLICT, "S010", "허용되지 않은 공개 결과 상태입니다."),
     PUBLIC_RESULT_NOT_FOUND(HttpStatus.NOT_FOUND, "S011", "공개된 상담 결과를 찾을 수 없습니다."),
     PUBLIC_RESULT_NO_CHANGES(HttpStatus.CONFLICT, "S012", "수정한 내역이 없습니다."),
+    // 학생이 예약 일정 변경 화면을 연 뒤 다른 요청이 먼저 같은 예약의 일정을 바꿔, 요청의
+    // expectedScheduleId(화면이 기억하던 예약 당시 일정)와 DB의 실제 현재 일정이 달라졌을 때 사용하는
+    // 에러코드. 새 일정의 마감·정원 문제(S002)와는 원인이 다르므로 별도 코드로 구분한다.
+    RESERVATION_SCHEDULE_CONFLICT(HttpStatus.CONFLICT, "S013", "예약 일정이 이미 변경되었습니다. 최신 예약 정보를 확인해 주세요."),
 
     // ── 마일리지 ──────────────────────────────────────────────────
     MILEAGE_ITEM_NOT_FOUND(HttpStatus.NOT_FOUND, "M001", "마일리지 항목을 찾을 수 없습니다."),

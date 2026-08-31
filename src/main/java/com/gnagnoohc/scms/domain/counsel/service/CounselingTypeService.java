@@ -27,8 +27,8 @@ public class CounselingTypeService {
     /**
      * 학생 신청 화면용: 활성이면서 DIRECT(온라인 신청)인 유형만 코드 오름차순으로 조회해 외부 응답 전용 DTO로 변환한다.
      *
-     * <p>CENTER(센터 접수)는 체크리스트 12번(상담센터 접수 처리)이 구현되기 전까지 학생 신청 경로에서 제외한다.
-     * enum·시드·데이터는 유지하고 노출만 차단하므로, 12번 착수 시 DIRECT 필터만 풀면 복원된다.
+     * <p>CENTER(센터 접수) 온라인 접수는 현재 MVP 범위 밖이며 별도 정책이 확정되기 전까지 학생 신청 경로에서 제외한다.
+     * enum·시드·데이터는 유지하고 노출만 차단하므로, CENTER 접수 정책이 확정되면 DIRECT 필터만 풀면 복원된다.
      * 지금은 상담사용 {@link #getSchedulableCounselingTypes()}와 노출 대상이 같지만, 권한과 용도가 달라 메서드는 분리해 둔다.</p>
      */
     public List<CounselingTypeResponse> getActiveCounselingTypes() {
