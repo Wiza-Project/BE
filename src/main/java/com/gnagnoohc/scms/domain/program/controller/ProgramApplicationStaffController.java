@@ -2,7 +2,7 @@ package com.gnagnoohc.scms.domain.program.controller;
 
 import com.gnagnoohc.scms.domain.program.dto.request.ProgramApplicationBulkApproveRequestDTO;
 import com.gnagnoohc.scms.domain.program.dto.request.ProgramApplicationBulkRejectRequestDTO;
-import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplicationAdminListItemResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplicationStaffListItemResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplicationBulkDecisionResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplicationDecisionResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.request.ProgramApplicationRejectRequestDTO;
@@ -26,16 +26,16 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-@Tag(name = "ProgramApplicationAdmin", description = "운영부서의 비교과 프로그램 참여 신청 승인/반려")
+@Tag(name = "ProgramApplicationStaff", description = "운영부서의 비교과 프로그램 참여 신청 승인/반려")
 @RestController
-@RequestMapping("/api/admin/programs/{programId}/applications")
+@RequestMapping("/api/staff/programs/{programId}/applications")
 @RequiredArgsConstructor
-public class ProgramApplicationAdminController {
+public class ProgramApplicationStaffController {
 
     private final ProgramApplicationService programApplicationService;
 
     @Operation(summary = "참여 신청 승인", description = "정원 이내인 경우에만 참여 신청을 승인합니다.")
-    // HTTP POST 요청, 즉 "/api/admin/programs/{programId}/applications/{applicationId}/approve" 로 오는 요청을 처리한다.
+    // HTTP POST 요청, 즉 "/api/staff/programs/{programId}/applications/{applicationId}/approve" 로 오는 요청을 처리한다.
     @PostMapping("/{applicationId}/approve")
     public ApiResponse<ProgramApplicationDecisionResponseDTO> approve(
             @PathVariable Integer programId,
@@ -58,7 +58,7 @@ public class ProgramApplicationAdminController {
 
     @Operation(summary = "참여 신청 목록 조회", description = "프로그램 하나의 전체 신청자를 상태 필터·이름/학번 키워드 검색과 함께 페이지 단위로 조회합니다.")
     @GetMapping
-    public ApiResponse<PageResponse<ProgramApplicationAdminListItemResponseDTO>> list(
+    public ApiResponse<PageResponse<ProgramApplicationStaffListItemResponseDTO>> list(
             @PathVariable Integer programId,
             // 신청 상태(APPLIED/WAITLISTED/APPROVED/REJECTED/CANCELLED)로 필터링. 생략하면 전체 상태를 조회한다.
             @RequestParam(required = false) String status,
