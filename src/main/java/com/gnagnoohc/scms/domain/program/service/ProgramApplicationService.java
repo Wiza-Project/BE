@@ -427,13 +427,34 @@ public class ProgramApplicationService {
      */
     public ProgramApplicationBulkDecisionResponseDTO bulkApprove(
             Integer programId, List<Integer> applicationIds, Integer staffId, Integer departmentCodeId) {
+        validateBulkDecisionAuthority(programId, staffId, departmentCodeId);
         return bulkDecide(applicationIds, id -> approve(programId, id, staffId, departmentCodeId));
     }
 
     // 운영부서가 여러 신청 건을 한 번에 반려한다. bulkApprove와 동일한 방식이며, 반려 사유는 선택된 모든 건에 공통 적용된다.
     public ProgramApplicationBulkDecisionResponseDTO bulkReject(
             Integer programId, List<Integer> applicationIds, String reason, Integer staffId, Integer departmentCodeId) {
+        validateBulkDecisionAuthority(programId, staffId, departmentCodeId);
         return bulkDecide(applicationIds, id -> reject(programId, id, reason, staffId, departmentCodeId));
+    }
+
+    /**
+     * 부서/소유자 권한 검증은 정원 초과 같은 건별 부분 실패가 아니라 프로그램 단위로 고정된
+     * all-or-nothing 사전조건이므로, bulkDecide의 try/catch(건별 실패를 failed 목록에 담는 로직)에
+     * 맡기지 않고 루프 진입 전에 한 번만 검증해 실패 시 그대로 던진다 — 그래야 권한 없는 요청이
+     * (내용은 비어있더라도) HTTP 200으로 응답되는 대신 approve()/reject()와 동일하게 4xx로 응답된다.
+     * approve()/reject()와 같은 이유로 프로그램 행을 먼저 잠근다.
+     */
+    private void validateBulkDecisionAuthority(Integer programId, Integer staffId, Integer departmentCodeId) {
+        ExtracurricularProgram program = programRepository.findByIdForUpdate(programId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PROGRAM_NOT_FOUND));
+
+        if (!isOperatingDepartment(departmentCodeId)) {
+            throw new BusinessException(ErrorCode.DEPARTMENT_FORBIDDEN);
+        }
+        if (!program.getManagerUser().getUserId().equals(staffId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
     }
 
     private ProgramApplicationBulkDecisionResponseDTO bulkDecide(
