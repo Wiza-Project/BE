@@ -45,6 +45,12 @@ public class AssessmentSubmissionService {
         List<AssessmentRoundQuestion> roundQuestions =
                 assessmentRoundQuestionRepository.findByAssessmentRound_AssessmentRoundIdOrderByDisplayOrderAsc(roundId);
 
+        // 문항이 하나도 매핑되지 않은 회차는 채점 대상이 없어 결과를 만들 수 없다.
+        // assertAllAnswered는 미응답 문항이 없다는 이유로 공허하게 통과하므로 여기서 먼저 막는다.
+        if (roundQuestions.isEmpty()) {
+            throw new BusinessException(ErrorCode.ASSESSMENT_ROUND_NO_QUESTIONS);
+        }
+
         Map<Integer, BigDecimal> selectedValuesByQuestionId = assessmentResponseRepository.findByAttempt_AttemptId(attemptId)
                 .stream()
                 .collect(Collectors.toMap(r -> r.getQuestion().getQuestionId(), AssessmentResponse::getSelectedValue));

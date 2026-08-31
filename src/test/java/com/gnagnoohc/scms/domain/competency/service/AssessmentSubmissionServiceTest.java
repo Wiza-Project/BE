@@ -268,6 +268,28 @@ class AssessmentSubmissionServiceTest {
         assertThat(attempt.getAttemptStatus()).isEqualTo("NOT_STARTED");
     }
 
+    // 문항이 하나도 매핑되지 않은 회차는 채점 대상이 없어 제출을 성사시킬 수 없다.
+    // assertAllAnswered가 공허하게 통과하는 탓에 제출·채점이 커밋되던 경로를 막는다.
+    @Test
+    void submit_whenRoundHasNoQuestions_throwsAssessmentRoundNoQuestions() throws Exception {
+        Instant now = Instant.now();
+        AssessmentRound round = buildRound(now.minus(1, ChronoUnit.DAYS), now.plus(6, ChronoUnit.DAYS));
+        AssessmentAttempt attempt = buildAttempt(round, buildStudent(STUDENT_ID));
+
+        when(assessmentAttemptAccessGuard.getOwnAttempt(ATTEMPT_ID, STUDENT_ID)).thenReturn(attempt);
+        when(assessmentRoundQuestionRepository.findByAssessmentRound_AssessmentRoundIdOrderByDisplayOrderAsc(ROUND_ID))
+                .thenReturn(List.of());
+
+        assertThatThrownBy(() -> assessmentSubmissionService.submit(ATTEMPT_ID, STUDENT_ID))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.ASSESSMENT_ROUND_NO_QUESTIONS);
+
+        assertThat(attempt.getSubmittedAt()).isNull();
+        assertThat(attempt.getAttemptStatus()).isEqualTo("NOT_STARTED");
+        verify(assessmentResultReadyEventPublisher, never()).publishFromSubmit(any(), anyList());
+    }
+
     // 소유권·제출완료·기간 검증 자체(각 조건에서 어떤 에러코드가 나오는지)는
     // AssessmentAttemptAccessGuardTest에서 직접 검증한다. 여기서는 submit이 guard 결과를
     // 그대로 전파하는지만 확인한다.
