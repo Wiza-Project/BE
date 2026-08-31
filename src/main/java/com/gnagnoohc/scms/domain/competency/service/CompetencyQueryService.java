@@ -24,7 +24,7 @@ public class CompetencyQueryService {
     private final CompetencyRepository competencyRepository;
 
     // 활성 상태인 최상위 핵심역량을 축순서대로 반환한다. 없으면 빈 리스트(널 아님).
-    // 관리자 화면에서 활동 유형·프로그램에 연결할 역량을 고르는 셀렉트 박스의 원본 데이터다.
+    // 프로그램 필터(학생)·프로그램 등록 폼·마일리지 활동 유형 등록 폼에서 역량을 고르는 셀렉트 박스의 원본 데이터다.
     public List<CompetencySummary> getActiveTopLevelCompetencies() {
         return competencyRepository.findByParentCompetencyIsNullAndActiveTrueOrderByDisplayOrderAsc()
                 .stream()
