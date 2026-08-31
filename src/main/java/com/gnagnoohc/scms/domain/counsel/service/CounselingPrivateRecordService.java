@@ -4,7 +4,6 @@ import com.gnagnoohc.scms.domain.counsel.dto.CounselingPrivateRecordResponse;
 import com.gnagnoohc.scms.domain.counsel.entity.CounselingAssignment;
 import com.gnagnoohc.scms.domain.counsel.entity.CounselingPrivateRecord;
 import com.gnagnoohc.scms.domain.counsel.entity.CounselingSession;
-import com.gnagnoohc.scms.domain.counsel.repository.CounselUserRepository;
 import com.gnagnoohc.scms.domain.counsel.repository.CounselingAssignmentRepository;
 import com.gnagnoohc.scms.domain.counsel.repository.CounselingPrivateRecordRepository;
 import com.gnagnoohc.scms.domain.counsel.repository.CounselingSessionRepository;
@@ -26,10 +25,10 @@ import java.time.Instant;
 @Transactional(readOnly = true)
 public class CounselingPrivateRecordService {
 
-    private final CounselUserRepository counselUserRepository;
     private final CounselingSessionRepository counselingSessionRepository;
     private final CounselingAssignmentRepository counselingAssignmentRepository;
     private final CounselingPrivateRecordRepository counselingPrivateRecordRepository;
+    private final CounselManagementAccessPolicy counselManagementAccessPolicy;
 
     /**
      * 조회는 현재 활성 배정 담당자뿐 아니라 과거(종료된) 배정 담당자도 허용한다 — 자신이 작성한
@@ -37,10 +36,10 @@ public class CounselingPrivateRecordService {
      * PAST_ASSIGNMENT_DOCUMENTATION)는 감사로그용으로만 쓰고 응답에는 포함하지 않는다.
      */
     public CounselingPrivateRecordResponse getRecord(Integer sessionId, Integer counselorId) {
-        // TODO(common-audit): ensureActiveCounselor 실패 시에도 READ_PRIVATE_RECORD 실패 — actorUserId=counselorId,
-        // resourceType=COUNSELING_SESSION, resourceId=sessionId, actionCode=READ_PRIVATE_RECORD,
-        // actionResult=FAILURE. privateContent 전달 금지.
-        ensureActiveCounselor(counselorId);
+        // TODO(common-audit): requireScope 실패(활성·역할·유형 범위 포함) 시에도 READ_PRIVATE_RECORD 실패 —
+        // actorUserId=counselorId, resourceType=COUNSELING_SESSION, resourceId=sessionId,
+        // actionCode=READ_PRIVATE_RECORD, actionResult=FAILURE. privateContent 전달 금지.
+        CounselManagementAccessPolicy.Scope scope = counselManagementAccessPolicy.requireScope(counselorId);
         // TODO(common-audit): READ_PRIVATE_RECORD 실패 — actorUserId=counselorId, resourceType=COUNSELING_SESSION,
         // resourceId=sessionId, actionCode=READ_PRIVATE_RECORD, actionResult=FAILURE. privateContent 전달 금지.
         CounselingSession session = counselingSessionRepository.findById(sessionId)
@@ -50,6 +49,8 @@ public class CounselingPrivateRecordService {
             // resourceId=sessionId, actionCode=READ_PRIVATE_RECORD, actionResult=FAILURE. privateContent 전달 금지.
             throw new BusinessException(ErrorCode.SESSION_NOT_FOUND);
         }
+        // 원문(privateContent)을 읽기 전에 유형 범위부터 확인한다. 걸리면 아래 조회를 아예 하지 않는다.
+        ensureTypeInScope(scope, session);
 
         // 감사로그의 accessReason 값. active면 현재 담당자의 업무 조회, 아니면 과거 담당자의 기록 열람이다.
         boolean active = session.getCounselingAssignment().isActive();
@@ -76,7 +77,7 @@ public class CounselingPrivateRecordService {
      */
     @Transactional
     public CounselingPrivateRecordResponse saveDraft(Integer sessionId, String privateContent, Integer counselorId) {
-        ensureActiveCounselor(counselorId);
+        CounselManagementAccessPolicy.Scope scope = counselManagementAccessPolicy.requireScope(counselorId);
         CounselingSession session = counselingSessionRepository.findByIdForUpdate(sessionId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SESSION_NOT_FOUND));
         // 배정 종료(예약 취소)가 예약 행만 잠그고 이 회기 행과는 다른 행이라 직렬화되지 않는다.
@@ -89,6 +90,8 @@ public class CounselingPrivateRecordService {
         if (!assignment.isOwnedBy(counselorId)) {
             throw new BusinessException(ErrorCode.SESSION_NOT_FOUND);
         }
+        // 원문을 새로 쓰기 전에 유형 범위부터 확인한다. 여기서 걸리면 초안이 만들어지거나 바뀌지 않는다.
+        ensureTypeInScope(scope, assignment.getCounselingReservation().getCounselingType().getTypeCode());
         if (!assignment.isActive()) {
             throw new BusinessException(ErrorCode.PRIVATE_RECORD_STATE_NOT_ALLOWED);
         }
@@ -115,12 +118,14 @@ public class CounselingPrivateRecordService {
     /** 확정. 초안이 없거나 이미 확정된 경우 S009로 막는다(재확정·초안 없는 확정 방지). */
     @Transactional
     public CounselingPrivateRecordResponse confirm(Integer sessionId, Integer counselorId) {
-        ensureActiveCounselor(counselorId);
+        CounselManagementAccessPolicy.Scope scope = counselManagementAccessPolicy.requireScope(counselorId);
         CounselingSession session = counselingSessionRepository.findByIdForUpdate(sessionId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SESSION_NOT_FOUND));
         if (!session.getCounselingAssignment().isOwnedBy(counselorId)) {
             throw new BusinessException(ErrorCode.SESSION_NOT_FOUND);
         }
+        // 확정(불변화)하기 전에 유형 범위부터 확인한다.
+        ensureTypeInScope(scope, session);
         if (!session.getCounselingAssignment().isActive()) {
             throw new BusinessException(ErrorCode.PRIVATE_RECORD_STATE_NOT_ALLOWED);
         }
@@ -155,9 +160,23 @@ public class CounselingPrivateRecordService {
         return assignment.isActive() && session.isPrivateConfirmAllowed(now) && record != null && !record.isConfirmed();
     }
 
-    private void ensureActiveCounselor(Integer counselorId) {
-        if (!counselUserRepository.isActiveCounselor(counselorId)) {
-            throw new BusinessException(ErrorCode.FORBIDDEN);
+    /**
+     * 회기(session)를 거쳐 연결된 상담 유형이 현재 역할 범위에서 허용되는지 확인한다.
+     * 다른 유형이면 담당자가 아닌 회기와 동일하게 SESSION_NOT_FOUND(S007)로 통일해,
+     * "내 담당 회기인데 유형이 안 맞는다"는 사실 자체를 노출하지 않는다.
+     */
+    private void ensureTypeInScope(CounselManagementAccessPolicy.Scope scope, CounselingSession session) {
+        String typeCode = session.getCounselingAssignment()
+                .getCounselingReservation()
+                .getCounselingType()
+                .getTypeCode();
+        ensureTypeInScope(scope, typeCode);
+    }
+
+    private void ensureTypeInScope(CounselManagementAccessPolicy.Scope scope, String typeCode) {
+        // 회기는 항상 DIRECT 유형 일정에서만 만들어지므로 신청 경로는 고정값으로 넘긴다.
+        if (!counselManagementAccessPolicy.allows(scope, typeCode, "DIRECT")) {
+            throw new BusinessException(ErrorCode.SESSION_NOT_FOUND);
         }
     }
 }

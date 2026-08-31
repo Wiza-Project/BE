@@ -61,7 +61,7 @@ public interface CounselingSessionRepository extends JpaRepository<CounselingSes
             select new com.gnagnoohc.scms.domain.counsel.dto.CounselingSessionRow(
                 s.counselingSessionId, a.counselingAssignmentId, r.counselingReservationId, s.sessionNo,
                 student.userId, student.universityNo, student.userName, department.codeName,
-                counselingType.typeName, s.startsAt, s.endsAt, s.attendanceStatus, s.sessionStatus,
+                counselingType.typeName, counselingType.typeCode, s.startsAt, s.endsAt, s.attendanceStatus, s.sessionStatus,
                 s.nextSessionAt, s.cancellationReason, a.assignedAt, a.endedAt, counselor.userId
             )
             from CounselingSession s

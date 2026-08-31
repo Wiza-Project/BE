@@ -38,6 +38,7 @@ public class CounselingScheduleService {
     private final CounselingScheduleRepository counselingScheduleRepository;
     private final CounselingReservationRepository counselingReservationRepository;
     private final CounselingSessionRepository counselingSessionRepository;
+    private final CounselManagementAccessPolicy counselManagementAccessPolicy;
 
     /**
      * 활성 학생만 예약 가능한 일정을 조회할 수 있으며 조회 중에는 일정 행을 잠그지 않는다.
@@ -61,13 +62,14 @@ public class CounselingScheduleService {
     /**
      * 상담사는 과거와 마감된 일정을 포함해 본인 소유 일정만 최신 시작 시각 순으로 조회한다.
      * 목록의 예약 이력 표시는 화면 안내용이며, 수정 시에는 별도 트랜잭션에서 다시 검증한다.
+     * ST200+ST300 사용자는 CS200 일정만 봐야 하므로, 조회 조건 자체에 careerOnly를 넘겨
+     * 다른 유형의 일정 행을 애초에 읽지 않는다(조회 후 메모리에서 걸러내지 않는다).
      */
     @Transactional(readOnly = true)
     public List<CounselorScheduleResponse> getCounselorSchedules(Integer counselorId) {
-        if (!counselUserRepository.isActiveCounselor(counselorId)) {
-            throw new BusinessException(ErrorCode.FORBIDDEN);
-        }
-        return counselingScheduleRepository.findCounselorSchedules(counselorId);
+        CounselManagementAccessPolicy.Scope scope = counselManagementAccessPolicy.requireScope(counselorId);
+        boolean careerOnly = scope == CounselManagementAccessPolicy.Scope.CAREER_ONLY;
+        return counselingScheduleRepository.findCounselorSchedules(counselorId, careerOnly);
     }
 
     /**
@@ -83,6 +85,11 @@ public class CounselingScheduleService {
 
         // 같은 상담사의 빈 일정 구간을 동시에 선점하지 못하도록 사용자 행부터 잠근다.
         AppUser counselor = getActiveCounselorForUpdate(counselorId);
+        // 역할 범위 검증은 잠금 뒤 얻은 scope로 최종 확정한다. URL 진입 이후 역할이 바뀌었더라도
+        // 이 시점의 DB 값을 기준으로 판정하며, 부작용(겹침 조회·저장)보다 먼저 끝내야 검증 실패 시
+        // 어떤 행도 바뀌지 않는다.
+        CounselManagementAccessPolicy.Scope scope = counselManagementAccessPolicy.requireScope(counselor);
+        ensureTypeAllowed(scope, counselingType);
         validateRequest(request, Instant.now());
         ensureNoOverlap(counselorId, request.startsAt(), request.endsAt());
         ensureNoSessionOverlap(counselorId, request.startsAt(), request.endsAt());
@@ -112,9 +119,17 @@ public class CounselingScheduleService {
         CounselingType counselingType = getSchedulableCounselingType(request.counselingTypeId());
 
         // 모든 변경 경로가 사용자 행 다음 일정 행을 잠가 잠금 순서를 통일한다.
-        getActiveCounselorForUpdate(counselorId);
+        AppUser counselor = getActiveCounselorForUpdate(counselorId);
         CounselingSchedule schedule = getScheduleForUpdate(scheduleId);
         ensureOwnerAndOpen(schedule, counselorId);
+        // 소유권 검사 통과 뒤, 실제로 상태를 바꾸기 전에 기존 유형과 신규 요청 유형을 모두 검사한다.
+        // CAREER_ONLY 사용자는 본인 소유 일정이라도 비CS200 일정은 건드릴 수 없어야 하므로,
+        // "그 일정이 원래 CS200이었는지"와 "새로 옮기려는 유형이 CS200인지"를 둘 다 확인해야 한다.
+        // 신규 유형만 검사하면 CAREER_ONLY가 CS200으로 위장한 새 값을 보내 비CS200 기존 일정을
+        // 우회 수정할 길이 남는다. 여기서 걸리면 어떤 행도 아직 바뀌지 않았다.
+        CounselManagementAccessPolicy.Scope scope = counselManagementAccessPolicy.requireScope(counselor);
+        ensureTypeAllowed(scope, schedule.getCounselingType());
+        ensureTypeAllowed(scope, counselingType);
         validateRequest(request, Instant.now());
 
         if (counselingReservationRepository
@@ -150,23 +165,34 @@ public class CounselingScheduleService {
      * 일정 행 잠금이 동시에 들어온 수정이나 예약 처리가 이전 상태를 보고 진행하는 것을 막는다.
      */
     public CounselingScheduleResponse close(Integer scheduleId, Integer counselorId) {
-        getActiveCounselorForUpdate(counselorId);
+        AppUser counselor = getActiveCounselorForUpdate(counselorId);
         CounselingSchedule schedule = getScheduleForUpdate(scheduleId);
         ensureOwnerAndOpen(schedule, counselorId);
+        // 마감은 새 유형을 받지 않으므로 일정에 이미 연결된 유형을 기준으로 범위를 검사한다.
+        // 이미 만들어진 다른 유형 일정도 그 유형이 나중에 CAREER_ONLY 범위 밖이 됐다는 이유만으로
+        // 마감이 막히면 안 되지만, 마감은 상태를 바꾸는 조작이므로 여전히 현재 범위 안의 자원인지 확인한다.
+        CounselManagementAccessPolicy.Scope scope = counselManagementAccessPolicy.requireScope(counselor);
+        ensureTypeAllowed(scope, schedule.getCounselingType());
 
         schedule.close();
         return CounselingScheduleResponse.from(schedule);
     }
 
+    /**
+     * 사용자 행만 잠근다. 활성·STAFF·ST200 여부와 역할 범위 판정은 호출부가
+     * {@link CounselManagementAccessPolicy#requireScope(AppUser)}로 한 번에 확인한다.
+     */
     private AppUser getActiveCounselorForUpdate(Integer counselorId) {
-        AppUser counselor = counselUserRepository.findByIdForUpdate(counselorId)
+        return counselUserRepository.findByIdForUpdate(counselorId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
-        boolean active = "ACTIVE".equals(counselor.getAccountStatus());
-        boolean counselorRole = counselUserRepository.hasCounselorRole(counselorId);
-        if (!active || !counselorRole) {
+    }
+
+    private void ensureTypeAllowed(CounselManagementAccessPolicy.Scope scope, CounselingType counselingType) {
+        if (!counselManagementAccessPolicy.allows(
+                scope, counselingType.getTypeCode(), counselingType.getApplicationRoute()
+        )) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
-        return counselor;
     }
 
     private CounselingType getActiveCounselingType(Integer counselingTypeId) {
