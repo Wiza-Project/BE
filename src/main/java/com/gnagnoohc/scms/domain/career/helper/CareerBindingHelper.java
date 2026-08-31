@@ -59,8 +59,8 @@ public class CareerBindingHelper {
         if (fileGroupId == null) {
             return null;
         }
-        return fileGroupRepository.findById(fileGroupId).orElse(null);
-    }
+        return fileGroupRepository.findById(fileGroupId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "유효한 파일 그룹 정보를 찾을 수 없습니다."));    }
 
     /**
      * 특정 코드 그룹 및 코드값의 활성화 여부를 1차 검증합니다.
