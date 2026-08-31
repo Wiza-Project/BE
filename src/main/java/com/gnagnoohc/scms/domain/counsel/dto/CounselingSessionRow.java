@@ -18,6 +18,9 @@ public record CounselingSessionRow(
         String studentName,
         String departmentName,
         String counselingTypeName,
+        // API 응답(CounselingSessionResponse)에는 노출하지 않는다. ST200+ST300 범위 검사가
+        // 표시명이 아니라 이 불변 코드만으로 판정해야 하므로 내부 판정용으로만 들고 있다.
+        String counselingTypeCode,
         Instant startsAt,
         Instant endsAt,
         String attendanceStatus,
