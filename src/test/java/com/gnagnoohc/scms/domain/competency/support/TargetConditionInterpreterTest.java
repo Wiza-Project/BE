@@ -2,6 +2,7 @@ package com.gnagnoohc.scms.domain.competency.support;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.gnagnoohc.scms.domain.competency.support.TargetConditionInterpreter.StudentTargetSnapshot;
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
 import com.querydsl.core.types.dsl.BooleanExpression;
@@ -204,5 +205,86 @@ class TargetConditionInterpreterTest {
         JsonNode condition = objectMapper.valueToTree(Map.of("grades", List.of(1), "majorCodeIds", List.of(4000)));
 
         assertThat(interpreter.hasUnrecognizedKey(condition)).isFalse();
+    }
+
+    // ── matches(): toPredicate와 같은 판정을 학생 스냅샷에 대해 메모리에서 수행 ──────────────
+
+    private static final StudentTargetSnapshot GRADE_3_MAJOR_4000 = new StudentTargetSnapshot(true, 3, 4000);
+    private static final StudentTargetSnapshot NO_ACADEMIC_DETAIL = StudentTargetSnapshot.missing();
+
+    @Test
+    void matches_whenTargetConditionNull_returnsTrueForEveryone() {
+        assertThat(interpreter.matches(null, NO_ACADEMIC_DETAIL)).isTrue();
+    }
+
+    @Test
+    void matches_whenEmptyObject_returnsTrueForEveryone() {
+        JsonNode condition = objectMapper.valueToTree(Map.of());
+
+        assertThat(interpreter.matches(condition, NO_ACADEMIC_DETAIL)).isTrue();
+    }
+
+    @Test
+    void matches_whenGradeMatches_returnsTrue() {
+        JsonNode condition = objectMapper.valueToTree(Map.of("grades", List.of(1, 3)));
+
+        assertThat(interpreter.matches(condition, GRADE_3_MAJOR_4000)).isTrue();
+    }
+
+    @Test
+    void matches_whenGradeDoesNotMatch_returnsFalse() {
+        JsonNode condition = objectMapper.valueToTree(Map.of("grades", List.of(1, 2)));
+
+        assertThat(interpreter.matches(condition, GRADE_3_MAJOR_4000)).isFalse();
+    }
+
+    // 조건이 하나라도 걸리면 학적 상세가 없는 학생은 제외된다(toPredicate의 LEFT JOIN 의미와 동일).
+    @Test
+    void matches_whenConditionPresentButNoAcademicDetail_returnsFalse() {
+        JsonNode condition = objectMapper.valueToTree(Map.of("grades", List.of(3)));
+
+        assertThat(interpreter.matches(condition, NO_ACADEMIC_DETAIL)).isFalse();
+    }
+
+    // grade 배열에 1~4 밖 값이 섞이면 아무도 매칭되지 않는다(gradeIn의 Expressions.FALSE와 동일).
+    @Test
+    void matches_whenGradeArrayHasOutOfRangeValue_returnsFalseEvenIfStudentGradePresent() {
+        JsonNode condition = objectMapper.valueToTree(Map.of("grades", List.of(3, 9)));
+
+        assertThat(interpreter.matches(condition, GRADE_3_MAJOR_4000)).isFalse();
+    }
+
+    @Test
+    void matches_whenGradeAndMajorBothMatch_returnsTrue() {
+        JsonNode condition = objectMapper.valueToTree(Map.of("grades", List.of(3), "majorCodeIds", List.of(4000)));
+
+        assertThat(interpreter.matches(condition, GRADE_3_MAJOR_4000)).isTrue();
+    }
+
+    @Test
+    void matches_whenGradeMatchesButMajorDoesNot_returnsFalse() {
+        JsonNode condition = objectMapper.valueToTree(Map.of("grades", List.of(3), "majorCodeIds", List.of(9999)));
+
+        assertThat(interpreter.matches(condition, GRADE_3_MAJOR_4000)).isFalse();
+    }
+
+    @Test
+    void matches_whenUnrecognizedKeyPresent_throwsUnsupported() {
+        JsonNode condition = objectMapper.valueToTree(Map.of("colleges", List.of("공과대학")));
+
+        assertThatThrownBy(() -> interpreter.matches(condition, GRADE_3_MAJOR_4000))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.ASSESSMENT_TARGET_CONDITION_UNSUPPORTED);
+    }
+
+    @Test
+    void matches_whenGradesNotArray_throwsInvalidFormat() {
+        JsonNode condition = objectMapper.valueToTree(Map.of("grades", 3));
+
+        assertThatThrownBy(() -> interpreter.matches(condition, GRADE_3_MAJOR_4000))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.ASSESSMENT_TARGET_CONDITION_INVALID_FORMAT);
     }
 }
