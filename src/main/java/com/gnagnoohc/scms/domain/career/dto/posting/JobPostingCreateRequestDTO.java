@@ -18,6 +18,7 @@ import java.util.Map;
  *   <li><b>채용 공고 식별자 (job_posting_id):</b> 등록 시점에는 DB 영속화 전이므로 PK가 존재하지 않음 -> DB의 IDENTITY(Auto Increment) 속성으로 자동 처리</li>
  *   <li><b>기업 계정 식별자 (company_account_id):</b> 기업 계정의 화면은 존재하지 않음 -> 교직원이 사전 등록된 기업 계정 목록에서 선택한 식별자 pk를 전달</li>
  *   <li><b>공통코드 식별자 (ncs_code_id, region_code_id):</b> ERD 제약조건상 NULL 허용</li>
+ *   <li><b>파일 그룹 식별자 (file_group_id):</b> 공통 파일 스토리지에 사전 업로드된 포스터/안내문 이미지·PDF의 FileGroup PK (NULL 허용)</li>
  *   <li><b>게시/검수 상태:</b> 등록 시 기본값({@code review_status='REQUESTED'}, {@code posting_status='DRAFT'})으로 서버 및 DB에서 자동 초기화</li>
  * </ul>
  *
@@ -37,6 +38,9 @@ public class JobPostingCreateRequestDTO {
 
     @Schema(description = "common_code 테이블의 PK (지역 분류 코드 매핑)", example = "지역코드처리후예시추가")
     private Integer regionCodeId;
+
+    @Schema(description = "file_group 테이블의 PK (공통 파일 스토리지 포스터/안내문 이미지·PDF 그룹 식별자)", example = "10")
+    private Integer fileGroupId;
 
     @NotBlank(message = "공고 제목은 필수입니다.")
     @Schema(description = "공고 제목 (posting_title)", example = "2026 하반기 Java 백엔드 신입 개발자 채용")
