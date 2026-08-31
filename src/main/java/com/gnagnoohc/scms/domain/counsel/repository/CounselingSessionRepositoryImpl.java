@@ -40,7 +40,7 @@ public class CounselingSessionRepositoryImpl implements CounselingSessionReposit
 
     @Override
     public Page<CounselingSessionRow> findSessions(
-            Integer counselorId, String sessionStatus, Instant from, Instant to, Pageable pageable
+            Integer counselorId, boolean careerOnly, String sessionStatus, Instant from, Instant to, Pageable pageable
     ) {
         List<CounselingSessionRow> content = queryFactory
                 .select(Projections.constructor(
@@ -48,7 +48,7 @@ public class CounselingSessionRepositoryImpl implements CounselingSessionReposit
                         session.counselingSessionId, assignment.counselingAssignmentId,
                         reservation.counselingReservationId, session.sessionNo,
                         student.userId, student.universityNo, student.userName, department.codeName,
-                        counselingType.typeName, session.startsAt, session.endsAt,
+                        counselingType.typeName, counselingType.typeCode, session.startsAt, session.endsAt,
                         session.attendanceStatus, session.sessionStatus,
                         session.nextSessionAt, session.cancellationReason,
                         assignment.assignedAt, assignment.endedAt, counselor.userId
@@ -64,7 +64,8 @@ public class CounselingSessionRepositoryImpl implements CounselingSessionReposit
                         counselor.userId.eq(counselorId),
                         sessionStatusEq(sessionStatus),
                         startsAtGoe(from),
-                        startsAtLt(to)
+                        startsAtLt(to),
+                        careerOnlyEq(careerOnly)
                 )
                 .orderBy(session.startsAt.desc(), session.counselingSessionId.desc())
                 .offset(pageable.getOffset())
@@ -85,7 +86,8 @@ public class CounselingSessionRepositoryImpl implements CounselingSessionReposit
                         counselor.userId.eq(counselorId),
                         sessionStatusEq(sessionStatus),
                         startsAtGoe(from),
-                        startsAtLt(to)
+                        startsAtLt(to),
+                        careerOnlyEq(careerOnly)
                 );
 
         return PageableExecutionUtils.getPage(content, pageable, countQuery::fetchOne);
@@ -103,5 +105,10 @@ public class CounselingSessionRepositoryImpl implements CounselingSessionReposit
 
     private BooleanExpression startsAtLt(Instant to) {
         return to != null ? session.startsAt.lt(to) : null;
+    }
+
+    // ST200+ST300 사용자는 CS200(진로상담)만 봐야 하므로, careerOnly가 false면 조건 자체를 붙이지 않는다.
+    private BooleanExpression careerOnlyEq(boolean careerOnly) {
+        return careerOnly ? counselingType.typeCode.eq("CS200") : null;
     }
 }
