@@ -5,8 +5,12 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gnagnoohc.scms.domain.competency.dto.AssessmentRoundRequest;
 import com.gnagnoohc.scms.domain.competency.dto.AssessmentRoundResponse;
+import com.gnagnoohc.scms.domain.competency.entity.AssessmentQuestion;
 import com.gnagnoohc.scms.domain.competency.entity.AssessmentRound;
+import com.gnagnoohc.scms.domain.competency.entity.AssessmentRoundQuestion;
 import com.gnagnoohc.scms.domain.competency.repository.AssessmentAttemptRepository;
+import com.gnagnoohc.scms.domain.competency.repository.AssessmentQuestionRepository;
+import com.gnagnoohc.scms.domain.competency.repository.AssessmentRoundQuestionRepository;
 import com.gnagnoohc.scms.domain.competency.repository.AssessmentRoundRepository;
 import com.gnagnoohc.scms.domain.competency.support.TargetConditionInterpreter;
 import com.gnagnoohc.scms.global.error.BusinessException;
@@ -16,6 +20,8 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 @Service
@@ -27,8 +33,19 @@ public class AssessmentRoundService {
 
     private final AssessmentRoundRepository assessmentRoundRepository;
     private final AssessmentAttemptRepository assessmentAttemptRepository;
+    private final AssessmentQuestionRepository assessmentQuestionRepository;
+    private final AssessmentRoundQuestionRepository assessmentRoundQuestionRepository;
     private final TargetConditionInterpreter targetConditionInterpreter;
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    // 교직원 회차 관리 화면 목록. 회차/응시/결과 통계 세 탭이 공유하는 회차 목록의 원천이다.
+    @Transactional(readOnly = true)
+    public List<AssessmentRoundResponse> getRounds() {
+        return assessmentRoundRepository.findAllByOrderByStartsAtDesc()
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
 
     public AssessmentRoundResponse registerRound(AssessmentRoundRequest request, Integer staffId) {
         validatePeriod(request.startsAt(), request.endsAt());
@@ -53,7 +70,21 @@ public class AssessmentRoundService {
             throw resolveDuplicateRoundViolation(e);
         }
 
+        composeQuestions(round, staffId);
         return toResponse(round);
+    }
+
+    // 회차 개설 시점에 현재 활성 문항 전량을 편성한다(응시 시작 후에는 회차 수정 자체가 막히므로
+    // 문항 세트도 이 시점에 확정된다). display_order는 역량 축순서 → 문항ID 순으로 1부터 이어진다.
+    // 활성 문항이 하나도 없으면 편성 없이 넘어간다 — 회차 목록/진단 안내에서 "0문항"으로 드러난다.
+    private void composeQuestions(AssessmentRound round, Integer staffId) {
+        List<AssessmentQuestion> questions = assessmentQuestionRepository.findAllActiveForRoundComposition();
+        List<AssessmentRoundQuestion> roundQuestions = new ArrayList<>();
+        int displayOrder = 1;
+        for (AssessmentQuestion question : questions) {
+            roundQuestions.add(AssessmentRoundQuestion.of(round, question, displayOrder++, staffId));
+        }
+        assessmentRoundQuestionRepository.saveAll(roundQuestions);
     }
 
     // 이미 응시(문항 응답)가 시작된 회차는 통째로 수정을 막는다 — 학년도·기간 등 일부만 잠그면

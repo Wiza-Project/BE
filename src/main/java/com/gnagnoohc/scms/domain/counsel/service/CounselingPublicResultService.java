@@ -52,13 +52,14 @@ public class CounselingPublicResultService {
     private final CounselingReservationRepository counselingReservationRepository;
     private final CounselingPrivateRecordRepository counselingPrivateRecordRepository;
     private final CounselingPublicResultRepository counselingPublicResultRepository;
+    private final CounselManagementAccessPolicy counselManagementAccessPolicy;
 
     /**
      * 현재 담당자뿐 아니라 배정이 끝난 과거 담당자도 자신이 담당했던 회기라면 조회할 수 있다
      * (비공개 기록 조회와 같은 정책). 결과가 없으면 예외 없이 resultStatus=EMPTY로 응답한다.
      */
     public CounselorCounselingPublicResultResponse getResult(Integer sessionId, Integer counselorId) {
-        ensureActiveCounselor(counselorId);
+        CounselManagementAccessPolicy.Scope scope = counselManagementAccessPolicy.requireScope(counselorId);
         CounselingSession session = counselingSessionRepository.findById(sessionId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SESSION_NOT_FOUND));
         CounselingAssignment assignment = session.getCounselingAssignment();
@@ -66,6 +67,7 @@ public class CounselingPublicResultService {
             throw new BusinessException(ErrorCode.SESSION_NOT_FOUND);
         }
         CounselingReservation reservation = assignment.getCounselingReservation();
+        ensureTypeInScope(scope, reservation);
         CounselingPublicResult result = counselingPublicResultRepository
                 .findTopByCounselingSessionCounselingSessionIdOrderByVersionNoDesc(sessionId)
                 .orElse(null);
@@ -82,7 +84,7 @@ public class CounselingPublicResultService {
     public CounselorCounselingPublicResultResponse saveDraft(
             Integer sessionId, String resultSummary, String actionPlan, Integer counselorId
     ) {
-        ensureActiveCounselor(counselorId);
+        CounselManagementAccessPolicy.Scope scope = counselManagementAccessPolicy.requireScope(counselorId);
         CounselingSession session = counselingSessionRepository.findByIdForUpdate(sessionId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SESSION_NOT_FOUND));
         Integer assignmentId = session.getCounselingAssignment().getCounselingAssignmentId();
@@ -91,6 +93,8 @@ public class CounselingPublicResultService {
         if (!assignment.isOwnedBy(counselorId)) {
             throw new BusinessException(ErrorCode.SESSION_NOT_FOUND);
         }
+        // 초안을 새로 쓰기 전에 유형 범위부터 확인한다.
+        ensureTypeInScope(scope, assignment.getCounselingReservation());
         if (!assignment.isActive()) {
             throw new BusinessException(ErrorCode.PUBLIC_RESULT_STATE_NOT_ALLOWED);
         }
@@ -119,7 +123,7 @@ public class CounselingPublicResultService {
      */
     @Transactional
     public CounselorCounselingPublicResultResponse publish(Integer sessionId, Integer counselorId) {
-        ensureActiveCounselor(counselorId);
+        CounselManagementAccessPolicy.Scope scope = counselManagementAccessPolicy.requireScope(counselorId);
         CounselingSession session = counselingSessionRepository.findByIdForUpdate(sessionId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SESSION_NOT_FOUND));
         Integer assignmentId = session.getCounselingAssignment().getCounselingAssignmentId();
@@ -128,6 +132,8 @@ public class CounselingPublicResultService {
         if (!assignment.isOwnedBy(counselorId)) {
             throw new BusinessException(ErrorCode.SESSION_NOT_FOUND);
         }
+        // 공개(불변 노출) 전에 유형 범위부터 확인한다.
+        ensureTypeInScope(scope, assignment.getCounselingReservation());
         if (!assignment.isActive()) {
             throw new BusinessException(ErrorCode.PUBLIC_RESULT_STATE_NOT_ALLOWED);
         }
@@ -156,7 +162,7 @@ public class CounselingPublicResultService {
      */
     @Transactional
     public CounselorCounselingPublicResultResponse complete(Integer sessionId, Integer counselorId) {
-        ensureActiveCounselor(counselorId);
+        CounselManagementAccessPolicy.Scope scope = counselManagementAccessPolicy.requireScope(counselorId);
         Instant now = Instant.now();
 
         CounselingSession session = counselingSessionRepository.findByIdForUpdate(sessionId)
@@ -173,6 +179,8 @@ public class CounselingPublicResultService {
         if (!assignment.isOwnedBy(counselorId)) {
             throw new BusinessException(ErrorCode.SESSION_NOT_FOUND);
         }
+        // 예약 완료·배정 종료라는 되돌릴 수 없는 부작용을 만들기 전에 유형 범위부터 확인한다.
+        ensureTypeInScope(scope, reservation);
         if (!assignment.isActive()) {
             throw new BusinessException(ErrorCode.PUBLIC_RESULT_STATE_NOT_ALLOWED);
         }
@@ -229,13 +237,16 @@ public class CounselingPublicResultService {
             String correctionReason,
             Integer counselorId
     ) {
-        ensureActiveCounselor(counselorId);
+        CounselManagementAccessPolicy.Scope scope = counselManagementAccessPolicy.requireScope(counselorId);
         CounselingSession session = counselingSessionRepository.findByIdForUpdate(sessionId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SESSION_NOT_FOUND));
         CounselingAssignment assignment = session.getCounselingAssignment();
         if (!assignment.isOwnedBy(counselorId)) {
             throw new BusinessException(ErrorCode.SESSION_NOT_FOUND);
         }
+        // 배정이 이미 종료됐어도 원래 담당자의 정정은 허용하는 기존 예외는 유지하되, 그 예외는 CS200
+        // 범위 안에서만 유효하다. 새 버전을 만들기 전에 유형 범위부터 확인한다.
+        ensureTypeInScope(scope, assignment.getCounselingReservation());
 
         CounselingPublicResult latest = counselingPublicResultRepository
                 .findTopByCounselingSessionCounselingSessionIdAndPublishedAtIsNotNullOrderByVersionNoDesc(sessionId)
@@ -263,13 +274,14 @@ public class CounselingPublicResultService {
      * 작성자 표시명은 findAllById로 한 번에 배치 조회해 버전 수만큼 N+1 쿼리가 나가지 않게 한다.
      */
     public List<CounselingPublicResultHistoryResponse> getHistory(Integer sessionId, Integer counselorId) {
-        ensureActiveCounselor(counselorId);
+        CounselManagementAccessPolicy.Scope scope = counselManagementAccessPolicy.requireScope(counselorId);
         CounselingSession session = counselingSessionRepository.findById(sessionId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SESSION_NOT_FOUND));
         CounselingAssignment assignment = session.getCounselingAssignment();
         if (!assignment.isOwnedBy(counselorId)) {
             throw new BusinessException(ErrorCode.SESSION_NOT_FOUND);
         }
+        ensureTypeInScope(scope, assignment.getCounselingReservation());
 
         List<CounselingPublicResult> versions = counselingPublicResultRepository
                 .findByCounselingSessionCounselingSessionIdAndPublishedAtIsNotNullOrderByVersionNoDesc(sessionId);
@@ -432,9 +444,15 @@ public class CounselingPublicResultService {
         return completed && row.sessionId().equals(finalSessionId);
     }
 
-    private void ensureActiveCounselor(Integer counselorId) {
-        if (!counselUserRepository.isActiveCounselor(counselorId)) {
-            throw new BusinessException(ErrorCode.FORBIDDEN);
+    /**
+     * 예약에 연결된 상담 유형이 현재 역할 범위에서 허용되는지 확인한다. 다른 유형이면 담당자가
+     * 아닌 회기와 동일하게 SESSION_NOT_FOUND(S007)로 통일해 존재 자체를 노출하지 않는다.
+     * 회기는 항상 DIRECT 유형 일정에서만 만들어지므로 신청 경로는 고정값으로 넘긴다.
+     */
+    private void ensureTypeInScope(CounselManagementAccessPolicy.Scope scope, CounselingReservation reservation) {
+        String typeCode = reservation.getCounselingType().getTypeCode();
+        if (!counselManagementAccessPolicy.allows(scope, typeCode, "DIRECT")) {
+            throw new BusinessException(ErrorCode.SESSION_NOT_FOUND);
         }
     }
 

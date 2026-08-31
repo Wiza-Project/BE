@@ -36,6 +36,8 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -64,6 +66,9 @@ class AssessmentSubmissionServiceTest {
     @Mock
     AssessmentScoreRepository assessmentScoreRepository;
 
+    @Mock
+    AssessmentResultReadyEventPublisher assessmentResultReadyEventPublisher;
+
     // AssessmentScoreCalculator는 리포지토리 의존성 없는 순수 계산 컴포넌트라 목(mock) 대신 실제 인스턴스를 사용한다
     // (Mockito @InjectMocks는 @Mock이 아닌 협력자를 채워주지 못해 생성자로 직접 조립한다).
     AssessmentSubmissionService assessmentSubmissionService;
@@ -73,7 +78,7 @@ class AssessmentSubmissionServiceTest {
         assessmentSubmissionService = new AssessmentSubmissionService(
                 assessmentAttemptAccessGuard, assessmentResponseRepository,
                 assessmentRoundQuestionRepository, assessmentRoundRepository, assessmentScoreRepository,
-                new AssessmentScoreCalculator());
+                new AssessmentScoreCalculator(), assessmentResultReadyEventPublisher);
     }
 
     private static <T> T newInstance(Class<T> type) throws ReflectiveOperationException {
@@ -178,6 +183,9 @@ class AssessmentSubmissionServiceTest {
         assertThat(result.scores()).hasSize(1);
         assertThat(result.scores().get(0).rawScore()).isEqualByComparingTo(BigDecimal.valueOf(3)); // (4+2)/2
         assertThat(result.scores().get(0).convertedScore()).isEqualByComparingTo(BigDecimal.valueOf(60)); // 3/5*100
+
+        // 채점 완료 직후 이력서 연동용 결과 준비 이벤트를 방금 계산한 점수 리스트로 발행한다.
+        verify(assessmentResultReadyEventPublisher).publishFromSubmit(eq(attempt), anyList());
     }
 
     // 역량 2개(하나는 역문항 포함, 하나는 정문항만)를 함께 제출하는 submit() 전체 경로를 검증한다.
@@ -260,6 +268,28 @@ class AssessmentSubmissionServiceTest {
         assertThat(attempt.getAttemptStatus()).isEqualTo("NOT_STARTED");
     }
 
+    // 문항이 하나도 매핑되지 않은 회차는 채점 대상이 없어 제출을 성사시킬 수 없다.
+    // assertAllAnswered가 공허하게 통과하는 탓에 제출·채점이 커밋되던 경로를 막는다.
+    @Test
+    void submit_whenRoundHasNoQuestions_throwsAssessmentRoundNoQuestions() throws Exception {
+        Instant now = Instant.now();
+        AssessmentRound round = buildRound(now.minus(1, ChronoUnit.DAYS), now.plus(6, ChronoUnit.DAYS));
+        AssessmentAttempt attempt = buildAttempt(round, buildStudent(STUDENT_ID));
+
+        when(assessmentAttemptAccessGuard.getOwnAttempt(ATTEMPT_ID, STUDENT_ID)).thenReturn(attempt);
+        when(assessmentRoundQuestionRepository.findByAssessmentRound_AssessmentRoundIdOrderByDisplayOrderAsc(ROUND_ID))
+                .thenReturn(List.of());
+
+        assertThatThrownBy(() -> assessmentSubmissionService.submit(ATTEMPT_ID, STUDENT_ID))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.ASSESSMENT_ROUND_NO_QUESTIONS);
+
+        assertThat(attempt.getSubmittedAt()).isNull();
+        assertThat(attempt.getAttemptStatus()).isEqualTo("NOT_STARTED");
+        verify(assessmentResultReadyEventPublisher, never()).publishFromSubmit(any(), anyList());
+    }
+
     // 소유권·제출완료·기간 검증 자체(각 조건에서 어떤 에러코드가 나오는지)는
     // AssessmentAttemptAccessGuardTest에서 직접 검증한다. 여기서는 submit이 guard 결과를
     // 그대로 전파하는지만 확인한다.
@@ -321,6 +351,7 @@ class AssessmentSubmissionServiceTest {
                 .isEqualTo(ErrorCode.DIAGNOSIS_PERIOD_CLOSED);
 
         verify(assessmentScoreRepository, never()).saveAll(any());
+        verify(assessmentResultReadyEventPublisher, never()).publishFromSubmit(any(), anyList());
         assertThat(attempt.getAttemptStatus()).isEqualTo("NOT_STARTED");
     }
 

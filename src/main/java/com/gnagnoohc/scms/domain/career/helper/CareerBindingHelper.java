@@ -1,8 +1,10 @@
 package com.gnagnoohc.scms.domain.career.helper;
 
 import com.gnagnoohc.scms.global.common.entity.CommonCode;
+import com.gnagnoohc.scms.global.common.entity.FileGroup;
 import com.gnagnoohc.scms.global.common.helper.CommonCodeLookupHelper;
 import com.gnagnoohc.scms.global.common.repository.CommonCodeRepository;
+import com.gnagnoohc.scms.global.common.repository.FileGroupRepository;
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +21,7 @@ public class CareerBindingHelper {
 
     private final CommonCodeRepository commonCodeRepository;
     private final CommonCodeLookupHelper commonCodeLookupHelper;
+    private final FileGroupRepository fileGroupRepository;
 
     /**
      * 공통코드 식별자(PK)로 단건 조회 및 활성 상태(active = true)를 확인하여 반환합니다.
@@ -45,6 +48,19 @@ public class CareerBindingHelper {
                 .filter(code -> GROUP_REGION_CODE.equals(code.getCodeGroup()))
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "유효한 근무지역 코드를 찾을 수 없습니다."));
     }
+
+    /**
+     * 공통 파일 스토리지 포스터 파일그룹 조회 및 바인딩 (null 허용)
+     *
+     * @param fileGroupId 클라이언트 또는 파일 업로드 결과로 전달된 FileGroup PK
+     * @return 유효한 FileGroup 엔티티 또는 null
+     */
+    public FileGroup findValidFileGroupOrNull(Integer fileGroupId) {
+        if (fileGroupId == null) {
+            return null;
+        }
+        return fileGroupRepository.findById(fileGroupId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "유효한 파일 그룹 정보를 찾을 수 없습니다."));    }
 
     /**
      * 특정 코드 그룹 및 코드값의 활성화 여부를 1차 검증합니다.
