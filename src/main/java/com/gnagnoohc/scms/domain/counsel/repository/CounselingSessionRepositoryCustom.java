@@ -18,9 +18,11 @@ public interface CounselingSessionRepositoryCustom {
     /**
      * 로그인 상담사의 현재·과거 배정에 연결된 회기 목록. 선택 필터가 null이면 해당 조건을 붙이지 않는다.
      * 신청 원문·비공개 기록·공개 결과·연락처는 프로젝션에 포함하지 않는다.
+     * careerOnly가 true면 ST200+ST300 상담사용으로 CS200(진로상담) 회기만 조회 조건에서 걸러낸다.
      */
     Page<CounselingSessionRow> findSessions(
             Integer counselorId,
+            boolean careerOnly,
             String sessionStatus,
             Instant from,
             Instant to,
