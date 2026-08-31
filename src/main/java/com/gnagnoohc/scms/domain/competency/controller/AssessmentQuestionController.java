@@ -25,7 +25,7 @@ import java.util.List;
 
 @Tag(name = "AssessmentQuestion", description = "진단문항 관리")
 @RestController
-@RequestMapping("/api/admin/assessment-questions")
+@RequestMapping("/api/staff/assessment-questions")
 @RequiredArgsConstructor
 public class AssessmentQuestionController {
 

@@ -15,8 +15,8 @@ import java.util.List;
 
 // 핵심역량 "선택 목록" 조회.
 //
-// 등록·축순서·사용여부 변경(CompetencyController, /api/admin/** = 교직원 전용)과 달리, 이 조회는
-// 관리자 경로가 아니라 인증만 요구하는 /api/competencies 에 둔다(SecurityConfig의 anyRequest().authenticated()).
+// 등록·축순서·사용여부 변경(CompetencyController, /api/staff/** = 교직원 전용)과 달리, 이 조회는
+// 교직원 전용 경로가 아니라 인증만 요구하는 /api/competencies 에 둔다(SecurityConfig의 anyRequest().authenticated()).
 // 따라서 로그인한 사용자면 유형과 무관하게 호출할 수 있다 — 노출되는 값은 역량 이름·표시순서뿐이라
 // 민감정보가 아니기 때문이다. 실제 사용처는:
 //   - 학생: 비교과 프로그램 목록을 핵심역량으로 필터링
