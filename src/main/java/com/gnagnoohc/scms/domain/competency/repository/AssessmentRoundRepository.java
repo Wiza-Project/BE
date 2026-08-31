@@ -15,6 +15,10 @@ public interface AssessmentRoundRepository extends JpaRepository<AssessmentRound
     // 교직원 회차 관리 화면 목록 — 최근 개설 순.
     List<AssessmentRound> findAllByOrderByStartsAtDesc();
 
+    // 학생 진단 안내 — 지금이 응시기간 안(startsAt <= now <= endsAt)인 회차.
+    List<AssessmentRound> findByStartsAtLessThanEqualAndEndsAtGreaterThanEqualOrderByStartsAtDesc(
+            Instant startBound, Instant endBound);
+
     Optional<AssessmentRound> findByAcademicYearAndSemesterCodeAndAssessmentType(
             Integer academicYear, String semesterCode, String assessmentType);
 
