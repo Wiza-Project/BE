@@ -17,6 +17,7 @@ import java.util.Map;
  * <ul>
  *   <li>공고 식별자(PK)는 PathVariable로 전달받으므로 DTO 필드에서 제외</li>
  *   <li>기업 계정 식별자(company_account_id)는 pk라 수정 불가하므로 제외하거나 읽기 전용으로 취급</li>
+ *   <li>포스터 변경 시 새로 생성된 file_group_id 전달, 기존 유지 시 기존 ID 유지</li>
  * </ul>
  *
  * @author YUN
@@ -31,6 +32,9 @@ public class JobPostingUpdateRequestDTO {
 
     @Schema(description = "지역 공통코드 식별자 (region_code_id, NULL 가능)", example = "지역코드실제넘버링")
     private Integer regionCodeId;
+
+    @Schema(description = "file_group 테이블의 PK (공통 파일 스토리지 포스터/안내문 이미지·PDF 그룹 식별자)", example = "10")
+    private Integer fileGroupId;
 
     @NotBlank(message = "공고 제목은 필수입니다.")
     @Schema(description = "공고 제목 (posting_title)", example = "2026 하반기 Java 백엔드 개발자 채용 (수정)")
