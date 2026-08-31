@@ -3,7 +3,9 @@ package com.gnagnoohc.scms.domain.counsel.controller;
 import com.gnagnoohc.scms.domain.counsel.dto.CounselingTypeResponse;
 import com.gnagnoohc.scms.domain.counsel.service.CounselingTypeService;
 import com.gnagnoohc.scms.global.common.dto.ApiResponse;
+import com.gnagnoohc.scms.global.security.AuthUser;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -28,9 +30,13 @@ public class CounselorCounselingTypeController {
 
     /**
      * 상담사가 새 일정을 열 수 있는 활성 DIRECT 상담 유형 목록을 조회한다.
+     * 목록 자체가 이미 로그인한 상담사의 역할 범위(ST200 단독/ST200+ST300)로 제한되므로,
+     * FE는 역할별로 상담 유형을 따로 판정하지 않고 이 응답을 그대로 써도 된다.
      */
     @GetMapping
-    public ApiResponse<List<CounselingTypeResponse>> getSchedulableCounselingTypes() {
-        return ApiResponse.ok(counselingTypeService.getSchedulableCounselingTypes());
+    public ApiResponse<List<CounselingTypeResponse>> getSchedulableCounselingTypes(
+            @AuthenticationPrincipal AuthUser authUser
+    ) {
+        return ApiResponse.ok(counselingTypeService.getSchedulableCounselingTypes(authUser.getId()));
     }
 }
