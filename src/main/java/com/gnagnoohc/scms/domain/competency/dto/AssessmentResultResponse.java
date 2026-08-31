@@ -7,6 +7,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 
 public record AssessmentResultResponse(
         Integer attemptId,
@@ -41,10 +42,8 @@ public record AssessmentResultResponse(
                         percentileAvailable ? s.getPercentile() : null))
                 .toList();
 
-        BigDecimal sum = scores.stream()
-                .map(AssessmentScore::getConvertedScore)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal overallAverageScore = sum.divide(BigDecimal.valueOf(scores.size()), 2, RoundingMode.HALF_UP);
+        BigDecimal overallAverageScore = averageConvertedScore(
+                scores.stream().map(AssessmentScore::getConvertedScore).toList());
 
         return new AssessmentResultResponse(
                 attempt.getAttemptId(),
@@ -53,5 +52,17 @@ public record AssessmentResultResponse(
                 overallAverageScore,
                 percentileAvailable,
                 results);
+    }
+
+    // 결과 조회 응답과 이력서 연동 이벤트(AssessmentResultReadyEvent)가 전체 평균 산식을 공유하도록 분리한다.
+    // 환산점수 합 / 개수, 소수 둘째 자리 HALF_UP.
+    // 공용 유틸이라 호출부가 늘 수 있어, null·빈 리스트를 "/ by zero"나 맨 NPE 대신 사전조건 위반으로 명확히 막는다.
+    public static BigDecimal averageConvertedScore(List<BigDecimal> convertedScores) {
+        Objects.requireNonNull(convertedScores, "환산점수 목록은 필수입니다.");
+        if (convertedScores.isEmpty()) {
+            throw new IllegalArgumentException("환산점수 목록이 비어 있어 전체 평균을 계산할 수 없습니다.");
+        }
+        BigDecimal sum = convertedScores.stream().reduce(BigDecimal.ZERO, BigDecimal::add);
+        return sum.divide(BigDecimal.valueOf(convertedScores.size()), 2, RoundingMode.HALF_UP);
     }
 }
