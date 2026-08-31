@@ -122,10 +122,8 @@ public class ProgramMileageAccrualService {
                                         LocalDate completionDate,
                                         Map<PolicyLookupKey, MileagePolicy> policyCache) {
         MileagePolicy linkedPolicy = application.getProgram().getMileagePolicy();
-        if (linkedPolicy != null
-                && !ExtracurricularMileagePolicyDefinition.isExtracurricular(linkedPolicy.getActivityType())) {
-            return linkedPolicy;
-        }
+        // 프로그램 이수 적립은 비교과 프로그램 유형별 정책만 사용한다.
+        // 비교과가 아닌 연결 정책은 그대로 사용하지 않고, 아래의 유효한 정책 조회로 넘긴다.
         if (isUsablePolicy(linkedPolicy, programTypeCode, completionDate)) {
             return linkedPolicy;
         }
