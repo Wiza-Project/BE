@@ -3,6 +3,7 @@ package com.gnagnoohc.scms.domain.competency.repository;
 import com.gnagnoohc.scms.domain.competency.entity.AssessmentAttempt;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
@@ -25,4 +26,9 @@ public interface AssessmentAttemptRepository extends JpaRepository<AssessmentAtt
     // 엔티티 대신 id만 읽어 슬라이스로 넘기고, 실제 회차/점수 로드는 발행 시점에 건별로 한다.
     @Query("SELECT a.attemptId FROM AssessmentAttempt a WHERE a.submittedAt IS NOT NULL ORDER BY a.attemptId ASC")
     Slice<Integer> findSubmittedAttemptIds(Pageable pageable);
+
+    // 이력서 연동 이벤트 조립에 회차 메타(진단명·학년도·학기·구분)가 필요해 assessment_round를 함께 로드한다.
+    // 백필이 attempt마다 호출하므로 findById + 지연 로딩이면 회차 초기화 SELECT가 건별로 추가된다.
+    @EntityGraph(attributePaths = "assessmentRound")
+    Optional<AssessmentAttempt> findWithRoundByAttemptId(Integer attemptId);
 }

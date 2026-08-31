@@ -157,7 +157,7 @@ class AssessmentResultReadyEventPublisherTest {
                 AssessmentScore.create(attempt, c1, BigDecimal.valueOf(4), new BigDecimal("80.00")),
                 AssessmentScore.create(attempt, c2, BigDecimal.valueOf(3), new BigDecimal("60.00")));
 
-        when(assessmentAttemptRepository.findById(ATTEMPT_ID)).thenReturn(Optional.of(attempt));
+        when(assessmentAttemptRepository.findWithRoundByAttemptId(ATTEMPT_ID)).thenReturn(Optional.of(attempt));
         when(assessmentScoreRepository.findByAttemptIdFetchCompetencyOrderByDisplayOrder(ATTEMPT_ID)).thenReturn(scores);
         when(commonCodeService.getCodeName("SEMESTER", "SPRING")).thenReturn("1학기");
 
@@ -176,7 +176,7 @@ class AssessmentResultReadyEventPublisherTest {
         AssessmentAttempt attempt = buildAttempt(round, buildStudent(STUDENT_ID));
         lenient().when(commonCodeService.getCodeName(any(), any())).thenReturn("1학기");
 
-        when(assessmentAttemptRepository.findById(ATTEMPT_ID)).thenReturn(Optional.of(attempt));
+        when(assessmentAttemptRepository.findWithRoundByAttemptId(ATTEMPT_ID)).thenReturn(Optional.of(attempt));
         when(assessmentScoreRepository.findByAttemptIdFetchCompetencyOrderByDisplayOrder(ATTEMPT_ID))
                 .thenReturn(List.of());
 
@@ -193,7 +193,7 @@ class AssessmentResultReadyEventPublisherTest {
         List<AssessmentScore> scores = List.of(
                 AssessmentScore.create(attempt, c1, BigDecimal.valueOf(4), new BigDecimal("80.00")));
 
-        when(assessmentAttemptRepository.findById(ATTEMPT_ID)).thenReturn(Optional.of(attempt));
+        when(assessmentAttemptRepository.findWithRoundByAttemptId(ATTEMPT_ID)).thenReturn(Optional.of(attempt));
         when(assessmentScoreRepository.findByAttemptIdFetchCompetencyOrderByDisplayOrder(ATTEMPT_ID)).thenReturn(scores);
         // CommonCodeService.getCodeName은 매핑이 없으면 코드 원값을 그대로 돌려준다.
         when(commonCodeService.getCodeName("SEMESTER", "SPRING")).thenReturn("SPRING");

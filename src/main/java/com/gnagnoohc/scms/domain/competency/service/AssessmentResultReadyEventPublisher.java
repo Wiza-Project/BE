@@ -89,7 +89,7 @@ public class AssessmentResultReadyEventPublisher {
      */
     @Transactional
     public boolean publish(Integer attemptId, UUID requestId) {
-        AssessmentAttempt attempt = assessmentAttemptRepository.findById(attemptId)
+        AssessmentAttempt attempt = assessmentAttemptRepository.findWithRoundByAttemptId(attemptId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ASSESSMENT_ATTEMPT_NOT_FOUND));
 
         // 이미 displayOrder 정렬 + competency fetch join 되어 있다.
