@@ -23,6 +23,9 @@ public interface CounselingScheduleRepository extends JpaRepository<CounselingSc
      * 예약 상태와 관계없이 참조 행이 하나라도 있으면 수정이 막히므로 hasReservation도 같은 기준을 사용한다.
      * careerOnly가 true면 ST200+ST300 사용자용으로 CS200(진로상담) 일정만 조회 조건에서 걸러낸다.
      * 조회 후 메모리에서 다른 유형을 제거하지 않고 where 절에서 바로 제한한다.
+     * 신청 경로가 DIRECT인 일정만 조회한다. 단건 조작 판정(CounselManagementAccessPolicy.allows)이
+     * route≠DIRECT를 거부하는 것과 목록 술어를 일치시켜, "목록엔 보이는데 다룰 수 없는 일정"이
+     * 생기지 않게 한다(일정 생성 자체가 DIRECT만 허용하므로 실질 결과는 같지만 규칙을 한 곳과 맞춘다).
      */
     @Query("""
             select new com.gnagnoohc.scms.domain.counsel.dto.CounselorScheduleResponse(
@@ -43,6 +46,7 @@ public interface CounselingScheduleRepository extends JpaRepository<CounselingSc
             left join CounselingReservation reservation
               on reservation.counselingSchedule = schedule
             where counselor.userId = :counselorId
+              and counselingType.applicationRoute = 'DIRECT'
               and (:careerOnly = false or counselingType.typeCode = 'CS200')
             group by
                 schedule.counselingScheduleId,

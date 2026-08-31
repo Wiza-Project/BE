@@ -122,6 +122,9 @@ public interface CounselingReservationRepository extends JpaRepository<Counselin
      * DTO 변환(from)에서 counselingType·counselingSchedule·student를 바로 읽으므로
      * join fetch로 함께 가져와 목록 페이지마다 N+1 지연로딩 쿼리가 나가지 않게 한다.
      * careerOnly가 true면 ST200+ST300 상담사용으로 CS200(진로상담) 예약만 조회 조건에서 걸러낸다.
+     * 신청 경로가 DIRECT인 예약만 조회한다. 단건 조작 판정(CounselManagementAccessPolicy.allows)이
+     * route≠DIRECT를 거부하는 것과 목록 술어를 일치시킨다(상담사 일정에는 DIRECT 예약만 걸리므로
+     * 실질 결과는 같지만 규칙을 한 곳과 맞춘다).
      */
     @Query(value = """
             select r from CounselingReservation r
@@ -130,6 +133,7 @@ public interface CounselingReservationRepository extends JpaRepository<Counselin
             join fetch r.student
             where s.counselor.userId = :counselorId
               and r.reservationStatus = 'REQUESTED'
+              and t.applicationRoute = 'DIRECT'
               and (:careerOnly = false or t.typeCode = 'CS200')
             order by s.startsAt asc
             """,
@@ -139,6 +143,7 @@ public interface CounselingReservationRepository extends JpaRepository<Counselin
             join r.counselingType t
             where s.counselor.userId = :counselorId
               and r.reservationStatus = 'REQUESTED'
+              and t.applicationRoute = 'DIRECT'
               and (:careerOnly = false or t.typeCode = 'CS200')
             """)
     Page<CounselingReservation> findPendingByCounselor(
