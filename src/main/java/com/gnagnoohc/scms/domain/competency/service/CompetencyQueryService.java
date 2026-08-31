@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 
 // 핵심역량 목록을 "읽기만" 하는 진입점.
@@ -30,5 +31,31 @@ public class CompetencyQueryService {
                 .stream()
                 .map(CompetencySummary::from)
                 .toList();
+    }
+
+    // 프로그램 수정 화면 전용: 기본 목록(활성 최상위)은 그대로 두고, 그 프로그램이 이미 참조 중인 역량 한 건만
+    // 예외로 포함해 준다. 등록 후 관리자가 그 역량을 비활성화했거나 목록 밖(하위역량 등)인 경우에도 수정 폼
+    // 드롭다운에 현재 값이 떠야 하기 때문이다.
+    //   - includeCompetencyId가 null이면 기본 목록과 동일하다.
+    //   - 이미 활성 목록에 있으면 중복해서 넣지 않는다.
+    //   - 존재하지 않는 id면(참조가 꼬인 경우) 무시하고 활성 목록만 반환한다 — 수정 폼이 깨지지 않도록.
+    //   - 예외로 끼워 넣는 항목은 축순서 정렬된 활성 목록 "뒤"에 붙는다(active 값으로 프론트가 구분 표시).
+    public List<CompetencySummary> getActiveTopLevelCompetencies(Integer includeCompetencyId) {
+        List<CompetencySummary> active = getActiveTopLevelCompetencies();
+        if (includeCompetencyId == null) {
+            return active;
+        }
+        boolean alreadyIncluded = active.stream()
+                .anyMatch(competency -> includeCompetencyId.equals(competency.competencyId()));
+        if (alreadyIncluded) {
+            return active;
+        }
+        return competencyRepository.findById(includeCompetencyId)
+                .map(extra -> {
+                    List<CompetencySummary> merged = new ArrayList<>(active);
+                    merged.add(CompetencySummary.from(extra));
+                    return List.copyOf(merged);
+                })
+                .orElse(active);
     }
 }
