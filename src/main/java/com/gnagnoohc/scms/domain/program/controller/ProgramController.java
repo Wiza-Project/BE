@@ -90,7 +90,7 @@ public class ProgramController {
     @Operation(summary = "마일리지 정책 미리보기", description = "선택한 프로그램 유형(programTypeCodeId)에 매핑되는 현재 활성 마일리지 정책을 실시간으로 조회합니다. 매핑되는 정책이 없으면 관련 필드가 비어 내려갑니다.")
     @GetMapping("/mileage-policy-preview")
     public ApiResponse<ProgramMileagePolicyPreviewResponseDTO> previewMileagePolicy(
-            @RequestParam Integer programTypeCodeId) {
+            @RequestParam(required = false) Integer programTypeCodeId) {
         return ApiResponse.ok(programService.previewMileagePolicy(programTypeCodeId));
     }
 

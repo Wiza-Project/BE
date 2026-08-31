@@ -747,12 +747,11 @@ public class ProgramService {
     /**
      * WP-261 자동 매핑 로직(resolveMileagePolicyId)과 동일한 조건으로 조회하되, 등록/수정을 실행하지 않고도
      * 프론트 폼에서 programTypeCodeId 선택 시점에 매핑 결과를 미리 확인할 수 있게 한다.
+     * programTypeCodeId가 아직 선택되지 않아 null이면(findActiveExtracurricularPolicy가 이를 안전하게
+     * 처리) 매핑 정책이 없는 것과 동일하게 필드가 비어있는 응답을 반환한다.
      */
     @Transactional(readOnly = true)
     public ProgramMileagePolicyPreviewResponseDTO previewMileagePolicy(Integer programTypeCodeId) {
-        if (programTypeCodeId == null) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT, "programTypeCodeId는 필수입니다.");
-        }
         MileagePolicy policy = findActiveExtracurricularPolicy(programTypeCodeId).orElse(null);
         return ProgramMileagePolicyPreviewResponseDTO.from(programTypeCodeId, policy);
     }
