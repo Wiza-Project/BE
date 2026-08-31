@@ -1,5 +1,6 @@
 package com.gnagnoohc.scms.domain.counsel.repository;
 
+import com.gnagnoohc.scms.domain.counsel.dto.CounselorStudentLookupResponse;
 import com.gnagnoohc.scms.domain.user.entity.AppUser;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -80,4 +81,24 @@ public interface CounselUserRepository extends Repository<AppUser, Integer> {
               and role.id.roleCode = 'ST300'
             """)
     boolean hasProfessorRole(@Param("userId") Integer userId);
+
+    /**
+     * 학번 완전 일치 하나만 조회한다. 부분 검색·전체 목록은 대상이 아니며, 학생이 아니거나
+     * 비활성 계정이면 애초에 결과가 없어 서비스가 이유를 구분하지 않고 U001로 처리할 수 있다.
+     * 전체 AppUser를 읽어 메모리에서 거르지 않도록 WHERE 절에서 바로 제한하고 최소 필드만 담는다.
+     */
+    @Query("""
+            select new com.gnagnoohc.scms.domain.counsel.dto.CounselorStudentLookupResponse(
+                user.userId,
+                user.universityNo,
+                user.userName
+            )
+            from AppUser user
+            where user.universityNo = :universityNo
+              and user.userType = 'STUDENT'
+              and user.accountStatus = 'ACTIVE'
+            """)
+    Optional<CounselorStudentLookupResponse> findActiveStudentByUniversityNo(
+            @Param("universityNo") String universityNo
+    );
 }
