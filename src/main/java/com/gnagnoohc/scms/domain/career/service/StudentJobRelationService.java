@@ -17,6 +17,11 @@ import com.gnagnoohc.scms.domain.user.service.consent.ConsentType;
 import com.gnagnoohc.scms.domain.user.service.consent.ConsentVerifier;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;
 import com.gnagnoohc.scms.global.common.helper.JdbcUpsertHelper;
+import com.gnagnoohc.scms.global.common.notification.ModuleCode;
+import com.gnagnoohc.scms.global.common.notification.NotificationRequest;
+import com.gnagnoohc.scms.global.common.notification.NotificationSender;
+import com.gnagnoohc.scms.global.common.notification.NotificationType;
+import com.gnagnoohc.scms.global.common.service.NotificationService;
 import com.gnagnoohc.scms.global.common.util.DateTimeUtils;
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
@@ -29,6 +34,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.time.temporal.ChronoUnit;
+import java.util.List;
 
 /**
  * 학생-채용공고 관계(온라인 지원, 관심 공고 스크랩, 전형 현황) 비즈니스 로직 서비스
@@ -55,6 +62,7 @@ public class StudentJobRelationService {
     private final JdbcUpsertHelper jdbcUpsertHelper;
     private final CareerSecurityHelper careerSecurityHelper;
     private final ConsentVerifier consentVerifier;
+    private final NotificationSender notificationSender;
 
     /**
      * [학생] 온라인 채용공고 지원 신청
@@ -112,7 +120,46 @@ public class StudentJobRelationService {
         log.info("[StudentJobRelationService] 공고 지원 완료. studentUserId: {}, jobPostingId: {}, consentId: {}",
                 studentUserId, jobPosting.getJobPostingId(), consent.getUserConsentId());
 
+        // 온라인 입사지원 완료 알림 발송
+        try {
+            notificationSender.send(new NotificationRequest(
+                    studentUserId,
+                    NotificationType.APPLICATION_SUBMITTED,
+                    ModuleCode.CAREER,
+                    "온라인 입사지원 완료",
+                    "[%s] 공고에 정상적으로 지원 완료되었습니다.".formatted(jobPosting.getPostingTitle())
+            ));
+        } catch (Exception e) {
+            log.warn("[StudentJobRelationService] 지원 완료 알림 발송 실패 - studentId: {}", studentUserId, e);
+        }
+
         return mapToRelationResponseDTO(relation);
+    }
+
+    /**
+     * [스케줄러 호출용] D-3 마감 임박 관심 공고 알림 일괄 발송
+     */
+    public void sendDeadlineApproachingNotifications() {
+        Instant now = Instant.now();
+        Instant d3Start = now.plus(3, ChronoUnit.DAYS).truncatedTo(ChronoUnit.DAYS);
+        Instant d3End = d3Start.plus(1, ChronoUnit.DAYS).minusNanos(1);
+
+        List<StudentJobRelation> targets = relationRepository.findScrappedPostingsEndingBetween(d3Start, d3End);
+
+        for (StudentJobRelation target : targets) {
+            try {
+                notificationSender.send(new NotificationRequest(
+                        target.getStudent().getUserId(),
+                        NotificationType.DEADLINE_IMMINENT,
+                        ModuleCode.CAREER,
+                        "마감 임박 안내 (D-3)",
+                        "관심 공고 [%s] 접수 마감이 3일 남았습니다.".formatted(target.getJobPosting().getPostingTitle())
+                ));
+            } catch (Exception e) {
+                log.warn("[StudentJobRelationService] 마감 알림 발송 실패 - studentId: {}, jobPostingId: {}",
+                        target.getStudent().getUserId(), target.getJobPosting().getJobPostingId(), e);
+            }
+        }
     }
 
     /**

@@ -1,6 +1,7 @@
 package com.gnagnoohc.scms.domain.career.scheduler;
 
 import com.gnagnoohc.scms.domain.career.repository.JobPostingRepository;
+import com.gnagnoohc.scms.domain.career.service.StudentJobRelationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -38,6 +39,7 @@ import java.time.Instant;
 public class JobPostingScheduler {
 
     private final JobPostingRepository jobPostingRepository;
+    private final StudentJobRelationService studentJobRelationService;
 
     /**
      * 매 시 정각(0분 0초)에 접수 기간이 지난 게시 공고를 CLOSED로 상태 전이
@@ -51,4 +53,15 @@ public class JobPostingScheduler {
             log.info("[JobPostingScheduler] 마감기한 만료 채용공고 일괄 마감 완료. 처리 건수: {}건", closedCount);
         }
     }
+
+    /**
+     * 매일 오전 09:00 정각에 마감 D-3 관심 공고 알림 자동 발송
+     */
+    @Scheduled(cron = "0 0 9 * * *")
+    public void runJobDeadlineNotificationBatch() {
+        log.info("[JobPostingScheduler] 마감 D-3 관심 공고 알림 배치 실행 시작");
+        studentJobRelationService.sendDeadlineApproachingNotifications();
+        log.info("[JobPostingScheduler] 마감 D-3 관심 공고 알림 배치 실행 완료");
+    }
+
 }
