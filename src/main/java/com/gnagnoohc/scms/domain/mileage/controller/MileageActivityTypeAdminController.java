@@ -21,12 +21,12 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 
 import java.util.List;
 
-/** 마일리지 활동 유형 등록/조회. 관리자(AD100)만 사용할 수 있다. */
-@Tag(name = "MileageActivityTypeAdmin", description = "마일리지 활동 유형 관리")
+/** 마일리지 활동 유형 등록/조회. 교직원(STAFF)만 사용할 수 있다. */
+@Tag(name = "MileageActivityTypeStaff", description = "교직원 전용 마일리지 활동 유형 관리")
 @RestController
 @RequestMapping("/api/admin/mileage/activity-types")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('AD100')")
+@PreAuthorize("hasRole('STAFF')")
 public class MileageActivityTypeAdminController {
 
     private final MileageActivityTypeService mileageActivityTypeService;
