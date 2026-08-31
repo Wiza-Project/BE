@@ -12,6 +12,9 @@ import java.util.List;
 import java.util.Optional;
 
 public interface AssessmentRoundRepository extends JpaRepository<AssessmentRound, Integer> {
+    // 교직원 회차 관리 화면 목록 — 최근 개설 순.
+    List<AssessmentRound> findAllByOrderByStartsAtDesc();
+
     Optional<AssessmentRound> findByAcademicYearAndSemesterCodeAndAssessmentType(
             Integer academicYear, String semesterCode, String assessmentType);
 

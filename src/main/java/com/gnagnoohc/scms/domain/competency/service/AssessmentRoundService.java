@@ -16,6 +16,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Map;
 
 @Service
@@ -29,6 +30,15 @@ public class AssessmentRoundService {
     private final AssessmentAttemptRepository assessmentAttemptRepository;
     private final TargetConditionInterpreter targetConditionInterpreter;
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    // 교직원 회차 관리 화면 목록. 회차/응시/결과 통계 세 탭이 공유하는 회차 목록의 원천이다.
+    @Transactional(readOnly = true)
+    public List<AssessmentRoundResponse> getRounds() {
+        return assessmentRoundRepository.findAllByOrderByStartsAtDesc()
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
 
     public AssessmentRoundResponse registerRound(AssessmentRoundRequest request, Integer staffId) {
         validatePeriod(request.startsAt(), request.endsAt());
