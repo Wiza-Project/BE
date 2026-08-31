@@ -39,13 +39,14 @@ public interface MileagePolicyRepository extends JpaRepository<MileagePolicy, In
     Optional<MileagePolicy> findTopByActivityType_ActivityTypeIdAndAcademicYearAndSemesterCodeOrderByVersionNoDesc(
             Integer activityTypeId, Integer academicYear, String semesterCode);
 
-    /** 프로그램의 핵심역량에 연결된 비교과 전용 정책을 최신 버전부터 조회한다. */
+    /** 프로그램 유형에 연결된 비교과 전용 정책을 최신 버전부터 조회한다. */
     @Query("""
             select p
             from MileagePolicy p
             join fetch p.activityType activityType
-            join fetch activityType.competency competency
-            where competency.competencyId = :competencyId
+            join fetch activityType.programTypeCode programTypeCode
+            where programTypeCode.codeGroup = 'PROGRAM_TYPE'
+              and programTypeCode.code = :programTypeCode
               and activityType.categoryCode = :categoryCode
               and activityType.earningRoute = :earningRoute
               and p.policyStatus = 'ACTIVE'
@@ -54,8 +55,8 @@ public interface MileagePolicyRepository extends JpaRepository<MileagePolicy, In
               and (p.validTo is null or p.validTo >= :asOfDate)
             order by p.versionNo desc
             """)
-    List<MileagePolicy> findActiveExtracurricularPoliciesByCompetencyOn(
-            @Param("competencyId") Integer competencyId,
+    List<MileagePolicy> findActiveExtracurricularPoliciesByProgramTypeOn(
+            @Param("programTypeCode") String programTypeCode,
             @Param("categoryCode") String categoryCode,
             @Param("earningRoute") String earningRoute,
             @Param("asOfDate") LocalDate asOfDate
