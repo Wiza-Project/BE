@@ -3,6 +3,7 @@ package com.gnagnoohc.scms.domain.career.entity;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.gnagnoohc.scms.global.common.entity.BaseTimeEntity;
 import com.gnagnoohc.scms.global.common.entity.CommonCode;
+import com.gnagnoohc.scms.global.common.entity.FileGroup;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -51,6 +52,10 @@ public class JobPosting extends BaseTimeEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "region_code_id", nullable = true)
     private CommonCode regionCode;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "file_group_id", nullable = true)
+    private FileGroup fileGroup;
 
     @Column(name = "reviewed_by", nullable = true)
     private Integer reviewedBy;
@@ -110,13 +115,14 @@ public class JobPosting extends BaseTimeEntity {
      */
     @Builder
     public JobPosting(CompanyAccount companyAccount, CommonCode ncsCode, CommonCode regionCode,
-                      String postingTitle, String jobDescription, Integer recruitmentCount,
+                      FileGroup fileGroup, String postingTitle, String jobDescription, Integer recruitmentCount,
                       String employmentType, String salaryText, JsonNode qualificationData,
                       Instant applicationStartsAt, Instant applicationEndsAt,
                       String postingType, String benefitType) {
         this.companyAccount = companyAccount;
         this.ncsCode = ncsCode;
         this.regionCode = regionCode;
+        this.fileGroup = fileGroup;
         this.postingTitle = postingTitle;
         this.jobDescription = jobDescription;
         this.recruitmentCount = recruitmentCount;
@@ -129,6 +135,10 @@ public class JobPosting extends BaseTimeEntity {
         this.benefitType = benefitType;
     }
 
+    public void setFileGroup(FileGroup fileGroup) {
+        this.fileGroup = fileGroup;
+    }
+
     /**
      * 채용공고 수정 (비즈니스 변경 메서드)
      *
@@ -138,13 +148,16 @@ public class JobPosting extends BaseTimeEntity {
      *   <li>NCS 및 지역 코드는 선택 입력(NULL 허용)</li>
      * </ul>
      */
-    public void update(CommonCode ncsCode, CommonCode regionCode,
+    public void update(CommonCode ncsCode, CommonCode regionCode, FileGroup fileGroup,
                        String postingTitle, String jobDescription, Integer recruitmentCount,
                        String employmentType, String salaryText, JsonNode qualificationData,
                        Instant applicationStartsAt, Instant applicationEndsAt,
                        String postingType, String benefitType) {
         this.ncsCode = ncsCode;
         this.regionCode = regionCode;
+        if (fileGroup != null) {
+            this.fileGroup = fileGroup;
+        }
         this.postingTitle = postingTitle;
         this.jobDescription = jobDescription;
         this.recruitmentCount = recruitmentCount;

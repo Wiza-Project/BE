@@ -11,6 +11,10 @@ import com.gnagnoohc.scms.domain.career.helper.CareerSecurityHelper;
 import com.gnagnoohc.scms.domain.career.repository.CompanyAccountRepository;
 import com.gnagnoohc.scms.domain.career.repository.JobPostingRepository;
 import com.gnagnoohc.scms.global.common.entity.CommonCode;
+import com.gnagnoohc.scms.global.common.entity.FileGroup;
+import com.gnagnoohc.scms.global.common.helper.FileUploadValidator;
+import com.gnagnoohc.scms.global.common.service.FileGroupService;
+import com.gnagnoohc.scms.global.common.service.FileStorageService;
 import com.gnagnoohc.scms.global.common.util.DateTimeUtils;
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
@@ -21,6 +25,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.Instant;
 import java.util.Map;
@@ -78,6 +83,10 @@ public class JobPostingService {
     private final CareerBindingHelper careerBindingHelper;
     private final CareerSecurityHelper careerSecurityHelper;
 
+    private final FileGroupService fileGroupService;
+    private final FileStorageService fileStorageService;
+    private final FileUploadValidator fileUploadValidator;
+
     // 빈 주입 의존성 경고 방지 및 독립적 JSON 직렬화/역직렬화를 위한 객체 생성
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -119,7 +128,7 @@ public class JobPostingService {
     }
 
     /**
-     * [교직원/기업] 채용공고 신규 등록 (구인 신청 접수)
+     * [교직원/기업] 채용공고 신규 등록 (구인 신청 접수, 선택적 FileGroup 바인딩 포함)
      *
      * @param requestDTO 공고 등록 요청 DTO
      * @return 생성된 채용공고 식별자 (PK)
@@ -131,6 +140,7 @@ public class JobPostingService {
 
         CommonCode ncsCode = careerBindingHelper.findValidCommonCodeOrNull(requestDTO.getNcsCodeId());
         CommonCode regionCode = careerBindingHelper.findValidRegionCodeOrNull(requestDTO.getRegionCodeId());
+        FileGroup fileGroup = careerBindingHelper.findValidFileGroupOrNull(requestDTO.getFileGroupId());
 
         if (requestDTO.getApplicationStartsAt() != null && requestDTO.getApplicationStartsAt().isAfter(requestDTO.getApplicationEndsAt())) {
             throw new BusinessException(ErrorCode.INVALID_APPLICATION_PERIOD);
@@ -144,6 +154,7 @@ public class JobPostingService {
                 .companyAccount(companyAccount)
                 .ncsCode(ncsCode)
                 .regionCode(regionCode)
+                .fileGroup(fileGroup)
                 .postingTitle(requestDTO.getPostingTitle())
                 .jobDescription(requestDTO.getJobDescription())
                 .recruitmentCount(requestDTO.getRecruitmentCount())
@@ -159,6 +170,35 @@ public class JobPostingService {
         JobPosting savedPosting = jobPostingRepository.save(jobPosting);
         log.info("[JobPostingService] 채용공고 신규 등록 완료. ID: {}, 제목: {}", savedPosting.getJobPostingId(), savedPosting.getPostingTitle());
         return savedPosting.getJobPostingId();
+    }
+
+    /**
+     * [교직원/관리자 전용] 채용공고 포스터(이미지/PDF) 단독 업로드 처리
+     * 공통모듈에서 설계한 파일 첨부 모듈 적용
+     */
+    @Transactional
+    public void uploadJobPoster(Integer jobPostingId, MultipartFile file, Integer uploaderUserId) {
+        careerSecurityHelper.validateAndGetCareerStaff(uploaderUserId);
+
+        JobPosting jobPosting = jobPostingRepository.findById(jobPostingId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.JOB_POSTING_NOT_FOUND));
+
+        if (file == null || file.isEmpty()) {
+            return;
+        }
+
+        // 지원 포맷 검증 (jpg, jpeg, png, gif, webp, pdf)
+        fileUploadValidator.validate(file, FileUploadValidator.SUPPORTED_EXTENSIONS);
+
+        FileGroup group = jobPosting.getFileGroup();
+        if (group == null) {
+            group = fileGroupService.createGroup();
+            jobPosting.setFileGroup(group);
+        }
+
+        fileStorageService.store(file, group, uploaderUserId);
+        log.info("[JobPostingService] 채용공고 포스터 파일 업로드 완료. jobPostingId: {}, fileGroupId: {}",
+                jobPostingId, group.getFileGroupId());
     }
 
     /**
@@ -178,6 +218,7 @@ public class JobPostingService {
 
         CommonCode ncsCode = careerBindingHelper.findValidCommonCodeOrNull(requestDTO.getNcsCodeId());
         CommonCode regionCode = careerBindingHelper.findValidRegionCodeOrNull(requestDTO.getRegionCodeId());
+        FileGroup fileGroup = careerBindingHelper.findValidFileGroupOrNull(requestDTO.getFileGroupId());
 
         Instant startsAt = requestDTO.getApplicationStartsAt() != null ? requestDTO.getApplicationStartsAt().toInstant() : null;
         Instant endsAt = requestDTO.getApplicationEndsAt().toInstant();
@@ -186,6 +227,7 @@ public class JobPostingService {
         jobPosting.update(
                 ncsCode,
                 regionCode,
+                fileGroup,
                 requestDTO.getPostingTitle(),
                 requestDTO.getJobDescription(),
                 requestDTO.getRecruitmentCount(),
@@ -301,6 +343,7 @@ public class JobPostingService {
                 .ncsCodeName(jp.getNcsCode() != null ? jp.getNcsCode().getCodeName() : null)
                 .regionCodeId(jp.getRegionCode() != null ? jp.getRegionCode().getCodeId() : null)
                 .regionCodeName(jp.getRegionCode() != null ? jp.getRegionCode().getCodeName() : null)
+                .fileGroupId(jp.getFileGroup() != null ? jp.getFileGroup().getFileGroupId() : null)
                 .reviewedBy(jp.getReviewedBy())
                 .postingTitle(jp.getPostingTitle())
                 .jobDescription(jp.getJobDescription())
