@@ -41,10 +41,8 @@ public record AssessmentResultResponse(
                         percentileAvailable ? s.getPercentile() : null))
                 .toList();
 
-        BigDecimal sum = scores.stream()
-                .map(AssessmentScore::getConvertedScore)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal overallAverageScore = sum.divide(BigDecimal.valueOf(scores.size()), 2, RoundingMode.HALF_UP);
+        BigDecimal overallAverageScore = averageConvertedScore(
+                scores.stream().map(AssessmentScore::getConvertedScore).toList());
 
         return new AssessmentResultResponse(
                 attempt.getAttemptId(),
@@ -53,5 +51,12 @@ public record AssessmentResultResponse(
                 overallAverageScore,
                 percentileAvailable,
                 results);
+    }
+
+    // 결과 조회 응답과 이력서 연동 이벤트(AssessmentResultReadyEvent)가 전체 평균 산식을 공유하도록 분리한다.
+    // 환산점수 합 / 개수, 소수 둘째 자리 HALF_UP.
+    public static BigDecimal averageConvertedScore(List<BigDecimal> convertedScores) {
+        BigDecimal sum = convertedScores.stream().reduce(BigDecimal.ZERO, BigDecimal::add);
+        return sum.divide(BigDecimal.valueOf(convertedScores.size()), 2, RoundingMode.HALF_UP);
     }
 }

@@ -34,6 +34,7 @@ public class AssessmentSubmissionService {
     private final AssessmentRoundRepository assessmentRoundRepository;
     private final AssessmentScoreRepository assessmentScoreRepository;
     private final AssessmentScoreCalculator assessmentScoreCalculator;
+    private final AssessmentResultReadyEventPublisher assessmentResultReadyEventPublisher;
 
     public AssessmentSubmitResponse submit(Integer attemptId, Integer studentId) {
         AssessmentAttempt attempt = assessmentAttemptAccessGuard.getOwnAttempt(attemptId, studentId);
@@ -87,6 +88,10 @@ public class AssessmentSubmissionService {
         }
 
         attempt.markScored();
+
+        // 이력서 연동용 결과 준비 이벤트를 제출 트랜잭션 안에서 발행한다. 취창업은 AFTER_COMMIT로 구독하므로
+        // 취창업 리스너 실패가 이 제출을 롤백하지 않는다. 방금 계산한 점수 리스트를 그대로 넘겨 재조회를 피한다.
+        assessmentResultReadyEventPublisher.publishFromSubmit(attempt, scores);
 
         List<AssessmentSubmitResponse.CompetencyScore> scoreDtos = scores.stream()
                 .map(s -> new AssessmentSubmitResponse.CompetencyScore(
