@@ -1,9 +1,14 @@
 package com.gnagnoohc.scms.domain.career.repository;
 
+import com.gnagnoohc.scms.domain.career.entity.CompanyAccount;
+import com.gnagnoohc.scms.domain.career.entity.JobPosting;
 import com.gnagnoohc.scms.domain.career.entity.StudentJobRelation;
+import com.gnagnoohc.scms.domain.user.entity.AppUser;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -67,4 +72,18 @@ public interface StudentJobRelationRepositoryCustom {
      * @return 연관 객체가 완벽히 패치된 StudentJobRelation Optional
      */
     Optional<StudentJobRelation> findByIdWithDetails(Integer relationId);
+
+    /**
+     * <p>[알림 배치용] 특정 마감 기간 내에 존재하는 관심 공고 스크랩 목록 조회</p>
+     * <ul>
+     *   <li>기능: bookmarked_at IS NOT NULL, 게시 상태 PUBLISHED, 마감일 범위 일치 조건</li>
+     *   <li>성능: AppUser, JobPosting, CompanyAccount 3단 Fetch Join으로 알림 발송 시 N+1 원천 차단</li>
+     * </ul>
+     *
+     * @param startInstant 검색 시작 일시
+     * @param endInstant   검색 종료 일시
+     * @return 마감 임박 스크랩 관계 엔티티 리스트
+     */
+    List<StudentJobRelation> findScrappedPostingsEndingBetween(Instant startInstant, Instant endInstant);
+
 }
