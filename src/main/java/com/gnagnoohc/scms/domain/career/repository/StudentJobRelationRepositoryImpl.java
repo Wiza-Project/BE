@@ -11,6 +11,7 @@ import org.springframework.data.support.PageableExecutionUtils;
 import org.springframework.stereotype.Repository;
 import org.springframework.util.StringUtils;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -203,5 +204,23 @@ public class StudentJobRelationRepositoryImpl implements StudentJobRelationRepos
             return null;
         }
         return studentJobRelation.applicationStatus.eq(applicationStatus);
+    }
+
+    /**
+     * [알림 배치용] 마감 임박 기간 내에 있는 관심 등록 공고 조회
+     */
+    @Override
+    public List<StudentJobRelation> findScrappedPostingsEndingBetween(Instant startInstant, Instant endInstant) {
+        return queryFactory
+                .selectFrom(studentJobRelation)
+                .join(studentJobRelation.student, appUser).fetchJoin()
+                .join(studentJobRelation.jobPosting, jobPosting).fetchJoin()
+                .join(jobPosting.companyAccount, companyAccount).fetchJoin()
+                .where(
+                        studentJobRelation.bookmarkedAt.isNotNull(),
+                        jobPosting.postingStatus.eq("PUBLISHED"),
+                        jobPosting.applicationEndsAt.between(startInstant, endInstant)
+                )
+                .fetch();
     }
 }
