@@ -24,6 +24,16 @@ public class CompetencyService {
 
     private final CompetencyRepository competencyRepository;
 
+    // 교직원 핵심역량 관리 화면 목록. 축순서·사용여부·영문명 편집 대상이라 비활성 역량까지 축순서대로 모두 내려준다
+    // (활성만 주는 공용 드롭다운 목록 GET /api/competencies 와 용도가 다르다).
+    @Transactional(readOnly = true)
+    public List<CompetencyResponse> getCompetenciesForManagement() {
+        return competencyRepository.findByParentCompetencyIsNullOrderByDisplayOrderAsc()
+                .stream()
+                .map(CompetencyResponse::from)
+                .toList();
+    }
+
     public CompetencyResponse registerCompetency(CompetencyRegisterRequest request, Integer staffId) {
         long existingCount = competencyRepository.countByParentCompetencyIsNull();
         if (existingCount >= MAX_TOP_LEVEL_COMPETENCY) {

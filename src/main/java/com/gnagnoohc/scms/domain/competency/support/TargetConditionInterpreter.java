@@ -52,6 +52,72 @@ public class TargetConditionInterpreter {
         return predicate;
     }
 
+    // toPredicate와 동일한 판정을 학생 1명의 학적 스냅샷에 대해 메모리에서 수행한다.
+    // 여러 회차를 한 번에 판정할 때(학생 응시 가능 회차 목록) 회차마다 쿼리를 날리지 않도록 이 오버로드를 쓴다.
+    public boolean matches(JsonNode targetCondition, StudentTargetSnapshot student) {
+        if (targetCondition == null || targetCondition.isNull()) {
+            return true;
+        }
+        if (hasUnrecognizedKey(targetCondition)) {
+            throw new BusinessException(ErrorCode.ASSESSMENT_TARGET_CONDITION_UNSUPPORTED);
+        }
+        if (!isValidShape(targetCondition)) {
+            throw new BusinessException(ErrorCode.ASSESSMENT_TARGET_CONDITION_INVALID_FORMAT);
+        }
+
+        JsonNode gradesNode = targetCondition.get(KEY_GRADES);
+        JsonNode majorCodeIdsNode = targetCondition.get(KEY_MAJOR_CODE_IDS);
+        boolean hasGrades = gradesNode != null && !gradesNode.isNull() && !gradesNode.isEmpty();
+        boolean hasMajorCodeIds =
+                majorCodeIdsNode != null && !majorCodeIdsNode.isNull() && !majorCodeIdsNode.isEmpty();
+        if (!hasGrades && !hasMajorCodeIds) {
+            return true; // 인식되는 조건이 비어 있으면 전체 학생 대상 (toPredicate가 null을 반환하는 경우와 동일)
+        }
+        if (!student.hasAcademicDetail()) {
+            return false; // 조건이 걸린 회차는 학적 상세가 없는 학생을 제외한다 (LEFT JOIN 의미와 동일)
+        }
+        if (hasGrades && !gradeMatches(gradesNode, student.grade())) {
+            return false;
+        }
+        if (hasMajorCodeIds && !majorCodeIdMatches(majorCodeIdsNode, student.majorCodeId())) {
+            return false;
+        }
+        return true;
+    }
+
+    // grade 배열에 1~4 범위를 벗어난 값이 하나라도 섞이면 아무도 매칭되지 않는다(gradeIn의 Expressions.FALSE와 동일).
+    private boolean gradeMatches(JsonNode gradesNode, Integer studentGrade) {
+        List<Integer> grades = new ArrayList<>();
+        for (JsonNode gradeNode : gradesNode) {
+            int grade = gradeNode.asInt();
+            if (grade < 1 || grade > 4) {
+                return false;
+            }
+            grades.add(grade);
+        }
+        return studentGrade != null && grades.contains(studentGrade);
+    }
+
+    private boolean majorCodeIdMatches(JsonNode majorCodeIdsNode, Integer studentMajorCodeId) {
+        if (studentMajorCodeId == null) {
+            return false;
+        }
+        for (JsonNode node : majorCodeIdsNode) {
+            if (node.asInt() == studentMajorCodeId) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // matches()가 회차별 쿼리 없이 판정할 수 있도록 필요한 학생 학적만 담은 스냅샷.
+    // hasAcademicDetail=false면 학적 상세가 없어, 조건이 걸린 회차에서는 항상 제외된다.
+    public record StudentTargetSnapshot(boolean hasAcademicDetail, Integer grade, Integer majorCodeId) {
+        public static StudentTargetSnapshot missing() {
+            return new StudentTargetSnapshot(false, null, null);
+        }
+    }
+
     // grades/majorCodeIds 둘 다 인식하는 키의 전부다. 여기 없는 키가 하나라도 있으면 해석기가
     // 그 조건을 그냥 못 본 척 넘기는 대신 실패시켜야 한다(위 클래스 주석 참고).
     public boolean hasUnrecognizedKey(JsonNode targetCondition) {
