@@ -32,7 +32,7 @@ import java.time.Instant;
 
 /**
  * 학생의 DIRECT(온라인 신청) 직접 예약을 생성하고 본인 예약만 조회한다.
- * CENTER(센터 접수)형 신청은 체크리스트 12번(상담센터 접수 처리) 구현 전까지 거절한다.
+ * CENTER(센터 접수) 온라인 접수는 현재 MVP 범위 밖이며 별도 정책이 확정되기 전까지 거절한다.
  */
 @Service
 @RequiredArgsConstructor
@@ -48,6 +48,7 @@ public class CounselingReservationService {
     private final CounselingReservationRepository counselingReservationRepository;
     private final CounselingAssignmentRepository counselingAssignmentRepository;
     private final ConsentVerifier consentVerifier;
+    private final CounselManagementAccessPolicy counselManagementAccessPolicy;
 
     /**
      * 학생 행을 먼저 잠가 같은 학생의 서로 다른 일정 예약도 순서대로 검증한다.
@@ -150,6 +151,13 @@ public class CounselingReservationService {
      * 잠금 순서를 항상 "학생 → 예약 → 일정"으로 고정하는 이유는, 두 트랜잭션이 서로 반대 순서로
      * 행을 잠그면 각자 상대가 쥔 잠금을 기다리며 영원히 멈추는 교착상태(deadlock)가 생길 수
      * 있기 때문이다. cancel()과 마찬가지로 {@code @Transactional}이므로 중간에 예외가 나면 전체가 롤백된다.
+     *
+     * 예약 행을 잠근 직후, 아직 새 일정 행을 잠그기 전에 request.expectedScheduleId()와 DB의 실제
+     * 현재 일정을 비교한다(stale 검사). 같은 예약을 서로 다른 새 일정으로 동시에 수정하는 두 요청은
+     * 둘 다 같은 expectedScheduleId(원래 일정)를 보내는데, 먼저 커밋한 쪽이 일정을 바꾸고 나면
+     * 뒤에 도착한 요청은 예약 잠금을 얻은 뒤 비교에서 걸려 S013으로 실패한다. 이 비교와 아래 동일
+     * 일정 검사를 모두 새 일정 잠금 이전에 끝내는 이유는, 불필요한 일정 잠금을 피하면서 두 검사가
+     * 예약 행 잠금 하나로 직렬화되게 하기 위해서다.
      */
     @Transactional
     public CounselingReservationResponse changeSchedule(
@@ -162,6 +170,17 @@ public class CounselingReservationService {
         CounselingReservation reservation = getReservationForUpdate(reservationId, studentId);
         // 새 일정 행을 잠그기 전에 먼저 현재 예약이 변경 가능한 상태·기한인지 확인해 불필요한 잠금을 피한다.
         reservation.ensureChangeable(now);
+        Integer currentScheduleId = reservation.getCounselingSchedule().getCounselingScheduleId();
+        // stale 검사: 화면이 기억하던 일정과 DB의 실제 현재 일정이 다르면, 그 사이에 다른 요청이
+        // 먼저 이 예약의 일정을 바꾼 것이다. 이 시점에는 아직 어떤 필드도 바꾸지 않았으므로 그대로 던지면 된다.
+        if (!currentScheduleId.equals(request.expectedScheduleId())) {
+            throw new BusinessException(ErrorCode.RESERVATION_SCHEDULE_CONFLICT);
+        }
+        // 동일 일정 무변경 거절: 예상 일정과 새로 옮겨갈 일정이 같으면 실제로는 아무것도 바뀌지 않는
+        // 요청이므로 changeReason도 저장하지 않고 400으로 거절한다.
+        if (currentScheduleId.equals(request.scheduleId())) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "현재 예약 일정과 다른 일정을 선택해 주세요.");
+        }
         CounselingSchedule newSchedule = getScheduleForReservation(
                 request.scheduleId(),
                 reservation.getCounselingType(),
@@ -239,10 +258,10 @@ public class CounselingReservationService {
         if (DIRECT_ROUTE.equals(counselingType.getApplicationRoute())) {
             return getAvailableDirectSchedule(scheduleId, counselingType, studentId, now, excludeReservationId);
         }
-        // CENTER(센터 접수)는 체크리스트 12번(상담센터 접수 처리) 구현 전까지 학생 신청 경로에서 제외한다.
+        // CENTER(센터 접수) 온라인 접수는 현재 MVP 범위 밖이며 별도 정책이 확정되기 전까지 거절한다.
         // 프론트 필터만으로는 유형 ID를 직접 보낸 요청을 막지 못하므로 서버가 최종 방어선으로 거절한다.
         // 상담사 일정 등록의 CENTER 거절(CounselingScheduleService)과 같은 400 C001(INVALID_INPUT)로 통일한다.
-        // enum·시드는 유지하므로 12번 착수 시 REQUESTED 예약 생성 로직을 복원한다.
+        // enum·시드는 유지하므로 CENTER 접수 정책이 확정되면 REQUESTED 예약 생성 로직을 복원한다.
         if (CENTER_ROUTE.equals(counselingType.getApplicationRoute())) {
             throw new BusinessException(
                     ErrorCode.INVALID_INPUT,
@@ -277,9 +296,18 @@ public class CounselingReservationService {
                 || schedule.getBookingDeadline().isAfter(now);
         boolean capacityAvailable = counselingReservationRepository
                 .countOccupiedReservations(scheduleId) < schedule.getCapacity();
+        // 활성·ST200 여부에 더해, 담당 상담사의 현재 역할 범위가 이 유형을 허용하는지 확인한다.
+        // ST200+ST300 상담사의 일정은 CS200일 때만 예약을 받는다(학생 노출 목록과 같은 기준).
+        // 권한 예외를 학생에게 그대로 노출하지 않도록 isEligibleForType는 boolean만 돌려주고,
+        // 실패하면 아래에서 다른 조건들과 함께 동일한 SCHEDULE_NOT_AVAILABLE(S002)로 처리한다.
         boolean activeCounselor = "ACTIVE".equals(schedule.getCounselor().getAccountStatus())
-                && counselUserRepository.hasCounselorRole(schedule.getCounselor().getUserId());
-        // 변경(재배정)에서는 아직 옛 일정을 참조 중인 이 예약 자기 자신을 겹침 비교에서 빼야 한다.
+                && counselUserRepository.hasCounselorRole(schedule.getCounselor().getUserId())
+                && counselManagementAccessPolicy.isEligibleForType(
+                        schedule.getCounselor().getUserId(),
+                        counselingType.getTypeCode(),
+                        counselingType.getApplicationRoute()
+                );
+        // 학생의 예약 일정 변경에서는 아직 옛 일정을 참조 중인 이 예약 자기 자신을 겹침 비교에서 빼야 한다.
         // 그렇지 않으면 옛 일정과 항상 겹쳐 새 일정으로 절대 바꿀 수 없다.
         boolean overlapsActiveReservation = excludeReservationId == null
                 ? counselingReservationRepository.existsOverlappingActiveReservation(

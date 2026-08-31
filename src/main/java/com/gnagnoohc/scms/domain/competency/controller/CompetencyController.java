@@ -4,8 +4,6 @@ import com.gnagnoohc.scms.domain.competency.dto.CompetencyActiveStatusRequest;
 import com.gnagnoohc.scms.domain.competency.dto.CompetencyDisplayOrderRequest;
 import com.gnagnoohc.scms.domain.competency.dto.CompetencyRegisterRequest;
 import com.gnagnoohc.scms.domain.competency.dto.CompetencyResponse;
-import com.gnagnoohc.scms.domain.competency.dto.CompetencySummary;
-import com.gnagnoohc.scms.domain.competency.service.CompetencyQueryService;
 import com.gnagnoohc.scms.domain.competency.service.CompetencyService;
 import com.gnagnoohc.scms.global.common.dto.ApiResponse;
 import com.gnagnoohc.scms.global.security.AuthUser;
@@ -31,16 +29,12 @@ import java.util.List;
 public class CompetencyController {
 
     private final CompetencyService competencyService;
-    private final CompetencyQueryService competencyQueryService;
 
-    // 다른 화면·도메인이 공통으로 참조하는 핵심역량 선택 목록.
-    // 지금은 비교과 프로그램 등록 폼, 마일리지 활동 유형 등록 폼이 이 목록으로 competency_id를 고른다.
-    // 관리자 전용 경로(/api/admin/**)라 학생 화면에서는 호출할 수 없다.
-    @Operation(summary = "핵심역량 목록 조회", description = "활성 최상위 핵심역량을 축순서대로 조회합니다. "
-            + "비교과 프로그램 등록·마일리지 활동유형 등록 등 관리자 폼의 핵심역량 드롭다운에서 공용으로 사용합니다.")
+    @Operation(summary = "핵심역량 관리 목록 조회", description = "교직원 핵심역량 관리 화면용 목록입니다. 비활성 역량까지 축순서대로 모두 내려주며, "
+            + "영문명·설명·사용여부를 포함합니다. (활성 역량만 주는 공용 드롭다운 목록은 GET /api/competencies)")
     @GetMapping
-    public ApiResponse<List<CompetencySummary>> listCompetencies() {
-        return ApiResponse.ok(competencyQueryService.getActiveTopLevelCompetencies());
+    public ApiResponse<List<CompetencyResponse>> getCompetencies() {
+        return ApiResponse.ok(competencyService.getCompetenciesForManagement());
     }
 
     @Operation(summary = "핵심역량 등록", description = "최상위 핵심역량을 등록합니다. 역량코드는 C100~C600로 자동채번됩니다.")

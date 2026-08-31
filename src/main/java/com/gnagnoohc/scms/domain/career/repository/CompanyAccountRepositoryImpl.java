@@ -27,7 +27,7 @@ import static com.gnagnoohc.scms.domain.career.entity.QCompanyAccount.companyAcc
  * @author YUN
  */
 @RequiredArgsConstructor
-public class CompanyAccountRepositoryCustomImpl implements CompanyAccountRepositoryCustom {
+public class CompanyAccountRepositoryImpl implements CompanyAccountRepositoryCustom {
 
     private final JPAQueryFactory queryFactory;
 

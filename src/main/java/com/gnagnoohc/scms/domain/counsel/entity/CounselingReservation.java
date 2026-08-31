@@ -140,7 +140,7 @@ public class CounselingReservation extends BaseTimeEntity {
     }
 
     /**
-     * 아직 상담사 승인 전(REQUESTED)인 예약만 다른 일정으로 재배정한다.
+     * 아직 상담사 승인 전(REQUESTED)인 예약만 학생이 다른 일정으로 변경한다.
      * 같은 예약 행의 일정 FK만 교체하고 새로 만들지 않으며, 새 일정 자체의 마감·정원·중복 검증은
      * 서비스가 잠금을 잡은 뒤 별도로 수행한다(엔티티는 상태·기한만 책임진다).
      */

@@ -62,9 +62,10 @@ class AssessmentQuestionServiceTest {
     private static MockMultipartFile buildExcel(String[][] rows) {
         try (XSSFWorkbook workbook = new XSSFWorkbook()) {
             Sheet sheet = workbook.createSheet();
-            sheet.createRow(0); // 헤더 행(내용은 사용하지 않음)
+            sheet.createRow(0); // 엑셀 1행: 빈 행 (원본 템플릿과 동일)
+            sheet.createRow(1); // 엑셀 2행: 헤더 행(내용은 사용하지 않음)
             for (int i = 0; i < rows.length; i++) {
-                Row row = sheet.createRow(i + 1);
+                Row row = sheet.createRow(i + 2);
                 row.createCell(1).setCellValue(rows[i][0]); // B: 상위역량
                 row.createCell(4).setCellValue(rows[i][1]); // E: 평가문항
             }
