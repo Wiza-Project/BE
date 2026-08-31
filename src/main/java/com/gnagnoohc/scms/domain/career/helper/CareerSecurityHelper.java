@@ -6,7 +6,9 @@ import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
 import com.gnagnoohc.scms.global.security.AuthUser;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 취·창업(Career) 도메인 전용 교직원 권한 및 부서 인가 검증 헬퍼 컴포넌트
@@ -21,8 +23,10 @@ import org.springframework.stereotype.Component;
  *
  * @author YUN
  */
+@Slf4j
 @Component("careerSecurity")
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class CareerSecurityHelper {
 
     public static final String CAREER_EMPLOYMENT_DEPT = "D400";
@@ -44,6 +48,7 @@ public class CareerSecurityHelper {
      * @param principal Spring Security 컨텍스트의 Principal 객체 (일반적으로 {@link AuthUser})
      * @return 취창업지원과(D400) 소속 교직원이거나 ADMIN인 경우 {@code true}, 그 외 {@code false}
      */
+    @Transactional(readOnly = true)
     public boolean isCareerStaff(Object principal) {
         if (!(principal instanceof AuthUser authUser) || authUser.getId() == null) {
             return false;
@@ -66,6 +71,7 @@ public class CareerSecurityHelper {
      *                           사용자 미존재({@link ErrorCode#USER_NOT_FOUND}),
      *                           취창업지원과/관리자 권한 부족({@link ErrorCode#DEPARTMENT_FORBIDDEN})
      */
+    @Transactional(readOnly = true)
     public AppUser validateAndGetCareerStaff(Integer userId) {
         if (userId == null) {
             throw new BusinessException(ErrorCode.UNAUTHORIZED);
@@ -95,7 +101,8 @@ public class CareerSecurityHelper {
      * @param user 검증 대상 {@link AppUser} 엔티티
      * @return 둘 중 하나의 인가 조건을 충족하면 {@code true}, 모두 만족하지 못하면 {@code false}
      */
-    private boolean isCareerStaffOrAdmin(AppUser user) {
+    @Transactional(readOnly = true)
+    public boolean isCareerStaffOrAdmin(AppUser user) {
         boolean isCareerDept = user.getDepartmentCode() != null
                 && CAREER_EMPLOYMENT_DEPT.equals(user.getDepartmentCode().getCode());
         boolean isAdmin = "ADMIN".equalsIgnoreCase(user.getUserType());
