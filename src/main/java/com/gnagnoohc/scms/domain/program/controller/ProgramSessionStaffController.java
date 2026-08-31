@@ -16,11 +16,11 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-@Tag(name = "ProgramSessionAdmin", description = "운영부서의 비교과 프로그램 회차 관리")
+@Tag(name = "ProgramSessionStaff", description = "운영부서의 비교과 프로그램 회차 관리")
 @RestController
-@RequestMapping("/api/admin/programs/{programId}/sessions")
+@RequestMapping("/api/staff/programs/{programId}/sessions")
 @RequiredArgsConstructor
-public class ProgramSessionAdminController {
+public class ProgramSessionStaffController {
 
     private final ProgramSessionService programSessionService;
 

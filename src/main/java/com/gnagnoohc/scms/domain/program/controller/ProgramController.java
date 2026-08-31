@@ -1,8 +1,8 @@
 package com.gnagnoohc.scms.domain.program.controller;
 
 import com.gnagnoohc.scms.domain.program.dto.request.ProgramRegisterRequestDTO;
-import com.gnagnoohc.scms.domain.program.dto.response.ProgramAdminDetailResponseDTO;
-import com.gnagnoohc.scms.domain.program.dto.response.ProgramAdminListItemResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramStaffDetailResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramStaffListItemResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramFileUploadResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramRegisterResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.request.ProgramUpdateRequestDTO;
@@ -37,7 +37,7 @@ import java.util.List;
 
 @Tag(name = "Program", description = "비교과프로그램 등록/수정/삭제")
 @RestController
-@RequestMapping("/api/admin/programs")
+@RequestMapping("/api/staff/programs")
 @RequiredArgsConstructor
 public class ProgramController {
 
@@ -45,7 +45,7 @@ public class ProgramController {
 
     @Operation(summary = "담당 프로그램 목록 조회", description = "로그인한 staff 본인이 담당한 비교과 프로그램 목록을 페이지 단위로 조회합니다")
     @GetMapping
-    public ApiResponse<PageResponse<ProgramAdminListItemResponseDTO>> list(
+    public ApiResponse<PageResponse<ProgramStaffListItemResponseDTO>> list(
             @RequestParam(required = false) ProgramStatus status,
             @RequestParam(required = false) String keyword,
             // 연계 핵심역량 id로 필터링. 생략하면 역량으로 거르지 않는다.
@@ -56,7 +56,7 @@ public class ProgramController {
     }
 
     @Operation(summary = "프로그램 등록", description = "비교과 프로그램을 신규 등록합니다 (모집중 상태로 시작)")
-    // HTTP POST 요청, 즉 "/api/admin/programs" 로 오는 요청을 이 메서드가 처리한다.
+    // HTTP POST 요청, 즉 "/api/staff/programs" 로 오는 요청을 이 메서드가 처리한다.
     @PostMapping
     // 등록에 성공하면 HTTP 상태코드로 200(OK) 대신 201(CREATED, "새로 생성됨")을 응답한다.
     @ResponseStatus(HttpStatus.CREATED)
@@ -87,7 +87,7 @@ public class ProgramController {
 
     @Operation(summary = "프로그램 상세 조회", description = "담당 프로그램의 상세정보, 회차 목록, 수정/삭제 가능 여부를 조회합니다 (등록자 본인만 가능)")
     @GetMapping("/{programId}")
-    public ApiResponse<ProgramAdminDetailResponseDTO> getDetail(
+    public ApiResponse<ProgramStaffDetailResponseDTO> getDetail(
             @PathVariable Integer programId,
             @AuthenticationPrincipal AuthUser authUser) {
         return ApiResponse.ok(programService.getMyDetail(programId, authUser.getId()));
@@ -95,14 +95,14 @@ public class ProgramController {
 
     @Operation(summary = "프로그램 수정", description = "모집중 상태의 비교과 프로그램을 전체 필드 수정합니다 (등록자 본인만 가능)")
     /**
-     * HTTP PUT 요청, 즉 "/api/admin/programs/{programId}" 로 오는 요청을 이 메서드가 처리한다.
+     * HTTP PUT 요청, 즉 "/api/staff/programs/{programId}" 로 오는 요청을 이 메서드가 처리한다.
      * PUT은 "이 리소스 전체를 이 내용으로 통째로 교체해줘"라는 의미의 HTTP 메서드다(일부 필드만 보내는 PATCH와 다름).
      */
     @PutMapping("/{programId}")
     public ApiResponse<ProgramUpdateResponseDTO> update(
             /**
              * @PathVariable: URL 경로 중 "{programId}" 부분에 실제로 들어온 값을 그대로 매개변수로 받는다.
-             * 예를 들어 요청이 "/api/admin/programs/5"라면 programId에는 5가 담긴다.
+             * 예를 들어 요청이 "/api/staff/programs/5"라면 programId에는 5가 담긴다.
              */
             @PathVariable Integer programId,
             // 등록 때와 마찬가지로, 요청 body(JSON)를 검증하면서 ProgramUpdateRequestDTO로 변환한다.
@@ -116,7 +116,7 @@ public class ProgramController {
     }
 
     @Operation(summary = "프로그램 삭제", description = "모집중인 비교과 프로그램을 삭제합니다 (등록자 본인만 가능)")
-    // HTTP DELETE 요청, 즉 "/api/admin/programs/{programId}" 로 오는 요청을 이 메서드가 처리한다.
+    // HTTP DELETE 요청, 즉 "/api/staff/programs/{programId}" 로 오는 요청을 이 메서드가 처리한다.
     @DeleteMapping("/{programId}")
     // 삭제에 성공하면 돌려줄 데이터가 없으므로 204(NO_CONTENT)로 응답한다.
     @ResponseStatus(HttpStatus.NO_CONTENT)

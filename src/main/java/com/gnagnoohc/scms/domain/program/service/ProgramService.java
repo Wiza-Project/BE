@@ -1,7 +1,7 @@
 package com.gnagnoohc.scms.domain.program.service;
 
-import com.gnagnoohc.scms.domain.program.dto.response.ProgramAdminDetailResponseDTO;
-import com.gnagnoohc.scms.domain.program.dto.response.ProgramAdminListItemResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramStaffDetailResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramStaffListItemResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramDetailResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramListItemResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.request.ProgramRegisterRequestDTO;
@@ -492,7 +492,7 @@ public class ProgramService {
      * list()와 거의 같지만, 로그인한 staff 본인이 담당(managerUser)한 프로그램으로만 범위를 좁힌다.
      */
     @Transactional(readOnly = true)
-    public PageResponse<ProgramAdminListItemResponseDTO> listMine(Integer managerUserId, ProgramStatus status,
+    public PageResponse<ProgramStaffListItemResponseDTO> listMine(Integer managerUserId, ProgramStatus status,
                                                                     String keyword, Integer competencyId,
                                                                     Pageable pageable) {
         Page<ExtracurricularProgram> page = programRepository.searchByManager(
@@ -500,7 +500,7 @@ public class ProgramService {
         Map<Integer, Long> applicantCounts = countApplicantsByProgram(page.getContent());
         // listMine()은 이미 managerUserId 조건으로 본인 소유만 조회하므로, 여기서는 모집 마감 시각만 비교하면 된다.
         Instant now = Instant.now();
-        return PageResponse.from(page.map(program -> ProgramAdminListItemResponseDTO.from(
+        return PageResponse.from(page.map(program -> ProgramStaffListItemResponseDTO.from(
                 program, applicantCounts.getOrDefault(program.getProgramId(), 0L),
                 now.isBefore(program.getRecruitmentEndsAt()))));
     }
@@ -573,7 +573,7 @@ public class ProgramService {
      * 수정/삭제 가능 여부(isEditable/isDeletable)를 함께 계산해 내려준다.
      */
     @Transactional(readOnly = true)
-    public ProgramAdminDetailResponseDTO getMyDetail(Integer programId, Integer currentUserId) {
+    public ProgramStaffDetailResponseDTO getMyDetail(Integer programId, Integer currentUserId) {
         ExtracurricularProgram program = programRepository.findDetailById(programId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PROGRAM_NOT_FOUND));
 
@@ -592,7 +592,7 @@ public class ProgramService {
 
         boolean editable = Instant.now().isBefore(program.getRecruitmentEndsAt());
 
-        return ProgramAdminDetailResponseDTO.from(program, applicantCount, sessions, editable);
+        return ProgramStaffDetailResponseDTO.from(program, applicantCount, sessions, editable);
     }
 
     // 목록 페이지 한 번에 해당하는 프로그램들의 신청자 수를 한 번의 쿼리로 배치 조회한다(N+1 방지).
