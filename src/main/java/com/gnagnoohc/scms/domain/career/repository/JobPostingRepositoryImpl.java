@@ -111,12 +111,12 @@ public class JobPostingRepositoryImpl implements JobPostingRepositoryCustom {
     public Page<JobPosting> searchStaffPostings(JobPostingSearchConditionDTO cond, Pageable pageable) {
         List<JobPosting> content = queryFactory
                 .selectFrom(jobPosting)
-                .join(jobPosting.companyAccount, companyAccount).fetchJoin()
+                .leftJoin(jobPosting.companyAccount, companyAccount).fetchJoin()
                 .leftJoin(jobPosting.ncsCode, ncsCommonCode).fetchJoin()         // ncsCode 필드 참조
                 .leftJoin(jobPosting.regionCode, regionCommonCode).fetchJoin()   // regionCode 필드 참조
                 .where(
                         reviewStatusEq(cond.getReviewStatus()),
-                        postingTypeEq(cond.getPostingType()),
+                        postingStatusEq(cond.getPostingStatus()),
                         companyNameContains(cond.getCompanyName())
                 )
                 .offset(pageable.getOffset())
@@ -129,7 +129,7 @@ public class JobPostingRepositoryImpl implements JobPostingRepositoryCustom {
                 .from(jobPosting)
                 .where(
                         reviewStatusEq(cond.getReviewStatus()),
-                        postingTypeEq(cond.getPostingType()),
+                        postingStatusEq(cond.getPostingStatus()),
                         companyNameContains(cond.getCompanyName())
                 );
 
@@ -162,5 +162,12 @@ public class JobPostingRepositoryImpl implements JobPostingRepositoryCustom {
 
     private BooleanExpression reviewStatusEq(String reviewStatus) {
         return StringUtils.hasText(reviewStatus) ? jobPosting.reviewStatus.eq(reviewStatus) : null;
+    }
+
+    private BooleanExpression postingStatusEq(String postingStatus) {
+        if (postingStatus == null || postingStatus.isBlank() || "ALL".equalsIgnoreCase(postingStatus)) {
+            return null;
+        }
+        return jobPosting.postingStatus.equalsIgnoreCase(postingStatus);
     }
 }

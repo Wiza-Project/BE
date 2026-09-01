@@ -138,6 +138,11 @@ public class JobPostingService {
         CompanyAccount companyAccount = companyAccountRepository.findById(requestDTO.getCompanyAccountId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.COMPANY_ACCOUNT_NOT_FOUND));
 
+        // 미인증 기업 차단 검증
+        if (!"VERIFIED".equalsIgnoreCase(companyAccount.getVerificationStatus())) {
+            throw new BusinessException(ErrorCode.COMPANY_ACCOUNT_NOT_FOUND, "인증 심사가 완료(승인)된 협약 기업만 채용공고를 등록할 수 있습니다.");
+        }
+
         CommonCode ncsCode = careerBindingHelper.findValidCommonCodeOrNull(requestDTO.getNcsCodeId());
         CommonCode regionCode = careerBindingHelper.findValidRegionCodeOrNull(requestDTO.getRegionCodeId());
         FileGroup fileGroup = careerBindingHelper.findValidFileGroupOrNull(requestDTO.getFileGroupId());
@@ -269,6 +274,30 @@ public class JobPostingService {
 
         jobPosting.review(targetStatus, requestDTO.getRejectionReason(), reviewerUserId);
         log.info("[JobPostingService] 채용공고 검수 처리 완료. ID: {}, 상태: {}, 검수자 ID: {}", jobPostingId, targetStatus, reviewerUserId);
+    }
+
+    /**
+     * [교직원 전용] 채용공고 게시 상태 직접 변경 (게시/마감)
+     *
+     * @param jobPostingId  공고 식별자 (PK)
+     * @param postingStatus 변경할 게시 상태 ('PUBLISHED' 또는 'CLOSED')
+     */
+    @Transactional
+    public void updatePostingStatus(Integer jobPostingId, String postingStatus) {
+        JobPosting jobPosting = jobPostingRepository.findById(jobPostingId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.JOB_POSTING_NOT_FOUND));
+
+        if ("PUBLISHED".equalsIgnoreCase(postingStatus)) {
+            jobPosting.review("APPROVED", null, null);
+        } else if ("CLOSED".equalsIgnoreCase(postingStatus)) {
+            jobPosting.review("CLOSED", null, null);
+        } else if ("DRAFT".equalsIgnoreCase(postingStatus)) {
+            jobPosting.review("REQUESTED", null, null);
+        } else {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "유효하지 않은 게시 상태입니다.");
+        }
+
+        log.info("[JobPostingService] 채용공고 게시 상태 변경 완료. ID: {}, 상태: {}", jobPostingId, postingStatus);
     }
 
     /**

@@ -216,13 +216,6 @@ public class StudentJobRelationService {
      */
     @Transactional
     public JobScrapToggleResponseDTO toggleScrap(Integer studentUserId, Integer jobPostingId) {
-        Instant now = Instant.now();
-
-        // 스크랩 쓰기 개인정보 동의 검증
-        if (!consentVerifier.hasValidConsent(studentUserId, ConsentModuleCode.CAREER, ConsentType.PERSONAL_INFO, now)) {
-            throw new BusinessException(ErrorCode.REQUIRED_CONSENT_NOT_AGREED);
-        }
-
         JobPosting jobPosting = jobPostingRepository.findById(jobPostingId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.JOB_POSTING_NOT_FOUND));
 

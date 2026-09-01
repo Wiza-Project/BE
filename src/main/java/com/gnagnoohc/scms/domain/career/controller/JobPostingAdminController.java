@@ -2,6 +2,12 @@ package com.gnagnoohc.scms.domain.career.controller;
 
 import com.gnagnoohc.scms.domain.career.dto.posting.*;
 import com.gnagnoohc.scms.domain.career.service.JobPostingService;
+import com.gnagnoohc.scms.global.common.dto.ApiResponse;
+import com.gnagnoohc.scms.global.common.entity.FileGroup;
+import com.gnagnoohc.scms.global.common.entity.StoredFile;
+import com.gnagnoohc.scms.global.common.helper.FileUploadValidator;
+import com.gnagnoohc.scms.global.common.service.FileGroupService;
+import com.gnagnoohc.scms.global.common.service.FileStorageService;
 import com.gnagnoohc.scms.global.security.AuthUser;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -13,10 +19,14 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.util.Map;
 
 /**
  * 교직원/관리자 전용 채용공고 관리 API 컨트롤러
@@ -63,6 +73,10 @@ import org.springframework.web.bind.annotation.*;
 public class JobPostingAdminController {
 
     private final JobPostingService jobPostingService;
+
+    private final FileGroupService fileGroupService;
+    private final FileStorageService fileStorageService;
+    private final FileUploadValidator fileUploadValidator;
 
     @Operation(summary = "채용공고 전체 및 검수 목록 조회",
             description = "검수 상태(대기/승인/반려/마감)를 포함한 운영용 전체 공고 목록을 조회합니다.")
@@ -120,4 +134,34 @@ public class JobPostingAdminController {
         jobPostingService.deleteJobPosting(jobPostingId);
         return ResponseEntity.noContent().build();
     }
+
+    @Operation(summary = "채용공고 게시 상태 변경 (게시/마감)",
+            description = "공고의 게시 상태(PUBLISHED, CLOSED, DRAFT)를 직접 변경합니다.")
+    @PatchMapping("/{jobPostingId}/status")
+    public ResponseEntity<Void> updateJobPostingStatus(
+            @PathVariable Integer jobPostingId,
+            @RequestBody Map<String, String> payload) {
+        String postingStatus = payload.get("postingStatus");
+        jobPostingService.updatePostingStatus(jobPostingId, postingStatus);
+        return ResponseEntity.ok().build();
+    }
+
+    @Operation(summary = "채용공고 포스터/안내문 파일 업로드")
+    @PostMapping(value = "/poster", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<Map<String, Object>>> uploadPoster(
+            @RequestParam("file") MultipartFile file,
+            @AuthenticationPrincipal AuthUser authUser) {
+
+        fileUploadValidator.validate(file);
+        Integer uploaderId = (authUser != null && authUser.getId() != null) ? authUser.getId() : 12;
+
+        FileGroup group = fileGroupService.createGroup();
+        StoredFile storedFile = fileStorageService.store(file, group, uploaderId);
+
+        return ResponseEntity.ok(ApiResponse.ok(Map.of(
+                "fileGroupId", group.getFileGroupId(),
+                "storedFileId", storedFile.getStoredFileId()
+        )));
+    }
 }
+

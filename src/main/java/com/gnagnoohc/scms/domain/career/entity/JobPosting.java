@@ -209,6 +209,10 @@ public class JobPosting extends BaseTimeEntity {
             this.publishedAt = Instant.now();
         } else if ("REJECTED".equalsIgnoreCase(reviewStatus)) {
             this.postingStatus = "DRAFT";
+        } else if ("CLOSED".equalsIgnoreCase(reviewStatus)) {
+            this.postingStatus = "CLOSED";
+        } else if ("REQUESTED".equalsIgnoreCase(reviewStatus)) {
+            this.postingStatus = "DRAFT";
         }
     }
 }
