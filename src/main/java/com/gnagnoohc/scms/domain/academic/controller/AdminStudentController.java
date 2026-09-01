@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 교직원 학적조회(학적부관리) 화면. {@code SecurityConfig}가 {@code /api/admin/**}를
+ * 교직원 학적조회(학적부관리) 화면. {@code SecurityConfig}가 {@code /api/staff/**}를
  * 이미 STAFF role로 막고 있고, 여기 {@code @PreAuthorize}는 보조 안전장치일 뿐이다.
  *
  * <p>교직원 수정 API, 변동이력 입력 화면, 파일 업로드, AuditLog 기록은 전부 이번 티켓
@@ -29,7 +29,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @Tag(name = "AdminStudent", description = "교직원 학적조회(학적부관리)")
 @RestController
-@RequestMapping("/api/admin/students")
+@RequestMapping("/api/staff/students")
 @RequiredArgsConstructor
 @PreAuthorize("hasRole('STAFF')")
 public class AdminStudentController {
