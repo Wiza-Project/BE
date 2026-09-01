@@ -1,6 +1,6 @@
 package com.gnagnoohc.scms.domain.competency.controller;
 
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentHistoryResponse;
+import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentHistoryResponse;
 import com.gnagnoohc.scms.domain.competency.service.AssessmentHistoryService;
 import com.gnagnoohc.scms.global.common.dto.ApiResponse;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;

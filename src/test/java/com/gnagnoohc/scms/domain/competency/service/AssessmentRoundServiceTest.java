@@ -1,7 +1,7 @@
 package com.gnagnoohc.scms.domain.competency.service;
 
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentRoundRequest;
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentRoundResponse;
+import com.gnagnoohc.scms.domain.competency.dto.request.AssessmentRoundRequest;
+import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentRoundResponse;
 import com.gnagnoohc.scms.domain.competency.entity.AssessmentQuestion;
 import com.gnagnoohc.scms.domain.competency.entity.AssessmentRound;
 import com.gnagnoohc.scms.domain.competency.entity.AssessmentRoundQuestion;

@@ -1,7 +1,7 @@
 package com.gnagnoohc.scms.domain.competency.repository;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentNonParticipantResponse;
+import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentNonParticipantResponse;
 import com.gnagnoohc.scms.domain.competency.support.TargetConditionInterpreter;
 import com.querydsl.core.types.Projections;
 import com.querydsl.core.types.dsl.BooleanExpression;

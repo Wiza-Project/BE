@@ -1,6 +1,6 @@
 package com.gnagnoohc.scms.domain.program.service;
 
-import com.gnagnoohc.scms.domain.competency.dto.CompetencySummary;
+import com.gnagnoohc.scms.domain.competency.dto.response.CompetencySummary;
 import com.gnagnoohc.scms.domain.competency.service.CompetencyQueryService;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramStaffDetailResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramStaffListItemResponseDTO;
