@@ -179,6 +179,102 @@ public class CounselingScheduleService {
     }
 
     /**
+     * 학생 직접 예약이 호출하는 진입점이다. 신규 신청은 뺄 예약이 없어 excludeReservationId가 null이고,
+     * 일정 변경은 아직 옛 일정을 참조 중인 자기 자신의 예약을 겹침 비교에서 빼기 위해 값을 넘긴다.
+     */
+    CounselingSchedule requireReservableDirectSchedule(
+            Integer scheduleId,
+            CounselingType counselingType,
+            Integer studentId,
+            Instant now,
+            Integer excludeReservationId
+    ) {
+        return requireReservableDirectSchedule(scheduleId, counselingType, studentId, now, excludeReservationId, null);
+    }
+
+    /**
+     * 상담사 대행 예약이 호출하는 진입점이다. 학생 직접 예약과 같은 검증에 더해, 이 일정의 담당
+     * 상담사가 요청한 counselorId 본인인지까지 함께 확인한다. 대행 예약은 새로 만드는 예약이므로
+     * excludeReservationId를 쓸 일이 없어 null로 고정한다.
+     */
+    CounselingSchedule requireOwnedReservableDirectSchedule(
+            Integer scheduleId,
+            CounselingType counselingType,
+            Integer studentId,
+            Integer counselorId,
+            Instant now
+    ) {
+        return requireReservableDirectSchedule(scheduleId, counselingType, studentId, now, null, counselorId);
+    }
+
+    /**
+     * DIRECT(온라인 직접 신청) 일정 하나가 "지금 이 학생이 예약해도 되는 일정"인지 검증하는 단일 구현이다.
+     * 유형 일치·OPEN·마감 전·정원 여유·담당 상담사 활성(및 역할 범위)·본인 시간 중복 없음을 각각 boolean으로
+     * 먼저 구한 뒤 한 번에 검사한다. requiredOwnerCounselorId가 있으면(대행 예약) 일정 소유자 검사도 더한다.
+     * 어느 조건에서 걸렸는지 클라이언트에 따로 알려주지 않고 SCHEDULE_NOT_AVAILABLE(S002) 하나로 묶는
+     * 이유는, 예를 들어 "정원 마감"과 "이미 다른 사람이 예약함"을 구분해 알려주면 남의 예약 현황이나
+     * 다른 상담사의 일정 존재를 추측하는 데 악용될 수 있어서다.
+     */
+    private CounselingSchedule requireReservableDirectSchedule(
+            Integer scheduleId,
+            CounselingType counselingType,
+            Integer studentId,
+            Instant now,
+            Integer excludeReservationId,
+            Integer requiredOwnerCounselorId
+    ) {
+        if (scheduleId == null) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+        CounselingSchedule schedule = counselingScheduleRepository.findByIdForUpdate(scheduleId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.SCHEDULE_NOT_AVAILABLE));
+        boolean ownedByRequiredCounselor = requiredOwnerCounselorId == null
+                || schedule.isOwnedBy(requiredOwnerCounselorId);
+        boolean matchingType = schedule.getCounselingType().getCounselingTypeId()
+                .equals(counselingType.getCounselingTypeId());
+        boolean beforeDeadline = schedule.getBookingDeadline() == null
+                || schedule.getBookingDeadline().isAfter(now);
+        boolean capacityAvailable = counselingReservationRepository
+                .countOccupiedReservations(scheduleId) < schedule.getCapacity();
+        // 활성·ST200 여부에 더해, 담당 상담사의 현재 역할 범위가 이 유형을 허용하는지 확인한다.
+        // ST200+ST300 상담사의 일정은 CS200일 때만 예약을 받는다(학생 노출 목록과 같은 기준).
+        // 권한 예외를 그대로 노출하지 않도록 isEligibleForType는 boolean만 돌려주고,
+        // 실패하면 아래에서 다른 조건들과 함께 동일한 SCHEDULE_NOT_AVAILABLE(S002)로 처리한다.
+        boolean activeCounselor = "ACTIVE".equals(schedule.getCounselor().getAccountStatus())
+                && counselUserRepository.hasCounselorRole(schedule.getCounselor().getUserId())
+                && counselManagementAccessPolicy.isEligibleForType(
+                        schedule.getCounselor().getUserId(),
+                        counselingType.getTypeCode(),
+                        counselingType.getApplicationRoute()
+                );
+        // 예약 일정 변경에서는 아직 옛 일정을 참조 중인 이 예약 자기 자신을 겹침 비교에서 빼야 한다.
+        // 그렇지 않으면 옛 일정과 항상 겹쳐 새 일정으로 절대 바꿀 수 없다.
+        boolean overlapsActiveReservation = excludeReservationId == null
+                ? counselingReservationRepository.existsOverlappingActiveReservation(
+                        studentId,
+                        schedule.getStartsAt(),
+                        schedule.getEndsAt()
+                )
+                : counselingReservationRepository.existsOverlappingActiveReservationExcluding(
+                        studentId,
+                        excludeReservationId,
+                        schedule.getStartsAt(),
+                        schedule.getEndsAt()
+                );
+        if (!ownedByRequiredCounselor
+                || !matchingType
+                || !schedule.isOpen()
+                || !schedule.getStartsAt().isAfter(now)
+                || !beforeDeadline
+                || !capacityAvailable
+                || !activeCounselor
+                || overlapsActiveReservation) {
+            throw new BusinessException(ErrorCode.SCHEDULE_NOT_AVAILABLE);
+        }
+        return schedule;
+    }
+
+    /**
      * 사용자 행만 잠근다. 활성·STAFF·ST200 여부와 역할 범위 판정은 호출부가
      * {@link CounselManagementAccessPolicy#requireScope(AppUser)}로 한 번에 확인한다.
      */

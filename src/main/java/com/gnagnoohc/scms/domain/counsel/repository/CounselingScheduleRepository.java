@@ -26,6 +26,9 @@ public interface CounselingScheduleRepository extends JpaRepository<CounselingSc
      * 신청 경로가 DIRECT인 일정만 조회한다. 단건 조작 판정(CounselManagementAccessPolicy.allows)이
      * route≠DIRECT를 거부하는 것과 목록 술어를 일치시켜, "목록엔 보이는데 다룰 수 없는 일정"이
      * 생기지 않게 한다(일정 생성 자체가 DIRECT만 허용하므로 실질 결과는 같지만 규칙을 한 곳과 맞춘다).
+     * remainingCapacity는 REJECTED·CANCELED를 제외한 점유 예약 수를 정원에서 뺀 값이며,
+     * 기존 데이터가 정원을 초과했더라도 0 밑으로 내려가지 않게 CASE로 한 번 더 감싼다.
+     * hasReservation과 같은 LEFT JOIN 결과를 재사용하므로 건당 추가 쿼리가 생기지 않는다.
      */
     @Query("""
             select new com.gnagnoohc.scms.domain.counsel.dto.CounselorScheduleResponse(
@@ -38,7 +41,12 @@ public interface CounselingScheduleRepository extends JpaRepository<CounselingSc
                 schedule.bookingDeadline,
                 schedule.location,
                 schedule.scheduleStatus,
-                case when count(reservation.counselingReservationId) > 0 then true else false end
+                case when count(reservation.counselingReservationId) > 0 then true else false end,
+                case
+                    when (schedule.capacity - sum(case when reservation.reservationStatus not in ('REJECTED', 'CANCELED') then 1 else 0 end)) > 0
+                    then cast((schedule.capacity - sum(case when reservation.reservationStatus not in ('REJECTED', 'CANCELED') then 1 else 0 end)) as int)
+                    else 0
+                end
             )
             from CounselingSchedule schedule
             join schedule.counselingType counselingType
