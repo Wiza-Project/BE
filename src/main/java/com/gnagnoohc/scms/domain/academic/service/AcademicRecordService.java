@@ -48,7 +48,7 @@ public class AcademicRecordService {
     }
 
     /**
-     * GET /api/admin/students/{studentId} — 교직원 상세 조회. {@code studentId}는
+     * GET /api/staff/students/{studentId} — 교직원 상세 조회. {@code studentId}는
      * {@code app_user.user_id}(내부 PK)다. 대상이 없거나 학생이 아니면 "학적 상세가
      * 없다"가 아니라 "학생을 찾을 수 없다"는 뜻이라 USER_NOT_FOUND를 재사용한다
      */
@@ -60,7 +60,7 @@ public class AcademicRecordService {
     }
 
     /**
-     * GET /api/admin/students — 페이징 목록. {@code student_academic_detail} 행이 없는
+     * GET /api/staff/students — 페이징 목록. {@code student_academic_detail} 행이 없는
      * 학생도 목록엔 포함되고(전공/학년만 "미입력"), 입학일자는 페이지 단위 in절 조회로
      * 채운다
      */
@@ -78,7 +78,7 @@ public class AcademicRecordService {
         return PageResponse.from(enriched);
     }
 
-    /** GET /api/admin/students/summary — 상단 통계 타일. */
+    /** GET /api/staff/students/summary — 상단 통계 타일. */
     public AdminStudentSummaryResponse getSummary() {
         return new AdminStudentSummaryResponse(queryRepository.countTotalStudents(), queryRepository.countByStatus());
     }

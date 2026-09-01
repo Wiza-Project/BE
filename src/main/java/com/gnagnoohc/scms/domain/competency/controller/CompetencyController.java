@@ -24,7 +24,7 @@ import java.util.List;
 
 @Tag(name = "Competency", description = "핵심역량 관리")
 @RestController
-@RequestMapping("/api/admin/competencies")
+@RequestMapping("/api/staff/competencies")
 @RequiredArgsConstructor
 public class CompetencyController {
 

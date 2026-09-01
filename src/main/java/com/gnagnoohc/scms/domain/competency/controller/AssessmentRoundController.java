@@ -22,7 +22,7 @@ import java.util.List;
 
 @Tag(name = "AssessmentRound", description = "진단 회차 관리")
 @RestController
-@RequestMapping("/api/admin/assessment-rounds")
+@RequestMapping("/api/staff/assessment-rounds")
 @RequiredArgsConstructor
 public class AssessmentRoundController {
 

@@ -1,6 +1,6 @@
 package com.gnagnoohc.scms.domain.program.service;
 
-import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplicationAdminListItemResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplicationStaffListItemResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplicationBulkDecisionResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplicationCancelResponseDTO;
 import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplicationDecisionResponseDTO;
@@ -587,7 +587,7 @@ public class ProgramApplicationService {
      * 조회할 방법이 없었기 때문이다. keyword는 학생 이름/학번을 대상으로 부분 일치 검색한다.
      */
     @Transactional(readOnly = true)
-    public PageResponse<ProgramApplicationAdminListItemResponseDTO> listByProgram(
+    public PageResponse<ProgramApplicationStaffListItemResponseDTO> listByProgram(
             Integer programId, String status, String keyword, Pageable pageable) {
         if (!programRepository.existsById(programId)) {
             throw new BusinessException(ErrorCode.PROGRAM_NOT_FOUND);
@@ -595,7 +595,7 @@ public class ProgramApplicationService {
         String normalizedKeyword = StringUtils.hasText(keyword) ? escapeLikeKeyword(keyword.trim()) : null;
         Page<ProgramApplication> applications = applicationRepository.findAllByProgramIdAndStatus(
                 programId, status, normalizedKeyword, pageable);
-        return PageResponse.from(applications.map(ProgramApplicationAdminListItemResponseDTO::from));
+        return PageResponse.from(applications.map(ProgramApplicationStaffListItemResponseDTO::from));
     }
 
     /**

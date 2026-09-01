@@ -76,9 +76,11 @@ public class AssessmentComparisonService {
         return aMatch ? a : b;
     }
 
-    // 두 회차 모두 C1~C6 6개 역량이므로 정상 경로에선 1:1로 매칭된다. 한쪽에만 있는 역량이 생겨도
-    // (데이터 이상) 빠뜨리지 않도록 두 쪽 역량의 합집합으로 만들되, 방사형 차트 축과 어긋나지 않게
-    // displayOrder(축순서)로 정렬한다.
+    /**
+     * 두 회차 모두 C1~C6 6개 역량이므로 정상 경로에선 1:1로 매칭된다. 한쪽에만 있는 역량이 생겨도
+     * (데이터 이상) 빠뜨리지 않도록 두 쪽 역량의 합집합으로 만들되, 방사형 차트 축과 어긋나지 않게
+     * displayOrder(축순서)로 정렬한다.
+     */
     private static List<CompetencyDelta> buildDeltas(List<CompetencyResult> before, List<CompetencyResult> after) {
         Map<Integer, CompetencyResult> beforeByCompetency = indexByCompetency(before);
         Map<Integer, CompetencyResult> afterByCompetency = indexByCompetency(after);

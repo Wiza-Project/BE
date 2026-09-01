@@ -47,9 +47,11 @@ public class AssessmentDistributionService {
         return new AssessmentDistributionResponse(roundId, groupAxis, groups);
     }
 
-    // GRADE/MAJOR 둘 중 하나가 아니면 Q021로 차단한다 — TargetConditionInterpreter가 인식 못 하는
-    // target_condition 키를 조용히 무시하지 않고 에러로 실패시키는 것과 같은 이유(잘못된 값을 무시하면
-    // FE가 의도한 축과 다른 데이터를 받고도 알아채기 어렵다).
+    /**
+     * GRADE/MAJOR 둘 중 하나가 아니면 Q021로 차단한다 — TargetConditionInterpreter가 인식 못 하는
+     * target_condition 키를 조용히 무시하지 않고 에러로 실패시키는 것과 같은 이유(잘못된 값을 무시하면
+     * FE가 의도한 축과 다른 데이터를 받고도 알아채기 어렵다).
+     */
     private AssessmentGroupAxis parseGroupAxis(String groupByParam) {
         try {
             return AssessmentGroupAxis.valueOf(groupByParam.toUpperCase());
@@ -61,7 +63,7 @@ public class AssessmentDistributionService {
     private GroupScores toGroupScores(List<GroupCompetencyAggregate> groupRows) {
         GroupCompetencyAggregate first = groupRows.get(0);
         List<CompetencyAverage> competencyAverages = groupRows.stream()
-                // 방사형 차트(SCR-S02)와 축 순서를 맞추기 위해 displayOrder로 다시 정렬한다.
+                // 방사형 차트와 축 순서를 맞추기 위해 displayOrder로 다시 정렬한다.
                 .sorted(Comparator.comparing(GroupCompetencyAggregate::displayOrder))
                 .map(r -> new CompetencyAverage(r.competencyId(), r.competencyName(), r.displayOrder(), r.averageScore()))
                 .toList();

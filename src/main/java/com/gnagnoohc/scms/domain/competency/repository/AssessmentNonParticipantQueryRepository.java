@@ -36,9 +36,11 @@ public class AssessmentNonParticipantQueryRepository {
     private final JPAQueryFactory queryFactory;
     private final TargetConditionInterpreter targetConditionInterpreter;
 
-    // 미응시 = 대상 조건에 맞으면서, 이 회차에 제출 완료(submittedAt IS NOT NULL) 처리된
-    // attempt가 없는 학생. 중도저장만 하고 제출하지 않은 학생도 미응시로 잡는다
-    // (AssessmentAttendanceQueryRepository.countCompletedAttempts와 동일한 완료 기준).
+    /**
+     * 미응시 = 대상 조건에 맞으면서, 이 회차에 제출 완료(submittedAt IS NOT NULL) 처리된
+     * attempt가 없는 학생. 중도저장만 하고 제출하지 않은 학생도 미응시로 잡는다
+     * (AssessmentAttendanceQueryRepository.countCompletedAttempts와 동일한 완료 기준).
+     */
     public Page<AssessmentNonParticipantResponse> findNonParticipants(Integer assessmentRoundId, JsonNode targetCondition, Pageable pageable) {
         BooleanExpression conditionPredicate = targetConditionInterpreter.toPredicate(targetCondition);
         BooleanExpression notSubmitted = appUser.userId.notIn(submittedStudentIds(assessmentRoundId));
