@@ -1,6 +1,6 @@
 package com.gnagnoohc.scms.domain.competency.controller;
 
-import com.gnagnoohc.scms.domain.competency.dto.RecommendedProgramsResponse;
+import com.gnagnoohc.scms.domain.competency.dto.response.RecommendedProgramsResponse;
 import com.gnagnoohc.scms.domain.competency.service.AssessmentRecommendationService;
 import com.gnagnoohc.scms.global.common.dto.ApiResponse;
 import com.gnagnoohc.scms.global.security.AuthUser;

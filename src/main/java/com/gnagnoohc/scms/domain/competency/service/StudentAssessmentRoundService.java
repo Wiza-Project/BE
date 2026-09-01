@@ -1,6 +1,6 @@
 package com.gnagnoohc.scms.domain.competency.service;
 
-import com.gnagnoohc.scms.domain.competency.dto.StudentAssessmentRoundResponse;
+import com.gnagnoohc.scms.domain.competency.dto.response.StudentAssessmentRoundResponse;
 import com.gnagnoohc.scms.domain.competency.entity.AssessmentAttempt;
 import com.gnagnoohc.scms.domain.competency.entity.AssessmentRound;
 import com.gnagnoohc.scms.domain.competency.repository.AssessmentAttemptRepository;

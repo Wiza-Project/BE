@@ -1,6 +1,6 @@
 package com.gnagnoohc.scms.domain.competency.repository;
 
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentGroupAxis;
+import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentGroupAxis;
 import com.querydsl.core.types.Projections;
 import com.querydsl.core.types.dsl.StringExpression;
 import com.querydsl.jpa.impl.JPAQueryFactory;

@@ -1,7 +1,7 @@
 package com.gnagnoohc.scms.domain.competency.controller;
 
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentRoundRequest;
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentRoundResponse;
+import com.gnagnoohc.scms.domain.competency.dto.request.AssessmentRoundRequest;
+import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentRoundResponse;
 import com.gnagnoohc.scms.domain.competency.service.AssessmentRoundService;
 import com.gnagnoohc.scms.global.common.dto.ApiResponse;
 import com.gnagnoohc.scms.global.security.AuthUser;

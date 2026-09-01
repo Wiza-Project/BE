@@ -1,8 +1,8 @@
 package com.gnagnoohc.scms.domain.competency.controller;
 
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentQuestionEditRequest;
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentQuestionResponse;
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentQuestionUploadResponse;
+import com.gnagnoohc.scms.domain.competency.dto.request.AssessmentQuestionEditRequest;
+import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentQuestionResponse;
+import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentQuestionUploadResponse;
 import com.gnagnoohc.scms.domain.competency.service.AssessmentQuestionService;
 import com.gnagnoohc.scms.global.common.dto.ApiResponse;
 import com.gnagnoohc.scms.global.security.AuthUser;

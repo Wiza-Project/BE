@@ -1,4 +1,4 @@
-package com.gnagnoohc.scms.domain.competency.dto;
+package com.gnagnoohc.scms.domain.competency.dto.response;
 
 import java.math.BigDecimal;
 

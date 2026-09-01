@@ -1,9 +1,9 @@
 package com.gnagnoohc.scms.domain.competency.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentResponseProgress;
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentResponseSaveResponse;
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentResumeResponse;
+import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentResponseProgress;
+import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentResponseSaveResponse;
+import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentResumeResponse;
 import com.gnagnoohc.scms.domain.competency.entity.AssessmentAttempt;
 import com.gnagnoohc.scms.domain.competency.entity.AssessmentQuestion;
 import com.gnagnoohc.scms.domain.competency.entity.AssessmentResponse;

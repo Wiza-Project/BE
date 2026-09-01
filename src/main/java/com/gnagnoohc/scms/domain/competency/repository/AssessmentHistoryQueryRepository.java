@@ -1,6 +1,6 @@
 package com.gnagnoohc.scms.domain.competency.repository;
 
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentHistoryResponse;
+import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentHistoryResponse;
 import com.querydsl.core.BooleanBuilder;
 import com.querydsl.core.types.Projections;
 import com.querydsl.jpa.impl.JPAQuery;

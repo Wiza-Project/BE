@@ -1,8 +1,8 @@
 package com.gnagnoohc.scms.domain.competency.service;
 
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentComparisonResponse;
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentResultResponse;
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentResultResponse.CompetencyResult;
+import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentComparisonResponse;
+import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentResultResponse;
+import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentResultResponse.CompetencyResult;
 import com.gnagnoohc.scms.domain.competency.entity.AssessmentAttempt;
 import com.gnagnoohc.scms.domain.competency.entity.AssessmentRound;
 import com.gnagnoohc.scms.global.error.BusinessException;

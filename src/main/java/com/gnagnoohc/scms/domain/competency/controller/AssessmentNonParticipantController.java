@@ -1,8 +1,8 @@
 package com.gnagnoohc.scms.domain.competency.controller;
 
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentNonParticipantNotifyRequest;
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentNonParticipantNotifyResponse;
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentNonParticipantResponse;
+import com.gnagnoohc.scms.domain.competency.dto.request.AssessmentNonParticipantNotifyRequest;
+import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentNonParticipantNotifyResponse;
+import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentNonParticipantResponse;
 import com.gnagnoohc.scms.domain.competency.service.AssessmentNonParticipantService;
 import com.gnagnoohc.scms.global.common.dto.ApiResponse;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;

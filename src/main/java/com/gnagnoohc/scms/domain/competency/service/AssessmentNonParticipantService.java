@@ -1,7 +1,7 @@
 package com.gnagnoohc.scms.domain.competency.service;
 
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentNonParticipantNotifyResponse;
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentNonParticipantResponse;
+import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentNonParticipantNotifyResponse;
+import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentNonParticipantResponse;
 import com.gnagnoohc.scms.domain.competency.entity.AssessmentRound;
 import com.gnagnoohc.scms.domain.competency.repository.AssessmentNonParticipantQueryRepository;
 import com.gnagnoohc.scms.domain.competency.repository.AssessmentRoundRepository;
