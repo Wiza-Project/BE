@@ -1,7 +1,7 @@
 package com.gnagnoohc.scms.domain.competency.service;
 
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentDistributionResponse;
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentGroupAxis;
+import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentDistributionResponse;
+import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentGroupAxis;
 import com.gnagnoohc.scms.domain.competency.repository.AssessmentDistributionQueryRepository;
 import com.gnagnoohc.scms.domain.competency.repository.AssessmentDistributionQueryRepository.GroupCompetencyAggregate;
 import com.gnagnoohc.scms.domain.competency.repository.AssessmentRoundRepository;

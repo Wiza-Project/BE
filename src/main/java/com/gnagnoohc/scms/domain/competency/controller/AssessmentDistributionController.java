@@ -1,6 +1,6 @@
 package com.gnagnoohc.scms.domain.competency.controller;
 
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentDistributionResponse;
+import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentDistributionResponse;
 import com.gnagnoohc.scms.domain.competency.service.AssessmentDistributionService;
 import com.gnagnoohc.scms.global.common.dto.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;

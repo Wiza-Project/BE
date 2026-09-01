@@ -1,6 +1,6 @@
 package com.gnagnoohc.scms.domain.competency.controller;
 
-import com.gnagnoohc.scms.domain.competency.dto.CompetencySummary;
+import com.gnagnoohc.scms.domain.competency.dto.response.CompetencySummary;
 import com.gnagnoohc.scms.domain.competency.service.CompetencyQueryService;
 import com.gnagnoohc.scms.global.common.dto.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;

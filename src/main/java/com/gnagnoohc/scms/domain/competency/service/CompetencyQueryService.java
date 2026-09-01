@@ -1,6 +1,6 @@
 package com.gnagnoohc.scms.domain.competency.service;
 
-import com.gnagnoohc.scms.domain.competency.dto.CompetencySummary;
+import com.gnagnoohc.scms.domain.competency.dto.response.CompetencySummary;
 import com.gnagnoohc.scms.domain.competency.repository.CompetencyRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;

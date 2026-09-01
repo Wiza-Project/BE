@@ -1,4 +1,4 @@
-package com.gnagnoohc.scms.domain.competency.dto;
+package com.gnagnoohc.scms.domain.competency.dto.response;
 
 /**
  * 미응시자 목록(GET /api/staff/assessment-rounds/{roundId}/non-participants) 한 행.

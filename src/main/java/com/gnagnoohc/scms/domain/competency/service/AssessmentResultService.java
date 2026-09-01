@@ -1,6 +1,6 @@
 package com.gnagnoohc.scms.domain.competency.service;
 
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentResultResponse;
+import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentResultResponse;
 import com.gnagnoohc.scms.domain.competency.entity.AssessmentAttempt;
 import com.gnagnoohc.scms.domain.competency.entity.AssessmentScore;
 import com.gnagnoohc.scms.domain.competency.repository.AssessmentScoreRepository;

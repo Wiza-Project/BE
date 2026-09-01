@@ -1,4 +1,4 @@
-package com.gnagnoohc.scms.domain.competency.dto;
+package com.gnagnoohc.scms.domain.competency.dto.response;
 
 import com.gnagnoohc.scms.domain.competency.entity.AssessmentAttempt;
 import com.gnagnoohc.scms.domain.competency.entity.AssessmentScore;

@@ -1,4 +1,4 @@
-package com.gnagnoohc.scms.domain.competency.dto;
+package com.gnagnoohc.scms.domain.competency.dto.response;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.gnagnoohc.scms.domain.competency.entity.AssessmentAttempt;
