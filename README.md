@@ -1,9 +1,24 @@
-# scms-be
+# SCMS Backend
 
-**학생통합역량시스템** 백엔드 API 서버.
+학생통합역량시스템(SCMS)의 백엔드 API 서버입니다. 학생·교직원 포털이 사용하는 REST API,
+인증·인가, 공통코드, 파일·알림·감사 로그 같은 공통 기능을 제공합니다.
 
-프론트엔드 레포: `scms-fe`
-업무 프로세스 흐름도: `docs/process-model.pdf`
+- 프런트엔드: `../scms-fe`
+- API 확인: 애플리케이션 실행 후 `/swagger-ui.html`
+- 설계·DDL 문서: [`docs/`](docs/README.md)
+
+## 작업 기준
+
+이 저장소의 작업 단위는 Jira 티켓입니다. 브랜치명, 커밋, PR, 관련 설계 문서에 같은
+`WP-{번호}`를 기록해 요구사항부터 구현·검증까지 추적할 수 있어야 합니다.
+
+| 구분 | 현재 반영 기준 |
+| --- | --- |
+| 티켓 식별자 | `WP-{번호}` — 예: `WP-243` |
+| 브랜치 | `feat/WP-{번호}-{kebab-case}`, `fix/...`, `refactor/...`, `chore/...` |
+| 커밋 | `{type}(WP-{번호}): 변경 요약` |
+| 완료 기준 | 구현, 관련 테스트, API/DDL·프런트 영향 공유, PR 체크리스트 확인 |
+
 
 ---
 
@@ -154,28 +169,32 @@ com.gnagnoohc.scms
 
 ## 권한 설계 (중요)
 
-사용자 유형이 **4종**(학생/교직원/상담사/기업체)이고, 같은 교직원이라도
-소속 부서에 따라 할 수 있는 일이 다릅니다. 그래서 **2단 구조**로 검사합니다.
+사용자 유형은 **3종**(학생/교직원/관리자)입니다. 별도 포털은 학생·교직원만 제공하며,
+세부 역할은 학생(SD100), 교직원(ST100)·교수(ST300)·상담사(ST200), 관리자(AD100)로
+구분합니다. 같은 교직원이라도 소속 부서에 따라 할 수 있는 일이 다르므로 **2단 구조**로 검사합니다.
 
 **1단계 — URL 패턴 + UserType** (`SecurityConfig`)
 
 ```
 /api/students/**    → ROLE_STUDENT
-/api/counselors/**  → ROLE_COUNSELOR
-/api/companies/**   → ROLE_COMPANY
-/api/admin/**       → ROLE_STAFF
+/api/counselors/**  → ROLE_ST200
+/api/companies/**   → denyAll (현재 사용자 유형·포털 범위에서 제외)
+/api/admin/**       → denyAll (관리자 전용 포털·API 미제공)
+/api/staff/**       → ROLE_STAFF (교직원 포털 운영 API)
 ```
+
+`ADMIN`/`AD100`은 별도 관리자 화면 또는 교직원 운영 API 접근 권한을 뜻하지 않습니다.
 
 **2단계 — 부서 판정** (서비스 계층)
 
 ```java
-if (!authUser.getDepartment().canApproveProgramCategory()) {
+if (!isOperatingDepartment(authUser.getDepartmentCodeId())) {
     throw new BusinessException(ErrorCode.DEPARTMENT_FORBIDDEN);
 }
 ```
 
 URL 패턴에 부서까지 넣으려 하지 마세요. 규칙이 폭발합니다.
-부서 판정 로직은 `Department` enum의 `canXxx()` 메서드에 모아두었습니다.
+부서 판정 로직은 각 도메인 서비스에서 `CommonCode`의 부서 코드로 수행합니다.
 
 ---
 
@@ -196,24 +215,32 @@ URL 패턴에 부서까지 넣으려 하지 마세요. 규칙이 폭발합니다
 
 ---
 
-## 개발 규칙
+## 개발 컨벤션
 
-### 브랜치
+### 브랜치·커밋·PR
 
-```
-main                              배포 가능 상태
-develop                           통합 브랜치
-feature/P1200-program-approval    작업 브랜치 (프로세스 ID 사용)
+```text
+main                                      배포 기준 브랜치
+develop                                   통합 브랜치
+feat/WP-243-login-account-status-audit-log Jira 티켓 작업 브랜치
+
+feat(WP-243): 로그인 성공 감사 로그 기록
+fix(WP-243): 계정 상태 전환 시 감사 로그 중복 방지
+refactor(WP-242): 취창업 컨트롤러 책임 분리
 ```
 
-### 커밋 메시지
+- 하나의 브랜치는 하나의 Jira 티켓 범위를 지킵니다. 범위가 달라지면 별도 티켓·브랜치로 분리합니다.
+- 커밋 타입은 `feat`, `fix`, `refactor`, `test`, `docs`, `chore`를 사용합니다.
+- PR 본문에는 Jira 티켓, 변경한 API/DDL, 프런트·다른 도메인 영향, 실행한 검증을 적습니다.
+- 기존 작업 트리의 다른 사람 변경은 수정·되돌리지 않습니다. 충돌 가능성이 있으면 먼저 공유합니다.
 
-```
-feat: 비교과프로그램 참여승인 API 구현
-fix: 상담 예약 동시성 문제 수정
-refactor: 마일리지 적립 로직 이벤트 방식으로 분리
-chore: 의존성 추가
-```
+### API·계층 규칙
+
+- Controller는 요청 검증과 응답 조립만 맡기고, 비즈니스 규칙·상태 전이·권한의 세부 판정은 Service에 둡니다.
+- 엔티티를 API로 직접 반환하지 않습니다. 요청/응답 DTO와 `ApiResponse`, 목록의 `PageResponse`를 사용합니다.
+- API 오류는 `BusinessException`과 `global/error/ErrorCode`로 통일합니다. 새 오류 코드는 프런트 담당자에게 공유합니다.
+- 인증은 `AuthUser`와 `SecurityConfig`의 1차 URL 권한으로 처리하고, 부서·소유자·담당자 같은 세부 인가는 도메인 Service에서 다시 검사합니다.
+- API 경로나 응답 구조를 변경하면 `scms-fe` 호출부와 Swagger 설명을 함께 확인합니다.
 
 ### JPA 주의사항
 
@@ -222,6 +249,12 @@ chore: 의존성 추가
 - 엔티티에 `@Setter`를 붙이지 않습니다. 의미 있는 메서드로만 상태를 변경하세요.
 - 목록 조회 N+1은 `fetch join` 또는 QueryDSL로 명시 해결하세요.
 - 엔티티 변경 시 DDL을 `docs/ddl/` 에 날짜별로 남깁니다.
+
+### 동시성·트랜잭션
+
+- 중복 생성·정원·상태 전이처럼 경쟁 요청이 가능한 기능은 DB 유니크 제약, 조건부 업데이트 또는 잠금을 함께 설계합니다. 애플리케이션의 사전 조회만으로 보장하지 않습니다.
+- 상태 변경과 알림·이벤트의 일관성이 필요하면 커밋 이후(`@TransactionalEventListener`)에 후속 처리를 수행합니다.
+- 감사 로그처럼 본 업무 실패와 분리되어야 하는 기록은 전용 `REQUIRES_NEW` 경로를 사용합니다. 기록 대상·성공/실패 여부는 티켓과 코드에서 명확히 남깁니다.
 
 ### 도메인 간 결합 (이 프로젝트의 핵심 주의사항)
 
@@ -244,6 +277,24 @@ eventPublisher.publishEvent(new ProgramCompletedEvent(studentId, programId, mile
 @TransactionalEventListener
 public void handle(ProgramCompletedEvent event) { ... }
 ```
+
+- 이벤트 payload, 발행 시점, 재처리·실패 정책, 소비 도메인의 수용 기준은 티켓과 `docs/`에 계약으로 남깁니다.
+- 다른 도메인의 엔티티·Repository를 직접 참조해야 한다면 먼저 소유 도메인 담당자와 영향 범위를 확인합니다.
+
+### 검증
+
+CI는 `main`, `develop` 대상 PR·push에서 빌드와 테스트를 모두 실행합니다. 변경 범위에 맞는 테스트를
+로컬에서 먼저 실행하고, 공통 설정·보안·DB 매핑을 건드렸다면 전체 테스트를 실행합니다.
+
+```bash
+# 컴파일 및 전체 테스트
+./gradlew test
+
+# CI와 같은 빌드 검증(테스트 제외)
+./gradlew clean build -x test
+```
+
+PR에는 실행한 명령과, 수동으로 확인한 API·화면·권한 시나리오를 기록합니다.
 
 ### 개인정보 취급
 

@@ -14,9 +14,11 @@ public record AssessmentResultResponse(
         Integer roundId,
         Instant submittedAt,
         BigDecimal overallAverageScore,
-        // 각 score의 percentile null 여부로 유추하지 않고 별도 플래그로 내려주는 이유: percentile이 null인 원인이
-        // "회차 미집계"뿐이라는 보장이 없다(향후 데이터 이상 등으로도 null이 될 수 있음). FE가 "집계 완료 전"이라는
-        // 안내 문구를 띄우려면 원인이 명확한 신호가 따로 필요하다.
+        /**
+         * 각 score의 percentile null 여부로 유추하지 않고 별도 플래그로 내려주는 이유: percentile이 null인 원인이
+         * "회차 미집계"뿐이라는 보장이 없다(향후 데이터 이상 등으로도 null이 될 수 있음). FE가 "집계 완료 전"이라는
+         * 안내 문구를 띄우려면 원인이 명확한 신호가 따로 필요하다.
+         */
         boolean percentileAvailable,
         List<CompetencyResult> scores
 ) {
@@ -28,9 +30,11 @@ public record AssessmentResultResponse(
             BigDecimal percentile
     ) {}
 
-    // percentileAvailable=false(회차 집계 미완료)면 percentile 컬럼 값이 남아있어도 응답에 담지 않는다 —
-    // "집계 완료된 회차만 백분위 확인 가능" 규칙을 DTO 조립 시점에서 강제한다.
-    // overallAverageScore(방사형 차트 전체 평균 오버레이)는 백분위와 무관하게 내 환산점수만으로 항상 계산 가능하다.
+    /**
+     * percentileAvailable=false(회차 집계 미완료)면 percentile 컬럼 값이 남아있어도 응답에 담지 않는다 —
+     * "집계 완료된 회차만 백분위 확인 가능" 규칙을 DTO 조립 시점에서 강제한다.
+     * overallAverageScore(방사형 차트 전체 평균 오버레이)는 백분위와 무관하게 내 환산점수만으로 항상 계산 가능하다.
+     */
     public static AssessmentResultResponse from(AssessmentAttempt attempt, List<AssessmentScore> scores,
                                                  boolean percentileAvailable) {
         List<CompetencyResult> results = scores.stream()
@@ -54,9 +58,11 @@ public record AssessmentResultResponse(
                 results);
     }
 
-    // 결과 조회 응답과 이력서 연동 이벤트(AssessmentResultReadyEvent)가 전체 평균 산식을 공유하도록 분리한다.
-    // 환산점수 합 / 개수, 소수 둘째 자리 HALF_UP.
-    // 공용 유틸이라 호출부가 늘 수 있어, null·빈 리스트를 "/ by zero"나 맨 NPE 대신 사전조건 위반으로 명확히 막는다.
+    /**
+     * 결과 조회 응답과 이력서 연동 이벤트(AssessmentResultReadyEvent)가 전체 평균 산식을 공유하도록 분리한다.
+     * 환산점수 합 / 개수, 소수 둘째 자리 HALF_UP.
+     * 공용 유틸이라 호출부가 늘 수 있어, null·빈 리스트를 "/ by zero"나 맨 NPE 대신 사전조건 위반으로 명확히 막는다.
+     */
     public static BigDecimal averageConvertedScore(List<BigDecimal> convertedScores) {
         Objects.requireNonNull(convertedScores, "환산점수 목록은 필수입니다.");
         if (convertedScores.isEmpty()) {
