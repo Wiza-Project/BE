@@ -30,7 +30,7 @@ import org.springframework.web.bind.annotation.RestController;
 /** 활동 유형별 마일리지 점수 기준(정책) 등록/조회/수정. 교직원(STAFF)만 사용할 수 있다. */
 @Tag(name = "MileagePolicyStaff", description = "교직원 전용 마일리지 활동별 점수 기준(정책) 관리")
 @RestController
-@RequestMapping("/api/admin/mileage/policies")
+@RequestMapping("/api/staff/mileage/policies")
 @RequiredArgsConstructor
 @PreAuthorize("hasRole('STAFF')")
 public class MileagePolicyAdminController {
