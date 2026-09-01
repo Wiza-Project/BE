@@ -1,7 +1,7 @@
 package com.gnagnoohc.scms.domain.competency.dto;
 
 /**
- * 미응시자 목록(GET /api/admin/assessment-rounds/{roundId}/non-participants) 한 행.
+ * 미응시자 목록(GET /api/staff/assessment-rounds/{roundId}/non-participants) 한 행.
  * 개인정보(학번·이름·연락처)를 포함하므로 응시율 조회(AssessmentAttendanceResponse)와
  * 별도 DTO로 둔다.
  */

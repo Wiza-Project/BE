@@ -11,7 +11,7 @@ import java.util.stream.IntStream;
 
 /**
  * 학생 본인 조회(GET /api/students/academic-record)와 교직원 상세 조회
- * (GET /api/admin/students/{studentId})가 공유하는 응답 모양 — 두 화면의 "기본정보 +
+ * (GET /api/staff/students/{studentId})가 공유하는 응답 모양 — 두 화면의 "기본정보 +
  * 변동이력" 탭이 같은 구성이라 응답도 하나로 통일한다.
  *
  * <p>{@code student_academic_detail} 행이 없는 학생은 신상정보 관련 필드가 전부
