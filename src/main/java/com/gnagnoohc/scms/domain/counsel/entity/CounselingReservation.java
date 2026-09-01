@@ -27,6 +27,8 @@ public class CounselingReservation extends BaseTimeEntity {
     private static final String CANCELED_STATUS = "CANCELED";
     private static final String IN_PROGRESS_STATUS = "IN_PROGRESS";
     private static final String COMPLETED_STATUS = "COMPLETED";
+    // 학생 직접 예약과 상담사 대행 예약이 공유하는 신청 내용 길이 상한(trim 후 기준).
+    private static final int MAX_REQUEST_CONTENT_LENGTH = 3000;
 
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "counseling_reservation_id", nullable = false) private Integer counselingReservationId;
@@ -60,9 +62,26 @@ public class CounselingReservation extends BaseTimeEntity {
         reservation.counselingSchedule = counselingSchedule;
         reservation.student = student;
         reservation.userConsent = userConsent;
-        reservation.requestContent = requestContent;
+        reservation.requestContent = normalizeRequestContent(requestContent);
         reservation.reservationStatus = "REQUESTED";
         return reservation;
+    }
+
+    /**
+     * DTO의 Bean Validation은 빠른 실패를 위한 보조 수단일 뿐이므로, DTO를 거치지 않고
+     * 이 create()를 직접 호출하는 경로도 막을 수 있도록 최종 검증을 엔티티 생성 경계에 둔다.
+     * 앞뒤 공백을 제거한 뒤 길이를 검사하므로, 원문이 3,000자를 넘더라도 trim 결과가
+     * 정확히 3,000자면 통과한다.
+     */
+    private static String normalizeRequestContent(String requestContent) {
+        String trimmed = requestContent == null ? "" : requestContent.trim();
+        if (trimmed.isEmpty() || trimmed.length() > MAX_REQUEST_CONTENT_LENGTH) {
+            throw new BusinessException(
+                    ErrorCode.INVALID_INPUT,
+                    "신청 내용은 공백을 제외하고 1자 이상 " + MAX_REQUEST_CONTENT_LENGTH + "자 이하여야 합니다."
+            );
+        }
+        return trimmed;
     }
 
     /**
