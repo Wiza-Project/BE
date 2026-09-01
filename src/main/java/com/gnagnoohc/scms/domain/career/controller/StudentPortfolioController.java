@@ -44,13 +44,13 @@ import java.util.List;
  *
  * <p><strong>[설정 정보]</strong></p>
  * <ul>
- *   <li><b>기본 경로:</b> {@code /api/v1/students/me/portfolios}</li>
+ *   <li><b>기본 경로:</b> {@code /api/students/me/portfolios}</li>
  *   <li><b>접근 권한:</b> {@code ROLE_SD100(학생)} 전용</li>
  * </ul>
  */
 @Tag(name = "03-04. 학생 포트폴리오 API", description = "학생 본인의 포트폴리오 항목 생성, 조회, 수정, 삭제, 공개 여부 변경 및 첨부파일 관리")
 @RestController
-@RequestMapping("/api/v1/students/me/portfolios")
+@RequestMapping("/api/students/me/portfolios")
 @RequiredArgsConstructor
 @PreAuthorize("hasRole('SD100')")
 public class StudentPortfolioController {
