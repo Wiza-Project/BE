@@ -39,7 +39,8 @@ public class AssessmentQuestionService {
     // 문항번호는 하위역량 안에서 1~3으로 리셋돼 있어 그대로 쓸 수 없고, 하위역량은 스코프 밖(미개발)이기 때문.
     private static final int COMPETENCY_NAME_COLUMN = 1; // B: 상위역량
     private static final int QUESTION_TEXT_COLUMN = 4;   // E: 평가문항
-    private static final int HEADER_ROW_INDEX = 0;
+    // 원본은 1행이 비어 있고 2행(0-based 인덱스 1)이 헤더다. 데이터는 3행부터 시작한다.
+    private static final int HEADER_ROW_INDEX = 1;
 
     private static final String[] LIKERT_LABELS = {"매우 그렇지 않다", "그렇지 않다", "보통이다", "그렇다", "매우 그렇다"};
     private static final int RECOMMENDED_MAX_PER_COMPETENCY = 15;
