@@ -78,7 +78,7 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, Integer>
             "LEFT JOIN FETCH jp.regionCode rc " +
             "WHERE jp.postingStatus = 'PUBLISHED' " +
             "  AND (jp.applicationEndsAt IS NULL OR jp.applicationEndsAt >= :now) " +
-            "ORDER BY jp.createdAt DESC")
+            "ORDER BY jp.jobPostingId DESC")
     List<JobPosting> findDefaultActivePostingsWithDetails(@Param("now") Instant now);
 
     /**
