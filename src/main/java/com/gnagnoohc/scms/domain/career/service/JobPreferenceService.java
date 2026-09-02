@@ -60,7 +60,7 @@ public class JobPreferenceService {
     }
 
     /**
-     * [학생] 취업 희망조건을 등록하거나 기존 설정을 수정 (원자적 Upsert).
+     * [학생] 취업 희망조건을 등록하거나 기존 설정을 수정 (원자적 Upsert)
      *
      * <p><strong>[비즈니스 로직 처리 순서]</strong></p>
      * <ul>

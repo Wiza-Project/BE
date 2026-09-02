@@ -37,7 +37,7 @@ public class CareerSecurityHelper {
      * <pre>{@code
      * // 컨트롤러 적용 예시:
      * @PreAuthorize("@careerSecurity.isCareerStaff(principal)")
-     * @GetMapping("/admin/career/postings")
+     * @GetMapping("/staff/career/postings")
      * public ApiResponse<...> getList(...) { ... }
      * }</pre>
      *
@@ -57,8 +57,8 @@ public class CareerSecurityHelper {
     /**
      * [서비스 비즈니스 로직 전용] 취창업지원과 교직원/관리자 권한 검증 및 사용자 엔티티 반환
      *
-     * <p>서비스 계층 내부에서 권한을 재검증(2차 방어)하고, 승인/반려 심사자 정보 주입 등을 위해 검증 완료된 {@link AppUser} 엔티티를 반환합니다.<br>
-     * 권한이 유효하지 않을 경우 {@link BusinessException} 예외를 즉시 발생시켜 트랜잭션을 차단합니다.</p>
+     * <p>서비스 계층 내부에서 권한을 재검증(2차 방어)하고, 승인/반려 심사자 정보 주입 등을 위해 검증 완료된 {@link AppUser} 엔티티를 반환<br>
+     * 권한이 유효하지 않을 경우 {@link BusinessException} 예외를 즉시 발생시켜 트랜잭션을 차단</p>
      *
      * @param userId 검증할 사용자 식별자 PK ({@code app_user.user_id})
      * @return 인가 검증이 완료된 영속 {@link AppUser} 엔티티
