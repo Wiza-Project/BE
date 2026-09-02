@@ -50,7 +50,6 @@ import static com.gnagnoohc.scms.global.common.entity.QCommonCode.commonCode;
  *       <li><b>조회 정책:</b> 검수 대기({@code REQUESTED}), 승인({@code APPROVED}), 반려({@code REJECTED}), 마감({@code CLOSED}) 등 모든 상태의 이력을 모니터링해야 하므로 마감일/게시상태 고정 제약을 두지 않습니다.</li>
  *       <li><b>주요 검색 필터:</b> 검수 상태({@code reviewStatus}), 공고 구분({@code postingType}), 기업명({@code companyName}) 등 관리·승인 상태 중심 필터링</li>
  *       <li><b>정렬 정책:</b> 최근 접수된 검수 요청 건부터 신속히 처리하기 위해 최신 등록순({@code jobPostingId.desc()})으로 정렬</li>
- *       <li>기업 인증이 허가되지 않은 경우, 신규 공고 등록 시 목록에도 뜨지 않는다</li>
  *     </ul>
  *   </li>
  * </ul>

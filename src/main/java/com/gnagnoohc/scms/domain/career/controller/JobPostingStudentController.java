@@ -88,7 +88,8 @@ public class JobPostingStudentController {
         JobPosting posting = jobPostingRepository.findById(jobPostingId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
 
-        if (posting.getFileGroup() == null) {
+        // 게시 승인(PUBLISHED) 상태가 아니거나 파일그룹이 없으면 접근 차단
+        if (!"PUBLISHED".equalsIgnoreCase(posting.getPostingStatus()) || posting.getFileGroup() == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
         }
 
