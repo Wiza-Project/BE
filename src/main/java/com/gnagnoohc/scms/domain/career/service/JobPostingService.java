@@ -173,7 +173,7 @@ public class JobPostingService {
     }
 
     /**
-     * [교직원/관리자 전용] 채용공고 포스터(이미지/PDF) 단독 업로드 처리
+     * [교직원/관리자 전용] 채용공고 포스터(이미지 및 PDF) 단독 업로드 처리
      * 공통모듈에서 설계한 파일 첨부 모듈 적용
      */
     @Transactional

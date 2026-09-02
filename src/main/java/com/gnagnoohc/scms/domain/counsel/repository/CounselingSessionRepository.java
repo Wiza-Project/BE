@@ -1,6 +1,6 @@
 package com.gnagnoohc.scms.domain.counsel.repository;
 
-import com.gnagnoohc.scms.domain.counsel.dto.CounselingSessionRow;
+import com.gnagnoohc.scms.domain.counsel.dto.projection.CounselingSessionRow;
 import com.gnagnoohc.scms.domain.counsel.entity.CounselingSession;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.PageRequest;
@@ -58,7 +58,7 @@ public interface CounselingSessionRepository extends JpaRepository<CounselingSes
      * 다른 상담사의 회기는 조회 자체가 안 되게 하고(소유권 비노출), 서비스는 결과가 비면 S007로 막는다.
      */
     @Query("""
-            select new com.gnagnoohc.scms.domain.counsel.dto.CounselingSessionRow(
+            select new com.gnagnoohc.scms.domain.counsel.dto.projection.CounselingSessionRow(
                 s.counselingSessionId, a.counselingAssignmentId, r.counselingReservationId, s.sessionNo,
                 student.userId, student.universityNo, student.userName, department.codeName,
                 counselingType.typeName, counselingType.typeCode, s.startsAt, s.endsAt, s.attendanceStatus, s.sessionStatus,

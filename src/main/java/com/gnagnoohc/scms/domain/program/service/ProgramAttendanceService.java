@@ -1,8 +1,8 @@
 package com.gnagnoohc.scms.domain.program.service;
 
-import com.gnagnoohc.scms.domain.program.dto.request.ProgramAttendanceRecordRequestDTO;
-import com.gnagnoohc.scms.domain.program.dto.response.ProgramAttendanceResponseDTO;
-import com.gnagnoohc.scms.domain.program.dto.response.ProgramMyAttendanceResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.attendance.ProgramAttendanceRecordRequestDTO;
+import com.gnagnoohc.scms.domain.program.dto.attendance.ProgramAttendanceResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.attendance.ProgramMyAttendanceResponseDTO;
 import com.gnagnoohc.scms.domain.program.entity.ProgramApplication;
 import com.gnagnoohc.scms.domain.program.entity.ProgramAttendance;
 import com.gnagnoohc.scms.domain.program.entity.ProgramSession;

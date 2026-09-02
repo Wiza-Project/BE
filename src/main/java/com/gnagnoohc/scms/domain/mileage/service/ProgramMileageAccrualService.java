@@ -169,7 +169,7 @@ public class ProgramMileageAccrualService {
                 && policy.getActivityType().isActive()
                 && sameProgramType(policy.getActivityType(), programTypeCode)
                 && policy.getPoints() != null
-                && policy.getPoints().compareTo(ExtracurricularMileagePolicyDefinition.POINTS) == 0
+                && policy.getPoints().compareTo(BigDecimal.ZERO) > 0
                 && policy.isApplicableOn(completionDate);
     }
 
@@ -197,11 +197,10 @@ public class ProgramMileageAccrualService {
         }
 
         if (ExtracurricularMileagePolicyDefinition.isExtracurricular(policy.getActivityType())
-                && (policy.getPoints().compareTo(ExtracurricularMileagePolicyDefinition.POINTS) != 0
-                || !sameProgramType(policy.getActivityType(), programTypeCode))) {
+                && !sameProgramType(policy.getActivityType(), programTypeCode)) {
             throw new BusinessException(
                     ErrorCode.MILEAGE_POLICY_NOT_FOUND,
-                    "프로그램 유형에 맞는 5점 비교과 마일리지 정책이 없습니다.");
+                    "프로그램 유형에 맞는 비교과 마일리지 정책이 없습니다.");
         }
     }
 

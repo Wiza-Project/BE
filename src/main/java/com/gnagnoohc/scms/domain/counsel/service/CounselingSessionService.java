@@ -1,7 +1,7 @@
 package com.gnagnoohc.scms.domain.counsel.service;
 
-import com.gnagnoohc.scms.domain.counsel.dto.CounselingSessionResponse;
-import com.gnagnoohc.scms.domain.counsel.dto.CounselingSessionRow;
+import com.gnagnoohc.scms.domain.counsel.dto.response.CounselingSessionResponse;
+import com.gnagnoohc.scms.domain.counsel.dto.projection.CounselingSessionRow;
 import com.gnagnoohc.scms.domain.counsel.entity.CounselingAssignment;
 import com.gnagnoohc.scms.domain.counsel.entity.CounselingReservation;
 import com.gnagnoohc.scms.domain.counsel.entity.CounselingSession;

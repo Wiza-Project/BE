@@ -1,13 +1,13 @@
 package com.gnagnoohc.scms.domain.program.controller;
 
-import com.gnagnoohc.scms.domain.program.dto.request.ProgramRegisterRequestDTO;
-import com.gnagnoohc.scms.domain.program.dto.response.ProgramMileagePolicyPreviewResponseDTO;
-import com.gnagnoohc.scms.domain.program.dto.response.ProgramStaffDetailResponseDTO;
-import com.gnagnoohc.scms.domain.program.dto.response.ProgramStaffListItemResponseDTO;
-import com.gnagnoohc.scms.domain.program.dto.response.ProgramFileUploadResponseDTO;
-import com.gnagnoohc.scms.domain.program.dto.response.ProgramRegisterResponseDTO;
-import com.gnagnoohc.scms.domain.program.dto.request.ProgramUpdateRequestDTO;
-import com.gnagnoohc.scms.domain.program.dto.response.ProgramUpdateResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.program.ProgramRegisterRequestDTO;
+import com.gnagnoohc.scms.domain.program.dto.program.ProgramMileagePolicyPreviewResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.program.ProgramStaffDetailResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.program.ProgramStaffListItemResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.program.ProgramFileUploadResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.program.ProgramRegisterResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.program.ProgramUpdateRequestDTO;
+import com.gnagnoohc.scms.domain.program.dto.program.ProgramUpdateResponseDTO;
 import com.gnagnoohc.scms.domain.program.entity.ProgramStatus;
 import com.gnagnoohc.scms.domain.program.service.ProgramService;
 import com.gnagnoohc.scms.global.common.dto.ApiResponse;

@@ -1,6 +1,6 @@
 package com.gnagnoohc.scms.domain.counsel.service;
 
-import com.gnagnoohc.scms.domain.counsel.dto.CounselingPrivateRecordResponse;
+import com.gnagnoohc.scms.domain.counsel.dto.response.CounselingPrivateRecordResponse;
 import com.gnagnoohc.scms.domain.counsel.entity.CounselingAssignment;
 import com.gnagnoohc.scms.domain.counsel.entity.CounselingPrivateRecord;
 import com.gnagnoohc.scms.domain.counsel.entity.CounselingSession;

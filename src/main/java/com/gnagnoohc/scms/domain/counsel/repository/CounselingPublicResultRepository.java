@@ -1,6 +1,6 @@
 package com.gnagnoohc.scms.domain.counsel.repository;
 
-import com.gnagnoohc.scms.domain.counsel.dto.StudentCounselingPublicResultRow;
+import com.gnagnoohc.scms.domain.counsel.dto.projection.StudentCounselingPublicResultRow;
 import com.gnagnoohc.scms.domain.counsel.entity.CounselingPublicResult;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -41,7 +41,7 @@ public interface CounselingPublicResultRepository extends JpaRepository<Counseli
      * 늘어나도 이 쿼리 모양을 그대로 쓸 수 있도록 미리 최신 버전 선택 구조를 쓴다.
      */
     @Query("""
-            select new com.gnagnoohc.scms.domain.counsel.dto.StudentCounselingPublicResultRow(
+            select new com.gnagnoohc.scms.domain.counsel.dto.projection.StudentCounselingPublicResultRow(
                 r.publicResultId, s.counselingSessionId, res.counselingReservationId, s.sessionNo,
                 ct.typeName, counselor.userName, s.startsAt, r.publishedAt, r.resultSummary, r.actionPlan
             )
@@ -68,7 +68,7 @@ public interface CounselingPublicResultRepository extends JpaRepository<Counseli
 
     /** 목록과 같은 소유권·최신 버전 조건으로 회기 하나의 상세를 조회한다. */
     @Query("""
-            select new com.gnagnoohc.scms.domain.counsel.dto.StudentCounselingPublicResultRow(
+            select new com.gnagnoohc.scms.domain.counsel.dto.projection.StudentCounselingPublicResultRow(
                 r.publicResultId, s.counselingSessionId, res.counselingReservationId, s.sessionNo,
                 ct.typeName, counselor.userName, s.startsAt, r.publishedAt, r.resultSummary, r.actionPlan
             )

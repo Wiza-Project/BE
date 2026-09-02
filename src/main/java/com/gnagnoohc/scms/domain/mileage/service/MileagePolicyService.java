@@ -147,10 +147,10 @@ public class MileagePolicyService {
 
     private void validateExtracurricularPoints(MileageActivityType activityType, BigDecimal points) {
         if (ExtracurricularMileagePolicyDefinition.isExtracurricular(activityType)
-                && (points == null || points.compareTo(ExtracurricularMileagePolicyDefinition.POINTS) != 0)) {
+                && (points == null || points.compareTo(BigDecimal.ZERO) <= 0)) {
             throw new BusinessException(
                     ErrorCode.INVALID_INPUT,
-                    "비교과 마일리지 정책은 프로그램 이수 1건당 5점으로만 등록할 수 있습니다.");
+                    "비교과 마일리지 정책의 포인트는 0보다 커야 합니다.");
         }
     }
 

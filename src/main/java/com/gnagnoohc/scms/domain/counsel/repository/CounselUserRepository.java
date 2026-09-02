@@ -1,6 +1,6 @@
 package com.gnagnoohc.scms.domain.counsel.repository;
 
-import com.gnagnoohc.scms.domain.counsel.dto.CounselorStudentLookupResponse;
+import com.gnagnoohc.scms.domain.counsel.dto.response.CounselorStudentLookupResponse;
 import com.gnagnoohc.scms.domain.user.entity.AppUser;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -88,7 +88,7 @@ public interface CounselUserRepository extends Repository<AppUser, Integer> {
      * 전체 AppUser를 읽어 메모리에서 거르지 않도록 WHERE 절에서 바로 제한하고 최소 필드만 담는다.
      */
     @Query("""
-            select new com.gnagnoohc.scms.domain.counsel.dto.CounselorStudentLookupResponse(
+            select new com.gnagnoohc.scms.domain.counsel.dto.response.CounselorStudentLookupResponse(
                 user.userId,
                 user.universityNo,
                 user.userName

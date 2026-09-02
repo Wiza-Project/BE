@@ -24,7 +24,7 @@ import org.springframework.web.bind.annotation.*;
  *
  * <p><strong>[설정 및 인가 정보]</strong></p>
  * <ul>
- *   <li><b>기본 경로:</b> {@code /api/admin/career/companies}</li>
+ *   <li><b>기본 경로:</b> {@code /api/staff/career/companies}</li>
  *   <li><b>접근 권한:</b> 취창업지원과 교직원 전용 (SecurityConfig 1단계 + @careerSecurity 2단계)</li>
  *   <li><b>기능:</b> 채용공고 연계를 위한 기업 메타데이터 등록, 단건/목록 조회, 승인 심사</li>
  * </ul>
@@ -33,7 +33,7 @@ import org.springframework.web.bind.annotation.*;
  */
 @Tag(name = "[교직원] 협약기업 관리 API", description = "채용공고 연계용 협약기업 등록, 조회 및 심사 관리")
 @RestController
-@RequestMapping("/api/admin/career/companies")
+@RequestMapping("/api/staff/career/companies")
 @RequiredArgsConstructor
 @PreAuthorize("@careerSecurity.isCareerStaff(principal)")
 public class CompanyAccountController {

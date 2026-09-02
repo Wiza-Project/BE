@@ -1,11 +1,11 @@
 package com.gnagnoohc.scms.domain.program.controller;
 
-import com.gnagnoohc.scms.domain.program.dto.request.ProgramApplicationBulkApproveRequestDTO;
-import com.gnagnoohc.scms.domain.program.dto.request.ProgramApplicationBulkRejectRequestDTO;
-import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplicationStaffListItemResponseDTO;
-import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplicationBulkDecisionResponseDTO;
-import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplicationDecisionResponseDTO;
-import com.gnagnoohc.scms.domain.program.dto.request.ProgramApplicationRejectRequestDTO;
+import com.gnagnoohc.scms.domain.program.dto.application.ProgramApplicationBulkApproveRequestDTO;
+import com.gnagnoohc.scms.domain.program.dto.application.ProgramApplicationBulkRejectRequestDTO;
+import com.gnagnoohc.scms.domain.program.dto.application.ProgramApplicationStaffListItemResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.application.ProgramApplicationBulkDecisionResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.application.ProgramApplicationDecisionResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.application.ProgramApplicationRejectRequestDTO;
 import com.gnagnoohc.scms.domain.program.service.ProgramApplicationService;
 import com.gnagnoohc.scms.global.common.dto.ApiResponse;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;

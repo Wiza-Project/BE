@@ -1,6 +1,6 @@
 package com.gnagnoohc.scms.domain.counsel.service;
 
-import com.gnagnoohc.scms.domain.counsel.dto.CounselingTypeResponse;
+import com.gnagnoohc.scms.domain.counsel.dto.response.CounselingTypeResponse;
 import com.gnagnoohc.scms.domain.counsel.repository.CounselingTypeRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
