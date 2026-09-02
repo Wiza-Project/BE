@@ -3,9 +3,10 @@ package com.gnagnoohc.scms.domain.career.controller;
 import com.gnagnoohc.scms.domain.career.dto.posting.JobPostingDetailResponseDTO;
 import com.gnagnoohc.scms.domain.career.dto.posting.JobPostingSearchConditionDTO;
 import com.gnagnoohc.scms.domain.career.dto.posting.JobPostingSummaryResponseDTO;
+import com.gnagnoohc.scms.domain.career.entity.JobPosting;
+import com.gnagnoohc.scms.domain.career.repository.JobPostingRepository;
 import com.gnagnoohc.scms.domain.career.service.JobPostingService;
 import com.gnagnoohc.scms.global.common.entity.StoredFile;
-import com.gnagnoohc.scms.global.common.repository.FileGroupRepository;
 import com.gnagnoohc.scms.global.common.service.FileGroupService;
 import com.gnagnoohc.scms.global.common.service.FileStorageService;
 import com.gnagnoohc.scms.global.error.BusinessException;
@@ -14,10 +15,13 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -51,10 +55,9 @@ import org.springframework.web.bind.annotation.*;
 public class JobPostingStudentController {
 
     private final JobPostingService jobPostingService;
-
+    private final JobPostingRepository jobPostingRepository;
     private final FileGroupService fileGroupService;
     private final FileStorageService fileStorageService;
-    private final FileGroupRepository fileGroupRepository;
 
     @Operation(summary = "학생 채용공고 목록 조회 (필터/페이징)",
             description = "게시 승인(PUBLISHED) 및 마감일이 지나지 않은 유효 공고만 조회합니다.")
@@ -78,22 +81,36 @@ public class JobPostingStudentController {
         return ResponseEntity.ok(response);
     }
 
-    @Operation(summary = "공고 포스터 이미지 인라인 조회 (비로그인 허용)")
-    @GetMapping("/posters/{fileGroupId}")
-    public ResponseEntity<org.springframework.core.io.Resource> viewPoster(
-            @PathVariable Integer fileGroupId) {
+    @Operation(summary = "채용공고 포스터 인라인 조회", description = "공고에 첨부된 포스터 이미지를 안전하게 로드합니다.")
+    @GetMapping("/{jobPostingId}/poster")
+    public ResponseEntity<Resource> viewPoster(@PathVariable Integer jobPostingId) {
+        // 1. 공고를 먼저 조회하여 해당 공고에 귀속된 fileGroup만 타겟팅 (보안 취약점 방어)
+        JobPosting posting = jobPostingRepository.findById(jobPostingId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
 
-        // FileGroup 내의 첫 번째 파일 조회
-        StoredFile storedFile = fileGroupService.getFiles(fileGroupRepository.findById(fileGroupId)
-                        .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND)))
+        if (posting.getFileGroup() == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
+        }
+
+        StoredFile storedFile = fileGroupService.getFiles(posting.getFileGroup())
                 .stream().findFirst()
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
 
         FileStorageService.LoadedFile loaded = fileStorageService.load(storedFile.getStoredFileId());
 
+        // 2. MIME 타입 파싱 안전 처리 (잘못된 Content-Type 시 octet-stream 폴백)
+        MediaType mediaType;
+        try {
+            mediaType = (loaded.contentType() != null)
+                    ? MediaType.parseMediaType(loaded.contentType())
+                    : MediaType.APPLICATION_OCTET_STREAM;
+        } catch (Exception e) {
+            mediaType = MediaType.APPLICATION_OCTET_STREAM;
+        }
+
         return ResponseEntity.ok()
-                .contentType(org.springframework.http.MediaType.parseMediaType(loaded.contentType()))
-                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "inline")
+                .contentType(mediaType)
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline")
                 .body(loaded.resource());
     }
 
