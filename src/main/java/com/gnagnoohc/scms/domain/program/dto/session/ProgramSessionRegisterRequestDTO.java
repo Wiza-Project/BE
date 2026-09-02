@@ -1,4 +1,4 @@
-package com.gnagnoohc.scms.domain.program.dto.request;
+package com.gnagnoohc.scms.domain.program.dto.session;
 
 import com.gnagnoohc.scms.domain.program.entity.SessionLocationType;
 import jakarta.validation.constraints.NotNull;

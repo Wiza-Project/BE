@@ -1,5 +1,6 @@
-package com.gnagnoohc.scms.domain.program.dto.response;
+package com.gnagnoohc.scms.domain.program.dto.program;
 
+import com.gnagnoohc.scms.domain.program.dto.session.ProgramSessionResponseDTO;
 import com.gnagnoohc.scms.domain.program.entity.ExtracurricularProgram;
 
 import java.math.BigDecimal;

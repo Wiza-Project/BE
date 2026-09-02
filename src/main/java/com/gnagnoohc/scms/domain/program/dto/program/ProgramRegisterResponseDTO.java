@@ -1,4 +1,4 @@
-package com.gnagnoohc.scms.domain.program.dto.response;
+package com.gnagnoohc.scms.domain.program.dto.program;
 
 // BigDecimal: completionRate처럼 소수점 계산 오차 없이 정확한 값을 담아야 하는 필드에 사용.
 import java.math.BigDecimal;

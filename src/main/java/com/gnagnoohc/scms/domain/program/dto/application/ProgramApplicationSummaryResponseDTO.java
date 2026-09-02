@@ -1,4 +1,4 @@
-package com.gnagnoohc.scms.domain.program.dto.response;
+package com.gnagnoohc.scms.domain.program.dto.application;
 
 import java.math.BigDecimal;
 import java.time.Instant;

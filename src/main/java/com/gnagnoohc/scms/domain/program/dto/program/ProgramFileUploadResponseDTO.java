@@ -1,4 +1,4 @@
-package com.gnagnoohc.scms.domain.program.dto.response;
+package com.gnagnoohc.scms.domain.program.dto.program;
 
 public record ProgramFileUploadResponseDTO(
         Integer fileGroupId,
