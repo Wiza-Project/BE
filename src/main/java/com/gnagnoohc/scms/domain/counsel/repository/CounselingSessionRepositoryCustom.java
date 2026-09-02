@@ -1,6 +1,6 @@
 package com.gnagnoohc.scms.domain.counsel.repository;
 
-import com.gnagnoohc.scms.domain.counsel.dto.CounselingSessionRow;
+import com.gnagnoohc.scms.domain.counsel.dto.projection.CounselingSessionRow;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 

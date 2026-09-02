@@ -1,7 +1,7 @@
 package com.gnagnoohc.scms.domain.program.controller;
 
-import com.gnagnoohc.scms.domain.program.dto.request.ProgramAttendanceRecordRequestDTO;
-import com.gnagnoohc.scms.domain.program.dto.response.ProgramAttendanceResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.attendance.ProgramAttendanceRecordRequestDTO;
+import com.gnagnoohc.scms.domain.program.dto.attendance.ProgramAttendanceResponseDTO;
 import com.gnagnoohc.scms.domain.program.service.ProgramAttendanceService;
 import com.gnagnoohc.scms.global.common.dto.ApiResponse;
 import com.gnagnoohc.scms.global.security.AuthUser;
@@ -31,14 +31,16 @@ public class ProgramAttendanceStaffController {
             @Valid @RequestBody ProgramAttendanceRecordRequestDTO request,
             @AuthenticationPrincipal AuthUser authUser) {
         return ApiResponse.ok(programAttendanceService.recordAttendance(
-                programId, sessionId, applicationId, request, authUser.getId()));
+                programId, sessionId, applicationId, request, authUser.getId(), authUser.getDepartmentCodeId()));
     }
 
     @Operation(summary = "회차별 출석 목록 조회", description = "특정 회차에 기록된 출석 목록을 조회합니다.")
     @GetMapping
     public ApiResponse<List<ProgramAttendanceResponseDTO>> listAttendance(
             @PathVariable Integer programId,
-            @PathVariable Integer sessionId) {
-        return ApiResponse.ok(programAttendanceService.listAttendance(programId, sessionId));
+            @PathVariable Integer sessionId,
+            @AuthenticationPrincipal AuthUser authUser) {
+        return ApiResponse.ok(programAttendanceService.listAttendance(
+                programId, sessionId, authUser.getId(), authUser.getDepartmentCodeId()));
     }
 }

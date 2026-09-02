@@ -1,12 +1,12 @@
 package com.gnagnoohc.scms.domain.program.service;
 
-import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplicationStaffListItemResponseDTO;
-import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplicationBulkDecisionResponseDTO;
-import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplicationCancelResponseDTO;
-import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplicationDecisionResponseDTO;
-import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplicationSummaryResponseDTO;
-import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplicationSurveyResponseDTO;
-import com.gnagnoohc.scms.domain.program.dto.response.ProgramApplyResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.application.ProgramApplicationStaffListItemResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.application.ProgramApplicationBulkDecisionResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.application.ProgramApplicationCancelResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.application.ProgramApplicationDecisionResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.application.ProgramApplicationSummaryResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.application.ProgramApplicationSurveyResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.application.ProgramApplyResponseDTO;
 import com.gnagnoohc.scms.domain.program.entity.ExtracurricularProgram;
 import com.gnagnoohc.scms.domain.program.entity.ProgramApplication;
 import com.gnagnoohc.scms.domain.program.event.ApplicationDecidedEvent;
@@ -20,6 +20,7 @@ import com.gnagnoohc.scms.domain.user.service.consent.ConsentModuleCode;
 import com.gnagnoohc.scms.domain.user.service.consent.ConsentType;
 import com.gnagnoohc.scms.domain.user.service.consent.ConsentVerifier;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;
+import com.gnagnoohc.scms.global.common.repository.CommonCodeRepository;
 import com.gnagnoohc.scms.global.common.notification.ModuleCode;
 import com.gnagnoohc.scms.global.common.notification.NotificationRequest;
 import com.gnagnoohc.scms.global.common.notification.NotificationSender;
@@ -56,6 +57,13 @@ import java.util.stream.Collectors;
 @Slf4j
 public class ProgramApplicationService {
 
+    /**
+     * 로그인한 사용자가 비교과운영부서 소속인지 검증(isOperatingDepartment)할 때 기준이 되는 CommonCode 값.
+     * ProgramService.isOperatingDepartment()와 동일한 기준(CommonCodeSeeder 기준 비교과운영부서=D200)이다.
+     */
+    private static final String DEPARTMENT_GROUP = "DEPARTMENT";
+    private static final String DEFAULT_DEPARTMENT_CODE = "D200"; // 비교과운영부서
+
     private final ExtracurricularProgramRepository programRepository;
     private final ProgramApplicationRepository applicationRepository;
     private final ProgramAttendanceRepository attendanceRepository;
@@ -64,6 +72,7 @@ public class ProgramApplicationService {
     private final ApplicationEventPublisher eventPublisher;
     private final PlatformTransactionManager transactionManager;
     private final ConsentVerifier consentVerifier;
+    private final CommonCodeRepository commonCodeRepository;
 
     /**
      * 학생의 프로그램 참여 신청을 접수한다. 매개변수 2개의 의미:
@@ -227,7 +236,8 @@ public class ProgramApplicationService {
      * 운영부서가 신청 건을 승인한다. 정원(capacity) 내에서만 승인할 수 있다 —
      * 신청 시점에 대기(WAITLISTED)로 분류됐던 건이라도, 다른 신청이 반려되어 자리가 나면 승인할 수 있다.
      */
-    public ProgramApplicationDecisionResponseDTO approve(Integer programId, Integer applicationId, Integer staffId) {
+    public ProgramApplicationDecisionResponseDTO approve(
+            Integer programId, Integer applicationId, Integer staffId, Integer departmentCodeId) {
         /**
          * 프로그램 row에 락을 걸어, "현재 승인 건수 확인"과 "실제 승인 반영" 사이에
          * 다른 승인 요청이 끼어들어 정원을 초과하는 경쟁 조건을 막는다 (apply()와 동일한 이유).
@@ -236,6 +246,13 @@ public class ProgramApplicationService {
          */
         ExtracurricularProgram program = programRepository.findByIdForUpdate(programId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PROGRAM_NOT_FOUND));
+
+        if (!isOperatingDepartment(departmentCodeId)) {
+            throw new BusinessException(ErrorCode.DEPARTMENT_FORBIDDEN);
+        }
+        if (!program.getManagerUser().getUserId().equals(staffId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
 
         ProgramApplication application = findApplicationForUpdate(programId, applicationId);
 
@@ -371,9 +388,17 @@ public class ProgramApplicationService {
      * reject()가 프로그램 행 락 없이 자리를 비우면, apply()가 그 빈 자리를 보지 못하고 대기자로
      * 잘못 접수하는 경쟁 조건이 있었다.
      */
-    public ProgramApplicationDecisionResponseDTO reject(Integer programId, Integer applicationId, String reason, Integer staffId) {
-        programRepository.findByIdForUpdate(programId)
+    public ProgramApplicationDecisionResponseDTO reject(
+            Integer programId, Integer applicationId, String reason, Integer staffId, Integer departmentCodeId) {
+        ExtracurricularProgram program = programRepository.findByIdForUpdate(programId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PROGRAM_NOT_FOUND));
+
+        if (!isOperatingDepartment(departmentCodeId)) {
+            throw new BusinessException(ErrorCode.DEPARTMENT_FORBIDDEN);
+        }
+        if (!program.getManagerUser().getUserId().equals(staffId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
 
         ProgramApplication application = findApplicationForUpdate(programId, applicationId);
         String previousStatus = application.getApplicationStatus();
@@ -400,13 +425,36 @@ public class ProgramApplicationService {
      * 그 건에서만 잡아 실패 목록에 담고 계속 진행한다. 이 메서드 전체가 하나의 트랜잭션이라, 실패한 건은
      * 애초에 UPDATE가 실행되지 않았을 뿐이므로 별도의 트랜잭션 분리(REQUIRES_NEW) 없이도 부분 성공이 자연스럽게 성립한다.
      */
-    public ProgramApplicationBulkDecisionResponseDTO bulkApprove(Integer programId, List<Integer> applicationIds, Integer staffId) {
-        return bulkDecide(applicationIds, id -> approve(programId, id, staffId));
+    public ProgramApplicationBulkDecisionResponseDTO bulkApprove(
+            Integer programId, List<Integer> applicationIds, Integer staffId, Integer departmentCodeId) {
+        validateBulkDecisionAuthority(programId, staffId, departmentCodeId);
+        return bulkDecide(applicationIds, id -> approve(programId, id, staffId, departmentCodeId));
     }
 
     // 운영부서가 여러 신청 건을 한 번에 반려한다. bulkApprove와 동일한 방식이며, 반려 사유는 선택된 모든 건에 공통 적용된다.
-    public ProgramApplicationBulkDecisionResponseDTO bulkReject(Integer programId, List<Integer> applicationIds, String reason, Integer staffId) {
-        return bulkDecide(applicationIds, id -> reject(programId, id, reason, staffId));
+    public ProgramApplicationBulkDecisionResponseDTO bulkReject(
+            Integer programId, List<Integer> applicationIds, String reason, Integer staffId, Integer departmentCodeId) {
+        validateBulkDecisionAuthority(programId, staffId, departmentCodeId);
+        return bulkDecide(applicationIds, id -> reject(programId, id, reason, staffId, departmentCodeId));
+    }
+
+    /**
+     * 부서/소유자 권한 검증은 정원 초과 같은 건별 부분 실패가 아니라 프로그램 단위로 고정된
+     * all-or-nothing 사전조건이므로, bulkDecide의 try/catch(건별 실패를 failed 목록에 담는 로직)에
+     * 맡기지 않고 루프 진입 전에 한 번만 검증해 실패 시 그대로 던진다 — 그래야 권한 없는 요청이
+     * (내용은 비어있더라도) HTTP 200으로 응답되는 대신 approve()/reject()와 동일하게 4xx로 응답된다.
+     * approve()/reject()와 같은 이유로 프로그램 행을 먼저 잠근다.
+     */
+    private void validateBulkDecisionAuthority(Integer programId, Integer staffId, Integer departmentCodeId) {
+        ExtracurricularProgram program = programRepository.findByIdForUpdate(programId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PROGRAM_NOT_FOUND));
+
+        if (!isOperatingDepartment(departmentCodeId)) {
+            throw new BusinessException(ErrorCode.DEPARTMENT_FORBIDDEN);
+        }
+        if (!program.getManagerUser().getUserId().equals(staffId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
     }
 
     private ProgramApplicationBulkDecisionResponseDTO bulkDecide(
@@ -588,10 +636,18 @@ public class ProgramApplicationService {
      */
     @Transactional(readOnly = true)
     public PageResponse<ProgramApplicationStaffListItemResponseDTO> listByProgram(
-            Integer programId, String status, String keyword, Pageable pageable) {
-        if (!programRepository.existsById(programId)) {
-            throw new BusinessException(ErrorCode.PROGRAM_NOT_FOUND);
+            Integer programId, String status, String keyword, Pageable pageable,
+            Integer currentUserId, Integer departmentCodeId) {
+        ExtracurricularProgram program = programRepository.findById(programId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PROGRAM_NOT_FOUND));
+
+        if (!isOperatingDepartment(departmentCodeId)) {
+            throw new BusinessException(ErrorCode.DEPARTMENT_FORBIDDEN);
         }
+        if (!program.getManagerUser().getUserId().equals(currentUserId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+
         String normalizedKeyword = StringUtils.hasText(keyword) ? escapeLikeKeyword(keyword.trim()) : null;
         Page<ProgramApplication> applications = applicationRepository.findAllByProgramIdAndStatus(
                 programId, status, normalizedKeyword, pageable);
@@ -605,6 +661,21 @@ public class ProgramApplicationService {
      */
     private static String escapeLikeKeyword(String keyword) {
         return keyword.replace("!", "!!").replace("%", "!%").replace("_", "!_");
+    }
+
+    /**
+     * 로그인한 사용자의 부서 codeId가 비교과운영부서(D200)의 codeId와 같은지 검사한다.
+     * departmentCodeId가 null이면(부서 미배정) 당연히 비교과운영부서가 아니므로 false.
+     * ProgramService.isOperatingDepartment()와 동일한 로직이다.
+     */
+    private boolean isOperatingDepartment(Integer departmentCodeId) {
+        if (departmentCodeId == null) {
+            return false;
+        }
+        return commonCodeRepository.findByCodeGroupAndActiveTrueOrderBySortOrderAsc(DEPARTMENT_GROUP)
+                .stream()
+                .filter(commonCode -> commonCode.getCode().equals(DEFAULT_DEPARTMENT_CODE))
+                .anyMatch(commonCode -> commonCode.getCodeId().equals(departmentCodeId));
     }
 
     /**

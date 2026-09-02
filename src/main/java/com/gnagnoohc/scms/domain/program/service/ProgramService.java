@@ -2,24 +2,28 @@ package com.gnagnoohc.scms.domain.program.service;
 
 import com.gnagnoohc.scms.domain.competency.dto.response.CompetencySummary;
 import com.gnagnoohc.scms.domain.competency.service.CompetencyQueryService;
-import com.gnagnoohc.scms.domain.program.dto.response.ProgramStaffDetailResponseDTO;
-import com.gnagnoohc.scms.domain.program.dto.response.ProgramStaffListItemResponseDTO;
-import com.gnagnoohc.scms.domain.program.dto.response.ProgramDetailResponseDTO;
-import com.gnagnoohc.scms.domain.program.dto.response.ProgramListItemResponseDTO;
-import com.gnagnoohc.scms.domain.program.dto.request.ProgramRegisterRequestDTO;
-import com.gnagnoohc.scms.domain.program.dto.request.ProgramSessionRegisterRequestDTO;
-import com.gnagnoohc.scms.domain.program.dto.response.ProgramRegisterResponseDTO;
-import com.gnagnoohc.scms.domain.program.dto.request.ProgramUpdateRequestDTO;
-import com.gnagnoohc.scms.domain.program.dto.response.ProgramSessionResponseDTO;
-import com.gnagnoohc.scms.domain.program.dto.response.ProgramUpdateResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.program.ProgramMileagePolicyPreviewResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.program.ProgramStaffDetailResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.program.ProgramStaffListItemResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.program.ProgramDetailResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.program.ProgramListItemResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.program.ProgramRegisterRequestDTO;
+import com.gnagnoohc.scms.domain.program.dto.session.ProgramSessionRegisterRequestDTO;
+import com.gnagnoohc.scms.domain.program.dto.program.ProgramRegisterResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.program.ProgramUpdateRequestDTO;
+import com.gnagnoohc.scms.domain.program.dto.session.ProgramSessionResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.program.ProgramUpdateResponseDTO;
 import com.gnagnoohc.scms.domain.program.entity.ExtracurricularProgram;
 import com.gnagnoohc.scms.domain.program.entity.ProgramApplication;
 import com.gnagnoohc.scms.domain.program.entity.ProgramStatus;
 import com.gnagnoohc.scms.domain.program.entity.SessionLocationType;
 import com.gnagnoohc.scms.domain.program.repository.ExtracurricularProgramRepository;
-import com.gnagnoohc.scms.domain.program.dto.response.ProgramFileUploadResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.program.ProgramFileUploadResponseDTO;
 import com.gnagnoohc.scms.domain.program.repository.ProgramApplicationRepository;
 import com.gnagnoohc.scms.domain.program.repository.ProgramSessionRepository;
+import com.gnagnoohc.scms.domain.mileage.entity.MileagePolicy;
+import com.gnagnoohc.scms.domain.mileage.repository.MileagePolicyRepository;
+import com.gnagnoohc.scms.domain.mileage.service.ExtracurricularMileagePolicyDefinition;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;
 import com.gnagnoohc.scms.global.common.entity.FileGroup;
 import com.gnagnoohc.scms.global.common.entity.StoredFile;
@@ -42,11 +46,13 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -67,12 +73,19 @@ public class ProgramService {
      */
     private static final String DEPARTMENT_GROUP = "DEPARTMENT";
     private static final String DEFAULT_DEPARTMENT_CODE = "D200"; // 비교과운영부서
+    /**
+     * findActiveExtracurricularPolicy()에서 programTypeCodeId로 조회한 CommonCode가 실제로
+     * 프로그램 유형 그룹인지 검증할 때 쓰는 값. MileagePolicyRepository.findActiveExtracurricularPoliciesByProgramTypeOn()의
+     * JPQL이 검사하는 codeGroup 리터럴과 동일해야 한다.
+     */
+    private static final String PROGRAM_TYPE_GROUP = "PROGRAM_TYPE";
     // 운영계획서는 문서 1개(PDF)만 받는다 — FileUploadValidator의 기본 허용 확장자(이미지+PDF)보다 좁게 검증한다.
     private static final Set<String> OPERATION_PLAN_EXTENSIONS = Set.of("pdf");
 
     private final ExtracurricularProgramRepository programRepository;
     private final CompetencyQueryService competencyQueryService;
     private final CommonCodeRepository commonCodeRepository;
+    private final MileagePolicyRepository mileagePolicyRepository;
     private final ProgramSessionRepository programSessionRepository;
     private final ProgramApplicationRepository applicationRepository;
     private final FileGroupService fileGroupService;
@@ -153,7 +166,7 @@ public class ProgramService {
                     operatingUnitCodeId,
                     programTypeCodeId,
                     request.competencyId(),
-                    request.mileagePolicyId(),
+                    resolveMileagePolicyId(programTypeCodeId),
                     // managerUserId는 요청 DTO가 아니라 이 메서드의 매개변수(로그인한 사용자)로 채운다.
                     managerUserId,
                     request.programName(),
@@ -413,6 +426,8 @@ public class ProgramService {
          * (e) 실제 DB 반영 -------------------------------------------------------------
          * updatedRows는 이번 UPDATE 문으로 실제 몇 개의 row가 바뀌었는지를 담는다(보통 0 또는 1).
          */
+        Optional<MileagePolicy> resolvedMileagePolicy = findActiveExtracurricularPolicy(request.programTypeCodeId());
+
         int updatedRows;
         try {
             updatedRows = programRepository.updateProgram(
@@ -421,7 +436,7 @@ public class ProgramService {
                     operatingUnitCodeId,
                     request.programTypeCodeId(),
                     request.competencyId(),
-                    request.mileagePolicyId(),
+                    resolvedMileagePolicy.map(MileagePolicy::getMileagePolicyId).orElse(null),
                     request.programName(),
                     request.description(),
                     request.recruitmentStartsAt(),
@@ -463,6 +478,9 @@ public class ProgramService {
                 program.getProgramStatus().getLabel(),
                 request.capacity(),
                 completionRate,
+                resolvedMileagePolicy.map(MileagePolicy::getMileagePolicyId).orElse(null),
+                resolvedMileagePolicy.map(MileagePolicy::getPoints).orElse(null),
+                resolvedMileagePolicy.map(policy -> policy.getActivityType().getActivityName()).orElse(null),
                 request.recruitmentStartsAt(),
                 request.recruitmentEndsAt(),
                 request.operationStartsAt(),
@@ -493,11 +511,17 @@ public class ProgramService {
      * ── "staff용 목록 조회(List)" 기능 ──────────────────────────────────────
      *
      * list()와 거의 같지만, 로그인한 staff 본인이 담당(managerUser)한 프로그램으로만 범위를 좁힌다.
+     *   departmentCodeId : 로그인한 사용자가 소속된 부서의 CommonCode PK (인증 정보에서 옴)
+     *                    → register()와 동일하게, 비교과운영부서(D200) 소속인지 검증한다.
      */
     @Transactional(readOnly = true)
     public PageResponse<ProgramStaffListItemResponseDTO> listMine(Integer managerUserId, ProgramStatus status,
                                                                     String keyword, Integer competencyId,
-                                                                    Pageable pageable) {
+                                                                    Pageable pageable, Integer departmentCodeId) {
+        if (!isOperatingDepartment(departmentCodeId)) {
+            throw new BusinessException(ErrorCode.DEPARTMENT_FORBIDDEN);
+        }
+
         Page<ExtracurricularProgram> page = programRepository.searchByManager(
                 managerUserId, status, keyword, competencyId, pageable);
         Map<Integer, Long> applicantCounts = countApplicantsByProgram(page.getContent());
@@ -574,12 +598,17 @@ public class ProgramService {
      *
      * getDetail()과 거의 같지만, 등록자 본인만 조회 가능하도록 소유자 검증을 추가하고
      * 수정/삭제 가능 여부(isEditable/isDeletable)를 함께 계산해 내려준다.
+     *   departmentCodeId : 로그인한 사용자가 소속된 부서의 CommonCode PK (인증 정보에서 옴)
+     *                    → update()와 동일하게, 비교과운영부서(D200) 소속 + 등록자 본인인지 검증한다.
      */
     @Transactional(readOnly = true)
-    public ProgramStaffDetailResponseDTO getMyDetail(Integer programId, Integer currentUserId) {
+    public ProgramStaffDetailResponseDTO getMyDetail(Integer programId, Integer currentUserId, Integer departmentCodeId) {
         ExtracurricularProgram program = programRepository.findDetailById(programId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PROGRAM_NOT_FOUND));
 
+        if (!isOperatingDepartment(departmentCodeId)) {
+            throw new BusinessException(ErrorCode.DEPARTMENT_FORBIDDEN);
+        }
         if (!program.getManagerUser().getUserId().equals(currentUserId)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
@@ -692,6 +721,47 @@ public class ProgramService {
                 .stream()
                 .filter(commonCode -> commonCode.getCode().equals(DEFAULT_DEPARTMENT_CODE))
                 .anyMatch(commonCode -> commonCode.getCodeId().equals(departmentCodeId));
+    }
+
+    /**
+     * 프로그램 유형(programTypeCodeId)에 대응하는 비교과 마일리지 정책을 자동으로 찾아 그 id를 반환한다.
+     * WP-261: 등록/수정 시점에 마일리지 정책을 수동으로 고르지 않고, 프로그램 유형 선택만으로 자동 매핑되게 한다.
+     * 여기서 못 찾아도(시드 데이터 미존재, 유효기간 밖 등) 등록 자체를 막지 않고 null로 둔다 — 이수 완료 후
+     * 마일리지 적립 시점에 ProgramMileageAccrualService가 같은 조건으로 다시 동적 조회하기 때문에, 이 값은
+     * 최신 상태를 미리 채워두는 최적화일 뿐 필수 로직이 아니다.
+     */
+    private Integer resolveMileagePolicyId(Integer programTypeCodeId) {
+        return findActiveExtracurricularPolicy(programTypeCodeId)
+                .map(MileagePolicy::getMileagePolicyId)
+                .orElse(null);
+    }
+
+    private Optional<MileagePolicy> findActiveExtracurricularPolicy(Integer programTypeCodeId) {
+        if (programTypeCodeId == null) {
+            return Optional.empty();
+        }
+        return commonCodeRepository.findById(programTypeCodeId)
+                .filter(programTypeCode -> PROGRAM_TYPE_GROUP.equals(programTypeCode.getCodeGroup()))
+                .flatMap(programTypeCode -> mileagePolicyRepository
+                        .findActiveExtracurricularPoliciesByProgramTypeOn(
+                                programTypeCode.getCode(),
+                                ExtracurricularMileagePolicyDefinition.CATEGORY_CODE,
+                                ExtracurricularMileagePolicyDefinition.EARNING_ROUTE,
+                                LocalDate.now())
+                        .stream()
+                        .findFirst());
+    }
+
+    /**
+     * WP-261 자동 매핑 로직(resolveMileagePolicyId)과 동일한 조건으로 조회하되, 등록/수정을 실행하지 않고도
+     * 프론트 폼에서 programTypeCodeId 선택 시점에 매핑 결과를 미리 확인할 수 있게 한다.
+     * programTypeCodeId가 아직 선택되지 않아 null이면(findActiveExtracurricularPolicy가 이를 안전하게
+     * 처리) 매핑 정책이 없는 것과 동일하게 필드가 비어있는 응답을 반환한다.
+     */
+    @Transactional(readOnly = true)
+    public ProgramMileagePolicyPreviewResponseDTO previewMileagePolicy(Integer programTypeCodeId) {
+        MileagePolicy policy = findActiveExtracurricularPolicy(programTypeCodeId).orElse(null);
+        return ProgramMileagePolicyPreviewResponseDTO.from(programTypeCodeId, policy);
     }
 
     /**

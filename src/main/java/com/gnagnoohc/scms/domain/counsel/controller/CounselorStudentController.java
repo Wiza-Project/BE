@@ -1,6 +1,6 @@
 package com.gnagnoohc.scms.domain.counsel.controller;
 
-import com.gnagnoohc.scms.domain.counsel.dto.CounselorStudentLookupResponse;
+import com.gnagnoohc.scms.domain.counsel.dto.response.CounselorStudentLookupResponse;
 import com.gnagnoohc.scms.domain.counsel.service.CounselorReservationService;
 import com.gnagnoohc.scms.global.common.dto.ApiResponse;
 import com.gnagnoohc.scms.global.security.AuthUser;

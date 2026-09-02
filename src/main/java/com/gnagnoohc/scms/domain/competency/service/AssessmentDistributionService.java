@@ -13,6 +13,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -65,8 +67,14 @@ public class AssessmentDistributionService {
         List<CompetencyAverage> competencyAverages = groupRows.stream()
                 // 방사형 차트와 축 순서를 맞추기 위해 displayOrder로 다시 정렬한다.
                 .sorted(Comparator.comparing(GroupCompetencyAggregate::displayOrder))
-                .map(r -> new CompetencyAverage(r.competencyId(), r.competencyName(), r.displayOrder(), r.averageScore()))
+                .map(r -> new CompetencyAverage(r.competencyId(), r.competencyName(), r.displayOrder(),
+                        toScore(r.averageScore())))
                 .toList();
         return new GroupScores(first.groupKey(), first.groupLabel(), first.respondentCount(), competencyAverages);
+    }
+
+    // QueryDSL avg()가 준 Double을 화면 표시용 소수 2자리 BigDecimal로 맞춘다.
+    private static BigDecimal toScore(Double average) {
+        return average == null ? null : BigDecimal.valueOf(average).setScale(2, RoundingMode.HALF_UP);
     }
 }

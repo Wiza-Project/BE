@@ -1,12 +1,13 @@
 package com.gnagnoohc.scms.domain.program.controller;
 
-import com.gnagnoohc.scms.domain.program.dto.request.ProgramRegisterRequestDTO;
-import com.gnagnoohc.scms.domain.program.dto.response.ProgramStaffDetailResponseDTO;
-import com.gnagnoohc.scms.domain.program.dto.response.ProgramStaffListItemResponseDTO;
-import com.gnagnoohc.scms.domain.program.dto.response.ProgramFileUploadResponseDTO;
-import com.gnagnoohc.scms.domain.program.dto.response.ProgramRegisterResponseDTO;
-import com.gnagnoohc.scms.domain.program.dto.request.ProgramUpdateRequestDTO;
-import com.gnagnoohc.scms.domain.program.dto.response.ProgramUpdateResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.program.ProgramRegisterRequestDTO;
+import com.gnagnoohc.scms.domain.program.dto.program.ProgramMileagePolicyPreviewResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.program.ProgramStaffDetailResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.program.ProgramStaffListItemResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.program.ProgramFileUploadResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.program.ProgramRegisterResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.program.ProgramUpdateRequestDTO;
+import com.gnagnoohc.scms.domain.program.dto.program.ProgramUpdateResponseDTO;
 import com.gnagnoohc.scms.domain.program.entity.ProgramStatus;
 import com.gnagnoohc.scms.domain.program.service.ProgramService;
 import com.gnagnoohc.scms.global.common.dto.ApiResponse;
@@ -52,7 +53,8 @@ public class ProgramController {
             @RequestParam(required = false) Integer competencyId,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable,
             @AuthenticationPrincipal AuthUser authUser) {
-        return ApiResponse.ok(programService.listMine(authUser.getId(), status, keyword, competencyId, pageable));
+        return ApiResponse.ok(programService.listMine(
+                authUser.getId(), status, keyword, competencyId, pageable, authUser.getDepartmentCodeId()));
     }
 
     @Operation(summary = "프로그램 등록", description = "비교과 프로그램을 신규 등록합니다 (모집중 상태로 시작)")
@@ -85,12 +87,19 @@ public class ProgramController {
                 file, authUser.getId(), authUser.getDepartmentCodeId()));
     }
 
+    @Operation(summary = "마일리지 정책 미리보기", description = "선택한 프로그램 유형(programTypeCodeId)에 매핑되는 현재 활성 마일리지 정책을 실시간으로 조회합니다. 매핑되는 정책이 없으면 관련 필드가 비어 내려갑니다.")
+    @GetMapping("/mileage-policy-preview")
+    public ApiResponse<ProgramMileagePolicyPreviewResponseDTO> previewMileagePolicy(
+            @RequestParam(required = false) Integer programTypeCodeId) {
+        return ApiResponse.ok(programService.previewMileagePolicy(programTypeCodeId));
+    }
+
     @Operation(summary = "프로그램 상세 조회", description = "담당 프로그램의 상세정보, 회차 목록, 수정/삭제 가능 여부를 조회합니다 (등록자 본인만 가능)")
     @GetMapping("/{programId}")
     public ApiResponse<ProgramStaffDetailResponseDTO> getDetail(
             @PathVariable Integer programId,
             @AuthenticationPrincipal AuthUser authUser) {
-        return ApiResponse.ok(programService.getMyDetail(programId, authUser.getId()));
+        return ApiResponse.ok(programService.getMyDetail(programId, authUser.getId(), authUser.getDepartmentCodeId()));
     }
 
     @Operation(summary = "프로그램 수정", description = "모집중 상태의 비교과 프로그램을 전체 필드 수정합니다 (등록자 본인만 가능)")

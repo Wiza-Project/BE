@@ -1,7 +1,7 @@
 package com.gnagnoohc.scms.domain.counsel.repository;
 
-import com.gnagnoohc.scms.domain.counsel.dto.CounselingScheduleAvailabilityResponse;
-import com.gnagnoohc.scms.domain.counsel.dto.CounselorScheduleResponse;
+import com.gnagnoohc.scms.domain.counsel.dto.response.CounselingScheduleAvailabilityResponse;
+import com.gnagnoohc.scms.domain.counsel.dto.response.CounselorScheduleResponse;
 import com.gnagnoohc.scms.domain.counsel.entity.CounselingSchedule;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -31,7 +31,7 @@ public interface CounselingScheduleRepository extends JpaRepository<CounselingSc
      * hasReservation과 같은 LEFT JOIN 결과를 재사용하므로 건당 추가 쿼리가 생기지 않는다.
      */
     @Query("""
-            select new com.gnagnoohc.scms.domain.counsel.dto.CounselorScheduleResponse(
+            select new com.gnagnoohc.scms.domain.counsel.dto.response.CounselorScheduleResponse(
                 schedule.counselingScheduleId,
                 counselingType.counselingTypeId,
                 counselor.userId,
@@ -81,7 +81,7 @@ public interface CounselingScheduleRepository extends JpaRepository<CounselingSc
      * 영향을 받지 않고 기존처럼 활성 DIRECT 전체가 노출된다.
      */
     @Query("""
-            select new com.gnagnoohc.scms.domain.counsel.dto.CounselingScheduleAvailabilityResponse(
+            select new com.gnagnoohc.scms.domain.counsel.dto.response.CounselingScheduleAvailabilityResponse(
                 schedule.counselingScheduleId,
                 counselor.userName,
                 department.codeName,
