@@ -2,12 +2,14 @@ package com.gnagnoohc.scms.domain.mileage.repository;
 
 import com.gnagnoohc.scms.domain.mileage.entity.MileageBenefitPolicy;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
 import java.util.Collection;
 import java.util.List;
 
 /** 선택 학기에 적용할 활성 인증·장학 정책을 조회한다. */
-public interface MileageBenefitPolicyRepository extends JpaRepository<MileageBenefitPolicy, Integer> {
+public interface MileageBenefitPolicyRepository extends JpaRepository<MileageBenefitPolicy, Integer>,
+        JpaSpecificationExecutor<MileageBenefitPolicy> {
 
     /** 학생 마일리지 시뮬레이션에서 선택할 수 있는 활성 인증·장학 정책을 조회한다. */
     java.util.Optional<MileageBenefitPolicy> findByBenefitPolicyIdAndActiveTrue(

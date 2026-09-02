@@ -25,8 +25,14 @@ public record MileageDashboardResponse(
     ) {
     }
 
+    /**
+     * annualPoints는 currentSemesterPoints 중 연간(semesterCode='ALL') 정책 거래분이다.
+     * semesterTrend는 ALL 정책 거래를 특정 학기에 임의 배정하지 않고 제외하므로,
+     * semesterTrend의 선택 학기 항목 + annualPoints = currentSemesterPoints 관계가 성립한다.
+     */
     public record Summary(
             BigDecimal currentSemesterPoints,
+            BigDecimal annualPoints,
             BigDecimal cumulativePoints,
             Instant lastPostedAt
     ) {

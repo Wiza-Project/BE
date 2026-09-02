@@ -53,6 +53,9 @@ public class MileageDashboardService {
         BigDecimal currentSemesterPoints = valueOrZero(
                 mileageTransactionRepository.sumPostedPointsByStudentAndPeriod(
                         studentId, academicYear, selectedSemesterCode));
+        BigDecimal annualPoints = valueOrZero(
+                mileageTransactionRepository.sumPostedPointsByStudentAndAcademicYearAllSemester(
+                        studentId, academicYear));
         BigDecimal cumulativePoints = valueOrZero(
                 mileageTransactionRepository.sumPostedPointsByStudent(studentId));
 
@@ -81,6 +84,7 @@ public class MileageDashboardService {
                 new MileageDashboardResponse.Period(academicYear, selectedSemesterCode),
                 new MileageDashboardResponse.Summary(
                         currentSemesterPoints,
+                        annualPoints,
                         cumulativePoints,
                         mileageTransactionRepository.findLastPostedAt(studentId)),
                 benefitProgress,

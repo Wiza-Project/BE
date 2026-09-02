@@ -29,14 +29,20 @@ public class MileageTransactionHistoryService {
 
     private final MileageTransactionRepository mileageTransactionRepository;
 
-    /** 학생 본인의 확정 적립 내역을 10건 단위로 조회한다. */
+    /**
+     * 학생 본인의 확정 적립 내역을 10건 단위로 조회한다.
+     * academicYear가 null이면 학기 필터 없이 전체 이력을, 지정되면 선택 학기(또는 ALL 정책) 거래만 반환한다.
+     */
     public PageResponse<MileageTransactionHistoryResponse.ListItem> getEarnedTransactions(
             Integer studentId,
+            Integer academicYear,
+            String semesterCode,
             Pageable pageable
     ) {
         PageRequest pageRequest = PageRequest.of(pageable.getPageNumber(), PAGE_SIZE);
         return PageResponse.from(
-                mileageTransactionRepository.findEarnedTransactions(studentId, pageRequest)
+                mileageTransactionRepository
+                        .findEarnedTransactions(studentId, academicYear, semesterCode, pageRequest)
                         .map(item -> new MileageTransactionHistoryResponse.ListItem(
                                 item.getTransactionId(),
                                 item.getActivityName(),

@@ -63,6 +63,21 @@ public interface MileageTransactionRepository extends JpaRepository<MileageTrans
             @Param("semesterCode") String semesterCode
     );
 
+    /** 해당 학년도의 연간(ALL) 정책에 귀속된 확정 거래만 합산한다. semesterTrend가 제외하는 부분을 별도로 노출하기 위해 사용한다. */
+    @Query("""
+            select coalesce(sum(t.points), 0)
+            from MileageTransaction t
+            join t.mileagePolicy p
+            where t.student.userId = :studentId
+              and t.transactionStatus = 'POSTED'
+              and p.academicYear = :academicYear
+              and p.semesterCode = 'ALL'
+            """)
+    BigDecimal sumPostedPointsByStudentAndAcademicYearAllSemester(
+            @Param("studentId") Integer studentId,
+            @Param("academicYear") Integer academicYear
+    );
+
     /** 확정일이 없는 기존 거래도 생성일을 사용해 마지막 적립 시점을 반환한다. */
     @Query("""
             select max(coalesce(t.postedAt, t.createdAt))
@@ -172,7 +187,11 @@ public interface MileageTransactionRepository extends JpaRepository<MileageTrans
             Pageable pageable
     );
 
-    /** 학생 본인의 확정 적립 거래 전체를 최신순 페이지로 조회한다. */
+    /**
+     * 학생 본인의 확정 적립 거래를 최신순 페이지로 조회한다.
+     * academicYear가 null이면 학기 필터 없이 전체 이력을 반환하고,
+     * 지정되면 sumPostedPointsByStudentAndPeriod와 동일하게 선택 학기 또는 ALL 정책 거래만 반환한다.
+     */
     @Query(value = """
             select t.mileageTransactionId as transactionId,
                    t.transactionType as transactionType,
@@ -209,18 +228,25 @@ public interface MileageTransactionRepository extends JpaRepository<MileageTrans
             where t.student.userId = :studentId
               and t.transactionType = 'EARN'
               and t.transactionStatus = 'POSTED'
+              and (:academicYear is null
+                   or (p.academicYear = :academicYear and (p.semesterCode = :semesterCode or p.semesterCode = 'ALL')))
             order by coalesce(t.postedAt, t.createdAt) desc,
                      t.mileageTransactionId desc
             """,
             countQuery = """
                     select count(t)
                     from MileageTransaction t
+                    left join t.mileagePolicy p
                     where t.student.userId = :studentId
                       and t.transactionType = 'EARN'
                       and t.transactionStatus = 'POSTED'
+                      and (:academicYear is null
+                           or (p.academicYear = :academicYear and (p.semesterCode = :semesterCode or p.semesterCode = 'ALL')))
                     """)
     Page<TransactionHistoryProjection> findEarnedTransactions(
             @Param("studentId") Integer studentId,
+            @Param("academicYear") Integer academicYear,
+            @Param("semesterCode") String semesterCode,
             Pageable pageable
     );
 
