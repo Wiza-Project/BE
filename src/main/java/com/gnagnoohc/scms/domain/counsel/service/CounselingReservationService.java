@@ -1,10 +1,10 @@
 package com.gnagnoohc.scms.domain.counsel.service;
 
-import com.gnagnoohc.scms.domain.counsel.dto.CounselingReservationCancelRequest;
-import com.gnagnoohc.scms.domain.counsel.dto.CounselingReservationDetailResponse;
-import com.gnagnoohc.scms.domain.counsel.dto.CounselingReservationRequest;
-import com.gnagnoohc.scms.domain.counsel.dto.CounselingReservationResponse;
-import com.gnagnoohc.scms.domain.counsel.dto.CounselingReservationScheduleChangeRequest;
+import com.gnagnoohc.scms.domain.counsel.dto.request.CounselingReservationCancelRequest;
+import com.gnagnoohc.scms.domain.counsel.dto.response.CounselingReservationDetailResponse;
+import com.gnagnoohc.scms.domain.counsel.dto.request.CounselingReservationRequest;
+import com.gnagnoohc.scms.domain.counsel.dto.response.CounselingReservationResponse;
+import com.gnagnoohc.scms.domain.counsel.dto.request.CounselingReservationScheduleChangeRequest;
 import com.gnagnoohc.scms.domain.counsel.entity.CounselingAssignment;
 import com.gnagnoohc.scms.domain.counsel.entity.CounselingReservation;
 import com.gnagnoohc.scms.domain.counsel.entity.CounselingSchedule;

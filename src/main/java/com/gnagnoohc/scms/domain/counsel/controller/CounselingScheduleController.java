@@ -1,8 +1,8 @@
 package com.gnagnoohc.scms.domain.counsel.controller;
 
-import com.gnagnoohc.scms.domain.counsel.dto.CounselingScheduleRequest;
-import com.gnagnoohc.scms.domain.counsel.dto.CounselingScheduleResponse;
-import com.gnagnoohc.scms.domain.counsel.dto.CounselorScheduleResponse;
+import com.gnagnoohc.scms.domain.counsel.dto.request.CounselingScheduleRequest;
+import com.gnagnoohc.scms.domain.counsel.dto.response.CounselingScheduleResponse;
+import com.gnagnoohc.scms.domain.counsel.dto.response.CounselorScheduleResponse;
 import com.gnagnoohc.scms.domain.counsel.service.CounselingScheduleService;
 import com.gnagnoohc.scms.global.common.dto.ApiResponse;
 import com.gnagnoohc.scms.global.security.AuthUser;

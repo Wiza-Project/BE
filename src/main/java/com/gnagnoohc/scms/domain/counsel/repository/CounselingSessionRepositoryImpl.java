@@ -1,6 +1,6 @@
 package com.gnagnoohc.scms.domain.counsel.repository;
 
-import com.gnagnoohc.scms.domain.counsel.dto.CounselingSessionRow;
+import com.gnagnoohc.scms.domain.counsel.dto.projection.CounselingSessionRow;
 import com.gnagnoohc.scms.domain.counsel.entity.QCounselingAssignment;
 import com.gnagnoohc.scms.domain.counsel.entity.QCounselingReservation;
 import com.gnagnoohc.scms.domain.counsel.entity.QCounselingSession;

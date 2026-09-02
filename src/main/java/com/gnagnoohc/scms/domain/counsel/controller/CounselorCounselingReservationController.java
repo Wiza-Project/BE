@@ -1,10 +1,10 @@
 package com.gnagnoohc.scms.domain.counsel.controller;
 
-import com.gnagnoohc.scms.domain.counsel.dto.CounselorPendingReservationResponse;
-import com.gnagnoohc.scms.domain.counsel.dto.CounselorProxyReservationRequest;
-import com.gnagnoohc.scms.domain.counsel.dto.CounselorReservationDecisionResponse;
-import com.gnagnoohc.scms.domain.counsel.dto.CounselorReservationDetailResponse;
-import com.gnagnoohc.scms.domain.counsel.dto.CounselorReservationRejectRequest;
+import com.gnagnoohc.scms.domain.counsel.dto.response.CounselorPendingReservationResponse;
+import com.gnagnoohc.scms.domain.counsel.dto.request.CounselorProxyReservationRequest;
+import com.gnagnoohc.scms.domain.counsel.dto.response.CounselorReservationDecisionResponse;
+import com.gnagnoohc.scms.domain.counsel.dto.response.CounselorReservationDetailResponse;
+import com.gnagnoohc.scms.domain.counsel.dto.request.CounselorReservationRejectRequest;
 import com.gnagnoohc.scms.domain.counsel.service.CounselorReservationService;
 import com.gnagnoohc.scms.global.common.dto.ApiResponse;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;

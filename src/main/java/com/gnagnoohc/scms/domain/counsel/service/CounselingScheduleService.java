@@ -1,9 +1,9 @@
 package com.gnagnoohc.scms.domain.counsel.service;
 
-import com.gnagnoohc.scms.domain.counsel.dto.CounselingScheduleRequest;
-import com.gnagnoohc.scms.domain.counsel.dto.CounselingScheduleAvailabilityResponse;
-import com.gnagnoohc.scms.domain.counsel.dto.CounselingScheduleResponse;
-import com.gnagnoohc.scms.domain.counsel.dto.CounselorScheduleResponse;
+import com.gnagnoohc.scms.domain.counsel.dto.request.CounselingScheduleRequest;
+import com.gnagnoohc.scms.domain.counsel.dto.response.CounselingScheduleAvailabilityResponse;
+import com.gnagnoohc.scms.domain.counsel.dto.response.CounselingScheduleResponse;
+import com.gnagnoohc.scms.domain.counsel.dto.response.CounselorScheduleResponse;
 import com.gnagnoohc.scms.domain.counsel.entity.CounselingSchedule;
 import com.gnagnoohc.scms.domain.counsel.entity.CounselingType;
 import com.gnagnoohc.scms.domain.counsel.repository.CounselUserRepository;

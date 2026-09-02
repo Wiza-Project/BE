@@ -1,9 +1,9 @@
 package com.gnagnoohc.scms.domain.counsel.service;
 
-import com.gnagnoohc.scms.domain.counsel.dto.CounselingPublicResultHistoryResponse;
-import com.gnagnoohc.scms.domain.counsel.dto.CounselorCounselingPublicResultResponse;
-import com.gnagnoohc.scms.domain.counsel.dto.StudentCounselingPublicResultResponse;
-import com.gnagnoohc.scms.domain.counsel.dto.StudentCounselingPublicResultRow;
+import com.gnagnoohc.scms.domain.counsel.dto.response.CounselingPublicResultHistoryResponse;
+import com.gnagnoohc.scms.domain.counsel.dto.response.CounselorCounselingPublicResultResponse;
+import com.gnagnoohc.scms.domain.counsel.dto.response.StudentCounselingPublicResultResponse;
+import com.gnagnoohc.scms.domain.counsel.dto.projection.StudentCounselingPublicResultRow;
 import com.gnagnoohc.scms.domain.counsel.entity.CounselingAssignment;
 import com.gnagnoohc.scms.domain.counsel.entity.CounselingPublicResult;
 import com.gnagnoohc.scms.domain.counsel.entity.CounselingReservation;

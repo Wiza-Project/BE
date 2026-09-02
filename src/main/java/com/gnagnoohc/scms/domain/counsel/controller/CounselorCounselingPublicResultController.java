@@ -1,9 +1,9 @@
 package com.gnagnoohc.scms.domain.counsel.controller;
 
-import com.gnagnoohc.scms.domain.counsel.dto.CounselingPublicResultCorrectionRequest;
-import com.gnagnoohc.scms.domain.counsel.dto.CounselingPublicResultHistoryResponse;
-import com.gnagnoohc.scms.domain.counsel.dto.CounselingPublicResultSaveRequest;
-import com.gnagnoohc.scms.domain.counsel.dto.CounselorCounselingPublicResultResponse;
+import com.gnagnoohc.scms.domain.counsel.dto.request.CounselingPublicResultCorrectionRequest;
+import com.gnagnoohc.scms.domain.counsel.dto.response.CounselingPublicResultHistoryResponse;
+import com.gnagnoohc.scms.domain.counsel.dto.request.CounselingPublicResultSaveRequest;
+import com.gnagnoohc.scms.domain.counsel.dto.response.CounselorCounselingPublicResultResponse;
 import com.gnagnoohc.scms.domain.counsel.service.CounselingPublicResultService;
 import com.gnagnoohc.scms.global.common.dto.ApiResponse;
 import com.gnagnoohc.scms.global.security.AuthUser;
