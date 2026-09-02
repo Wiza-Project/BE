@@ -3,9 +3,9 @@ package com.gnagnoohc.scms.domain.academic.dto;
 import java.time.LocalDate;
 
 /**
- * 교직원 학생 목록(GET /api/admin/students) 한 행.
+ * 교직원 학생 목록(GET /api/staff/students) 한 행.
  *
- * <p>{@code userId}는 상세 조회(GET /api/admin/students/{studentId}) 호출에 쓰는 내부 PK고,
+ * <p>{@code userId}는 상세 조회(GET /api/staff/students/{studentId}) 호출에 쓰는 내부 PK고,
  * {@code studentId}는 화면에 보여주는 학번({@code app_user.university_no})이다 — 이름이
  * 비슷해 헷갈리기 쉬워 둘 다 명시적으로 내려준다.</p>
  *

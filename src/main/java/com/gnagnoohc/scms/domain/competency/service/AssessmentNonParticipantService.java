@@ -1,7 +1,7 @@
 package com.gnagnoohc.scms.domain.competency.service;
 
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentNonParticipantNotifyResponse;
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentNonParticipantResponse;
+import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentNonParticipantNotifyResponse;
+import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentNonParticipantResponse;
 import com.gnagnoohc.scms.domain.competency.entity.AssessmentRound;
 import com.gnagnoohc.scms.domain.competency.repository.AssessmentNonParticipantQueryRepository;
 import com.gnagnoohc.scms.domain.competency.repository.AssessmentRoundRepository;
@@ -46,9 +46,11 @@ public class AssessmentNonParticipantService {
                 assessmentNonParticipantQueryRepository.findNonParticipants(roundId, round.getTargetCondition(), pageable));
     }
 
-    // 요청 바디의 userIds를 그대로 신뢰하지 않고, GET 목록 조회와 동일한 기준(TargetConditionInterpreter
-    // + submittedAt IS NULL)으로 다시 구한 실제 미응시자 집합과 교집합만 발송 대상으로 삼는다 —
-    // 그래야 화면에 보이던 명단과 실제 발송 대상이 항상 일치한다.
+    /**
+     * 요청 바디의 userIds를 그대로 신뢰하지 않고, GET 목록 조회와 동일한 기준(TargetConditionInterpreter
+     * + submittedAt IS NULL)으로 다시 구한 실제 미응시자 집합과 교집합만 발송 대상으로 삼는다 —
+     * 그래야 화면에 보이던 명단과 실제 발송 대상이 항상 일치한다.
+     */
     public AssessmentNonParticipantNotifyResponse notify(Integer roundId, List<Integer> requestedUserIds) {
         AssessmentRound round = assessmentRoundRepository.findById(roundId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ASSESSMENT_ROUND_NOT_FOUND));

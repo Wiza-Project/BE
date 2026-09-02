@@ -1,6 +1,6 @@
 package com.gnagnoohc.scms.domain.competency.controller;
 
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentAttendanceResponse;
+import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentAttendanceResponse;
 import com.gnagnoohc.scms.domain.competency.service.AssessmentAttendanceService;
 import com.gnagnoohc.scms.global.common.dto.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "AssessmentAttendance", description = "진단 응시현황 조회")
 @RestController
-@RequestMapping("/api/admin/assessment-rounds")
+@RequestMapping("/api/staff/assessment-rounds")
 @RequiredArgsConstructor
 public class AssessmentAttendanceController {
 

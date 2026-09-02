@@ -1,9 +1,9 @@
 package com.gnagnoohc.scms.domain.competency.controller;
 
-import com.gnagnoohc.scms.domain.competency.dto.CompetencyActiveStatusRequest;
-import com.gnagnoohc.scms.domain.competency.dto.CompetencyDisplayOrderRequest;
-import com.gnagnoohc.scms.domain.competency.dto.CompetencyRegisterRequest;
-import com.gnagnoohc.scms.domain.competency.dto.CompetencyResponse;
+import com.gnagnoohc.scms.domain.competency.dto.request.CompetencyActiveStatusRequest;
+import com.gnagnoohc.scms.domain.competency.dto.request.CompetencyDisplayOrderRequest;
+import com.gnagnoohc.scms.domain.competency.dto.request.CompetencyRegisterRequest;
+import com.gnagnoohc.scms.domain.competency.dto.response.CompetencyResponse;
 import com.gnagnoohc.scms.domain.competency.service.CompetencyService;
 import com.gnagnoohc.scms.global.common.dto.ApiResponse;
 import com.gnagnoohc.scms.global.security.AuthUser;
@@ -24,7 +24,7 @@ import java.util.List;
 
 @Tag(name = "Competency", description = "핵심역량 관리")
 @RestController
-@RequestMapping("/api/admin/competencies")
+@RequestMapping("/api/staff/competencies")
 @RequiredArgsConstructor
 public class CompetencyController {
 

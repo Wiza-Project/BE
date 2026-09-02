@@ -1,7 +1,7 @@
 package com.gnagnoohc.scms.domain.competency.controller;
 
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentRoundRequest;
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentRoundResponse;
+import com.gnagnoohc.scms.domain.competency.dto.request.AssessmentRoundRequest;
+import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentRoundResponse;
 import com.gnagnoohc.scms.domain.competency.service.AssessmentRoundService;
 import com.gnagnoohc.scms.global.common.dto.ApiResponse;
 import com.gnagnoohc.scms.global.security.AuthUser;
@@ -22,7 +22,7 @@ import java.util.List;
 
 @Tag(name = "AssessmentRound", description = "진단 회차 관리")
 @RestController
-@RequestMapping("/api/admin/assessment-rounds")
+@RequestMapping("/api/staff/assessment-rounds")
 @RequiredArgsConstructor
 public class AssessmentRoundController {
 

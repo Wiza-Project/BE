@@ -9,9 +9,11 @@ import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 
-// AssessmentResponseService(응답 저장/이어하기)와 AssessmentSubmissionService(제출)가 공통으로 쓰는
-// attempt 접근 권한·상태 검증 규칙. 두 서비스에 각각 복붙돼 있던 걸 여기로 모았다 — 정책이 바뀌면
-// 여기 한 곳만 고치면 두 엔드포인트에 동시에 반영된다.
+/**
+ * AssessmentResponseService(응답 저장/이어하기)와 AssessmentSubmissionService(제출)가 공통으로 쓰는
+ * attempt 접근 권한·상태 검증 규칙. 두 서비스에 각각 복붙돼 있던 걸 여기로 모았다 — 정책이 바뀌면
+ * 여기 한 곳만 고치면 두 엔드포인트에 동시에 반영된다.
+ */
 @Component
 @RequiredArgsConstructor
 public class AssessmentAttemptAccessGuard {

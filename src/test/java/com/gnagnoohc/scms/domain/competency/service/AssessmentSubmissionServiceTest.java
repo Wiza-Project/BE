@@ -3,7 +3,7 @@ package com.gnagnoohc.scms.domain.competency.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentSubmitResponse;
+import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentSubmitResponse;
 import com.gnagnoohc.scms.domain.competency.entity.AssessmentAttempt;
 import com.gnagnoohc.scms.domain.competency.entity.AssessmentQuestion;
 import com.gnagnoohc.scms.domain.competency.entity.AssessmentResponse;

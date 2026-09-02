@@ -1,8 +1,8 @@
 package com.gnagnoohc.scms.domain.competency.controller;
 
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentAttemptResponse;
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentIntroResponse;
-import com.gnagnoohc.scms.domain.competency.dto.StudentAssessmentRoundResponse;
+import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentAttemptResponse;
+import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentIntroResponse;
+import com.gnagnoohc.scms.domain.competency.dto.response.StudentAssessmentRoundResponse;
 import com.gnagnoohc.scms.domain.competency.service.AssessmentIntroService;
 import com.gnagnoohc.scms.domain.competency.service.StudentAssessmentRoundService;
 import com.gnagnoohc.scms.global.common.dto.ApiResponse;

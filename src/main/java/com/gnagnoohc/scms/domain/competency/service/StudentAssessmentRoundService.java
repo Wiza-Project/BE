@@ -1,6 +1,6 @@
 package com.gnagnoohc.scms.domain.competency.service;
 
-import com.gnagnoohc.scms.domain.competency.dto.StudentAssessmentRoundResponse;
+import com.gnagnoohc.scms.domain.competency.dto.response.StudentAssessmentRoundResponse;
 import com.gnagnoohc.scms.domain.competency.entity.AssessmentAttempt;
 import com.gnagnoohc.scms.domain.competency.entity.AssessmentRound;
 import com.gnagnoohc.scms.domain.competency.repository.AssessmentAttemptRepository;
@@ -20,10 +20,12 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-// 학생 진단 안내 화면의 "응시 가능한 회차" 목록. 프론트가 회차 ID를 하드코딩하지 않도록,
-// 응시기간 안이면서 대상 조건에 맞는 회차만 골라 내려준다.
-//
-// 회차 수(N)와 무관하게 쿼리는 고정 4개다: 열린 회차 목록 + 학적 스냅샷 1회 + 문항 수 batch + 내 attempt batch.
+/**
+ * 학생 진단 안내 화면의 "응시 가능한 회차" 목록. 프론트가 회차 ID를 하드코딩하지 않도록,
+ * 응시기간 안이면서 대상 조건에 맞는 회차만 골라 내려준다.
+ *
+ * <p>회차 수(N)와 무관하게 쿼리는 고정 4개다: 열린 회차 목록 + 학적 스냅샷 1회 + 문항 수 batch + 내 attempt batch.
+ */
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
