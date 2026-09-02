@@ -1,6 +1,6 @@
 package com.gnagnoohc.scms.domain.competency.repository;
 
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentGroupAxis;
+import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentGroupAxis;
 import com.querydsl.core.types.Projections;
 import com.querydsl.core.types.dsl.StringExpression;
 import com.querydsl.jpa.impl.JPAQueryFactory;
@@ -15,9 +15,11 @@ import static com.gnagnoohc.scms.domain.competency.entity.QAssessmentAttempt.ass
 import static com.gnagnoohc.scms.domain.competency.entity.QAssessmentScore.assessmentScore;
 import static com.gnagnoohc.scms.domain.user.entity.QAppUser.appUser;
 
-// SCR-A06 역량별 분포·집단별 비교(#14). assessment_score를 (집단축, competency_id)로 GROUP BY하는
-// 같은 쿼리라 그룹 축을 파라미터로 받는 메서드 하나로 구현한다(기획서·개발순서_브랜치.md 근거,
-// 두 화면을 따로 구현하면 축 순서가 어긋날 위험이 있어 BE 티켓 자체를 나누지 않기로 함).
+/**
+ * 역량별 분포·집단별 비교. assessment_score를 (집단축, competency_id)로 GROUP BY하는
+ * 같은 쿼리라 그룹 축을 파라미터로 받는 메서드 하나로 구현한다 — 두 화면을 따로 구현하면
+ * 축 순서가 어긋날 위험이 있어서다.
+ */
 @Repository
 @RequiredArgsConstructor
 public class AssessmentDistributionQueryRepository {
@@ -64,9 +66,11 @@ public class AssessmentDistributionQueryRepository {
                 .fetch();
     }
 
-    // assessment_score는 제출 트랜잭션에서 attempt당 역량별로 한 행씩만 생성되므로(AssessmentSubmissionService),
-    // respondentCount(=이 (그룹,역량) 조합의 행 수)는 같은 그룹 내 모든 역량에서 항상 동일하다 —
-    // 서비스 계층이 그룹당 값을 조립할 때 어느 역량의 값을 가져와도 무방하다.
+    /**
+     * assessment_score는 제출 트랜잭션에서 attempt당 역량별로 한 행씩만 생성되므로(AssessmentSubmissionService),
+     * respondentCount(=이 (그룹,역량) 조합의 행 수)는 같은 그룹 내 모든 역량에서 항상 동일하다 —
+     * 서비스 계층이 그룹당 값을 조립할 때 어느 역량의 값을 가져와도 무방하다.
+     */
     public record GroupCompetencyAggregate(
             String groupKey,
             String groupLabel,

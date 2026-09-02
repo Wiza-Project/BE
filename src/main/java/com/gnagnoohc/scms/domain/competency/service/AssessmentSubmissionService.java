@@ -1,6 +1,6 @@
 package com.gnagnoohc.scms.domain.competency.service;
 
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentSubmitResponse;
+import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentSubmitResponse;
 import com.gnagnoohc.scms.domain.competency.entity.AssessmentAttempt;
 import com.gnagnoohc.scms.domain.competency.entity.AssessmentResponse;
 import com.gnagnoohc.scms.domain.competency.entity.AssessmentRound;
@@ -34,6 +34,7 @@ public class AssessmentSubmissionService {
     private final AssessmentRoundRepository assessmentRoundRepository;
     private final AssessmentScoreRepository assessmentScoreRepository;
     private final AssessmentScoreCalculator assessmentScoreCalculator;
+    private final AssessmentResultReadyEventPublisher assessmentResultReadyEventPublisher;
 
     public AssessmentSubmitResponse submit(Integer attemptId, Integer studentId) {
         AssessmentAttempt attempt = assessmentAttemptAccessGuard.getOwnAttempt(attemptId, studentId);
@@ -43,6 +44,12 @@ public class AssessmentSubmissionService {
         Integer roundId = attempt.getAssessmentRound().getAssessmentRoundId();
         List<AssessmentRoundQuestion> roundQuestions =
                 assessmentRoundQuestionRepository.findByAssessmentRound_AssessmentRoundIdOrderByDisplayOrderAsc(roundId);
+
+        // 문항이 하나도 매핑되지 않은 회차는 채점 대상이 없어 결과를 만들 수 없다.
+        // assertAllAnswered는 미응답 문항이 없다는 이유로 공허하게 통과하므로 여기서 먼저 막는다.
+        if (roundQuestions.isEmpty()) {
+            throw new BusinessException(ErrorCode.ASSESSMENT_ROUND_NO_QUESTIONS);
+        }
 
         Map<Integer, BigDecimal> selectedValuesByQuestionId = assessmentResponseRepository.findByAttempt_AttemptId(attemptId)
                 .stream()
@@ -87,6 +94,10 @@ public class AssessmentSubmissionService {
         }
 
         attempt.markScored();
+
+        // 이력서 연동용 결과 준비 이벤트를 제출 트랜잭션 안에서 발행한다. 취창업은 AFTER_COMMIT로 구독하므로
+        // 취창업 리스너 실패가 이 제출을 롤백하지 않는다. 방금 계산한 점수 리스트를 그대로 넘겨 재조회를 피한다.
+        assessmentResultReadyEventPublisher.publishFromSubmit(attempt, scores);
 
         List<AssessmentSubmitResponse.CompetencyScore> scoreDtos = scores.stream()
                 .map(s -> new AssessmentSubmitResponse.CompetencyScore(

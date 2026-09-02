@@ -20,12 +20,13 @@ import org.springframework.web.cors.CorsConfigurationSource;
 
 /**
  * ── 권한 설계 메모 ───────────────────────────────────────────────
- * 이 시스템은 사용자 유형이 4종(학생/교직원/상담사/기업체)이고,
- * 같은 교직원이라도 소속 부서에 따라 할 수 있는 일이 다릅니다.
+ * 이 시스템의 사용자 유형은 학생·교직원·관리자 3종이며, 화면은 학생·교직원
+ * 포털만 제공합니다. 역할은 학생(SD100), 교직원(ST100)·교수(ST300)·상담사(ST200),
+ * 관리자(AD100)로 구분합니다.
  *
  * 그래서 2단 구조로 갑니다.
  *   1단계: URL 패턴 + UserType   → 이 파일에서 hasRole 로 거름
- *   2단계: 부서(Department) 판정 → 서비스 계층에서 Department 의 canXxx() 로 검사
+ *   2단계: 부서(CommonCode) 판정 → 서비스 계층에서 부서 코드로 검사
  *
  * URL 패턴에 부서까지 욱여넣으면 규칙이 폭발합니다. 2단계를 분리하세요.
  */
@@ -76,11 +77,16 @@ public class SecurityConfig {
                 // 상담사 전용 (상담일정 등록/확정/결과등록). role_code는 ST200(카운셀러) — user_role 명명 규칙 확정본.
                 .requestMatchers("/api/counselors/**").hasRole("ST200")
 
-                // 기업체 전용 (구인신청)
-                .requestMatchers("/api/companies/**").hasRole("COMPANY")
+                // 기업체는 현재 사용자 유형·포털 범위에서 제외한다. 향후 같은 경로의 API가
+                // 실수로 추가돼도 일반 인증 사용자에게 노출되지 않게 명시적으로 차단한다.
+                .requestMatchers("/api/companies/**").denyAll()
 
-                // 교직원 관리 화면 (부서 판정은 서비스 계층에서 추가로 수행)
-                .requestMatchers("/api/admin/**").hasRole("STAFF")
+                // 관리자 전용 포털·API는 제공하지 않는다. 이전 경로가 일반 인증 사용자에게
+                // 열리지 않도록 명시적으로 차단한다.
+                .requestMatchers("/api/admin/**").denyAll()
+
+                // 교직원 포털 운영 API. 부서 판정은 서비스 계층에서 추가로 수행한다.
+                .requestMatchers("/api/staff/**").hasRole("STAFF")
 
                 .anyRequest().authenticated()
             )

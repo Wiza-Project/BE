@@ -1,6 +1,7 @@
 package com.gnagnoohc.scms.domain.counsel.controller;
 
 import com.gnagnoohc.scms.domain.counsel.dto.CounselorPendingReservationResponse;
+import com.gnagnoohc.scms.domain.counsel.dto.CounselorProxyReservationRequest;
 import com.gnagnoohc.scms.domain.counsel.dto.CounselorReservationDecisionResponse;
 import com.gnagnoohc.scms.domain.counsel.dto.CounselorReservationDetailResponse;
 import com.gnagnoohc.scms.domain.counsel.dto.CounselorReservationRejectRequest;
@@ -12,13 +13,16 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -31,6 +35,22 @@ import org.springframework.web.bind.annotation.RestController;
 public class CounselorCounselingReservationController {
 
     private final CounselorReservationService counselorReservationService;
+
+    /**
+     * 대면·전화로 접수한 학생을 대신해 예약을 생성하고 그 자리에서 즉시 승인·배정·1회기까지 만든다.
+     * 학생·유형·일정 ID는 요청으로 받지만 서버가 소유권·역할범위·정원·동의를 모두 다시 검증하므로
+     * 그대로 신뢰하지 않으며, consentId·counselorId는 요청으로 받지 않는다.
+     */
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    public ApiResponse<CounselorReservationDecisionResponse> createProxyReservation(
+            @Valid @RequestBody CounselorProxyReservationRequest request,
+            @AuthenticationPrincipal AuthUser authUser
+    ) {
+        return ApiResponse.ok(
+                counselorReservationService.createProxyReservation(request, authUser.getId())
+        );
+    }
 
     /**
      * 로그인한 상담사의 승인 대기(REQUESTED) 예약 목록을 조회한다.

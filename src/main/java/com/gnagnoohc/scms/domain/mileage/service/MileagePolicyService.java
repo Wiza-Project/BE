@@ -40,7 +40,7 @@ public class MileagePolicyService {
      * ── "등록(Create)" 기능 ──────────────────────────────────────────────
      *
      * request      : 등록할 정책 내용 (요청 바디에서 옴)
-     * staffId      : 지금 로그인해서 이 요청을 보낸 관리자의 id (인증 정보에서 옴, 클라이언트가 위조 불가) → created_by로 사용
+     * staffId      : 지금 로그인해서 이 요청을 보낸 교직원의 id (인증 정보에서 옴, 클라이언트가 위조 불가) → created_by로 사용
      *
      * version_no는 클라이언트가 정하지 않는다 — 같은 활동유형+학년도+학기 조합 내에서 서버가 자동으로 다음 버전을 채번한다.
      */
@@ -51,6 +51,7 @@ public class MileagePolicyService {
 
         String semesterCode = resolveSemesterCode(request.semesterCode());
         validatePeriod(request.validFrom(), request.validTo());
+        validateExtracurricularPoints(activityType, request.points());
 
         Integer nextVersionNo = policyRepository.findNextVersionNo(
                 activityType.getActivityTypeId(), request.academicYear(), semesterCode);
@@ -122,6 +123,7 @@ public class MileagePolicyService {
         String policyStatus = request.policyStatus() != null ? request.policyStatus() : policy.getPolicyStatus();
 
         validatePeriod(validFrom, validTo);
+        validateExtracurricularPoints(policy.getActivityType(), points);
 
         int updatedRows = policyRepository.updatePolicy(
                 mileagePolicyId, points, maximumPoints, validFrom, validTo, writeJson(duplicateRule), policyStatus);
@@ -140,6 +142,15 @@ public class MileagePolicyService {
     private void validatePeriod(LocalDate validFrom, LocalDate validTo) {
         if (validTo != null && !validFrom.isBefore(validTo)) {
             throw new BusinessException(ErrorCode.MILEAGE_POLICY_INVALID_PERIOD);
+        }
+    }
+
+    private void validateExtracurricularPoints(MileageActivityType activityType, BigDecimal points) {
+        if (ExtracurricularMileagePolicyDefinition.isExtracurricular(activityType)
+                && (points == null || points.compareTo(ExtracurricularMileagePolicyDefinition.POINTS) != 0)) {
+            throw new BusinessException(
+                    ErrorCode.INVALID_INPUT,
+                    "비교과 마일리지 정책은 프로그램 이수 1건당 5점으로만 등록할 수 있습니다.");
         }
     }
 

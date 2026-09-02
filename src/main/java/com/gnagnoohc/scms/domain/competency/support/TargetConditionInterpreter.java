@@ -14,19 +14,21 @@ import java.util.Set;
 
 import static com.gnagnoohc.scms.domain.academic.entity.QStudentAcademicDetail.studentAcademicDetail;
 
-// assessment_round.target_condition(JSONB) 해석기. 응시율·미응시자 조회·백분위 산출 배치가
-// 각자 이 JSON을 파싱하면 세 곳의 대상자 판정이 서로 어긋날 수 있어 여기 한 곳으로 모았다.
-//
-// 인식 키는 grades(학년 배열)·majorCodeIds(학과 공통코드 ID 배열,
-// AcademicRecordQueryRepository.majorCodeIdEq와 같은 기준) 둘뿐이다. 그 외 키는 조용히
-// 무시하지 않고 예외로 실패시킨다 — 무시하면 그 조건이 안 걸린 채로 대상자가 전체 학생으로 넓어진다.
-//
-// 형태 판정(isValidShape/hasUnrecognizedKey)은 AssessmentRoundService(등록·수정)와 여기(저장된
-// 값 해석) 양쪽에서 재사용한다 — 판정을 두 곳에 따로 두면 등록은 통과했는데 조회는 실패하는 식으로
-// 어긋날 수 있어서, 호출부는 실패를 자기 상황의 에러코드로만 변환한다.
-//
-// student_academic_detail은 모든 학생에게 있는 게 아니라 LEFT JOIN 대상이므로, 조건을 하나라도 걸면
-// 학적 상세가 없는 학생은 검증 불가능하다는 의미로 자동 제외된다(의도된 동작).
+/**
+ * assessment_round.target_condition(JSONB) 해석기. 응시율·미응시자 조회·백분위 산출 배치가
+ * 각자 이 JSON을 파싱하면 세 곳의 대상자 판정이 서로 어긋날 수 있어 여기 한 곳으로 모았다.
+ *
+ * <p>인식 키는 grades(학년 배열)·majorCodeIds(학과 공통코드 ID 배열,
+ * AcademicRecordQueryRepository.majorCodeIdEq와 같은 기준) 둘뿐이다. 그 외 키는 조용히
+ * 무시하지 않고 예외로 실패시킨다 — 무시하면 그 조건이 안 걸린 채로 대상자가 전체 학생으로 넓어진다.
+ *
+ * <p>형태 판정(isValidShape/hasUnrecognizedKey)은 AssessmentRoundService(등록·수정)와 여기(저장된
+ * 값 해석) 양쪽에서 재사용한다 — 판정을 두 곳에 따로 두면 등록은 통과했는데 조회는 실패하는 식으로
+ * 어긋날 수 있어서, 호출부는 실패를 자기 상황의 에러코드로만 변환한다.
+ *
+ * <p>student_academic_detail은 모든 학생에게 있는 게 아니라 LEFT JOIN 대상이므로, 조건을 하나라도 걸면
+ * 학적 상세가 없는 학생은 검증 불가능하다는 의미로 자동 제외된다(의도된 동작).
+ */
 @Component
 public class TargetConditionInterpreter {
 
@@ -52,6 +54,72 @@ public class TargetConditionInterpreter {
         return predicate;
     }
 
+    // toPredicate와 동일한 판정을 학생 1명의 학적 스냅샷에 대해 메모리에서 수행한다.
+    // 여러 회차를 한 번에 판정할 때(학생 응시 가능 회차 목록) 회차마다 쿼리를 날리지 않도록 이 오버로드를 쓴다.
+    public boolean matches(JsonNode targetCondition, StudentTargetSnapshot student) {
+        if (targetCondition == null || targetCondition.isNull()) {
+            return true;
+        }
+        if (hasUnrecognizedKey(targetCondition)) {
+            throw new BusinessException(ErrorCode.ASSESSMENT_TARGET_CONDITION_UNSUPPORTED);
+        }
+        if (!isValidShape(targetCondition)) {
+            throw new BusinessException(ErrorCode.ASSESSMENT_TARGET_CONDITION_INVALID_FORMAT);
+        }
+
+        JsonNode gradesNode = targetCondition.get(KEY_GRADES);
+        JsonNode majorCodeIdsNode = targetCondition.get(KEY_MAJOR_CODE_IDS);
+        boolean hasGrades = gradesNode != null && !gradesNode.isNull() && !gradesNode.isEmpty();
+        boolean hasMajorCodeIds =
+                majorCodeIdsNode != null && !majorCodeIdsNode.isNull() && !majorCodeIdsNode.isEmpty();
+        if (!hasGrades && !hasMajorCodeIds) {
+            return true; // 인식되는 조건이 비어 있으면 전체 학생 대상 (toPredicate가 null을 반환하는 경우와 동일)
+        }
+        if (!student.hasAcademicDetail()) {
+            return false; // 조건이 걸린 회차는 학적 상세가 없는 학생을 제외한다 (LEFT JOIN 의미와 동일)
+        }
+        if (hasGrades && !gradeMatches(gradesNode, student.grade())) {
+            return false;
+        }
+        if (hasMajorCodeIds && !majorCodeIdMatches(majorCodeIdsNode, student.majorCodeId())) {
+            return false;
+        }
+        return true;
+    }
+
+    // grade 배열에 1~4 범위를 벗어난 값이 하나라도 섞이면 아무도 매칭되지 않는다(gradeIn의 Expressions.FALSE와 동일).
+    private boolean gradeMatches(JsonNode gradesNode, Integer studentGrade) {
+        List<Integer> grades = new ArrayList<>();
+        for (JsonNode gradeNode : gradesNode) {
+            int grade = gradeNode.asInt();
+            if (grade < 1 || grade > 4) {
+                return false;
+            }
+            grades.add(grade);
+        }
+        return studentGrade != null && grades.contains(studentGrade);
+    }
+
+    private boolean majorCodeIdMatches(JsonNode majorCodeIdsNode, Integer studentMajorCodeId) {
+        if (studentMajorCodeId == null) {
+            return false;
+        }
+        for (JsonNode node : majorCodeIdsNode) {
+            if (node.asInt() == studentMajorCodeId) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // matches()가 회차별 쿼리 없이 판정할 수 있도록 필요한 학생 학적만 담은 스냅샷.
+    // hasAcademicDetail=false면 학적 상세가 없어, 조건이 걸린 회차에서는 항상 제외된다.
+    public record StudentTargetSnapshot(boolean hasAcademicDetail, Integer grade, Integer majorCodeId) {
+        public static StudentTargetSnapshot missing() {
+            return new StudentTargetSnapshot(false, null, null);
+        }
+    }
+
     // grades/majorCodeIds 둘 다 인식하는 키의 전부다. 여기 없는 키가 하나라도 있으면 해석기가
     // 그 조건을 그냥 못 본 척 넘기는 대신 실패시켜야 한다(위 클래스 주석 참고).
     public boolean hasUnrecognizedKey(JsonNode targetCondition) {
@@ -67,13 +135,15 @@ public class TargetConditionInterpreter {
         return false;
     }
 
-    // grades/majorCodeIds가 존재한다면 배열이어야 하고 원소는 전부 int로 안전하게 변환 가능해야
-    // 한다. asInt()는 true→1, 4000.7→4000처럼 정수가 아닌 값도 그럴듯한 숫자로 바꿔버리고,
-    // isIntegralNumber()만으로는 4294971296(2^32+4000)처럼 long 범위 정수가 int로 캐스팅되며
-    // 4000으로 오버플로우되는 것도 못 막는다 — 그래서 canConvertToInt()로 범위까지 확인한다.
-    // FE(회차 등록 화면)는 선택이 없으면 키 자체를 안 보내고 targetCondition을 null로 보낸다
-    // (buildTargetCondition: fGrades.length/fDepts.length 확인 후에만 키를 채움) — 빈 배열이
-    // 실제로 올 일이 없어 조건 생략으로 처리해도 무해하다.
+    /**
+     * grades/majorCodeIds가 존재한다면 배열이어야 하고 원소는 전부 int로 안전하게 변환 가능해야
+     * 한다. asInt()는 true→1, 4000.7→4000처럼 정수가 아닌 값도 그럴듯한 숫자로 바꿔버리고,
+     * isIntegralNumber()만으로는 4294971296(2^32+4000)처럼 long 범위 정수가 int로 캐스팅되며
+     * 4000으로 오버플로우되는 것도 못 막는다 — 그래서 canConvertToInt()로 범위까지 확인한다.
+     * FE(회차 등록 화면)는 선택이 없으면 키 자체를 안 보내고 targetCondition을 null로 보낸다
+     * (buildTargetCondition: fGrades.length/fDepts.length 확인 후에만 키를 채움) — 빈 배열이
+     * 실제로 올 일이 없어 조건 생략으로 처리해도 무해하다.
+     */
     public boolean isValidShape(JsonNode targetCondition) {
         if (targetCondition == null || targetCondition.isNull()) {
             return true;
@@ -105,10 +175,12 @@ public class TargetConditionInterpreter {
         return true;
     }
 
-    // grade는 DB CHECK 제약(1~4)이 있어 범위 밖 값과 일치하는 학생은 존재할 수 없다. 조건이
-    // 아예 없는 것과 범위 밖 값이 섞여 들어온 것을 다르게 취급해야 하므로, 하나라도 범위를
-    // 벗어나면 조건을 빼지 않고 항상 불일치로 고정한다(AcademicRecordQueryRepository.gradeEq와 동일한 근거).
-    // 배열 형태·원소 타입은 isValidShape가 이미 보장하므로 여기서는 다시 검사하지 않는다.
+    /**
+     * grade는 DB CHECK 제약(1~4)이 있어 범위 밖 값과 일치하는 학생은 존재할 수 없다. 조건이
+     * 아예 없는 것과 범위 밖 값이 섞여 들어온 것을 다르게 취급해야 하므로, 하나라도 범위를
+     * 벗어나면 조건을 빼지 않고 항상 불일치로 고정한다(AcademicRecordQueryRepository.gradeEq와 동일한 근거).
+     * 배열 형태·원소 타입은 isValidShape가 이미 보장하므로 여기서는 다시 검사하지 않는다.
+     */
     private BooleanExpression gradeIn(JsonNode gradesNode) {
         if (gradesNode == null || gradesNode.isNull() || gradesNode.isEmpty()) {
             return null;

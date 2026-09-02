@@ -32,6 +32,15 @@ public record ProgramUpdateResponseDTO(
         // 수정된 이수 기준 출석률(%).
         BigDecimal completionRate,
 
+        // 수정된 programTypeCodeId에 자동 매핑된 마일리지 정책 id. 매핑되는 정책이 없으면 null.
+        Integer mileagePolicyId,
+
+        // 매핑된 마일리지 정책의 포인트. 매핑되는 정책이 없으면 null.
+        BigDecimal mileagePoints,
+
+        // 매핑된 마일리지 정책의 활동명. 매핑되는 정책이 없으면 null.
+        String mileageActivityName,
+
         // 수정된 모집 시작 시각.
         Instant recruitmentStartsAt,
 

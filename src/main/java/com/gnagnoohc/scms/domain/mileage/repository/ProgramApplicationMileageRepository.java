@@ -21,8 +21,11 @@ public interface ProgramApplicationMileageRepository extends JpaRepository<Progr
             from ProgramApplication a
             join fetch a.student
             join fetch a.program program
+            join fetch program.programTypeCode
+            join fetch program.competency programCompetency
             left join fetch program.mileagePolicy policy
             left join fetch policy.activityType activityType
+            left join fetch activityType.programTypeCode
             left join fetch activityType.competency
             where a.applicationId = :applicationId
               and a.completionStatus = 'COMPLETED'
@@ -37,8 +40,11 @@ public interface ProgramApplicationMileageRepository extends JpaRepository<Progr
             from ProgramApplication a
             join fetch a.student
             join fetch a.program program
+            join fetch program.programTypeCode
+            join fetch program.competency programCompetency
             left join fetch program.mileagePolicy policy
             left join fetch policy.activityType activityType
+            left join fetch activityType.programTypeCode
             left join fetch activityType.competency
             where a.completionStatus = 'COMPLETED'
               and not exists (
