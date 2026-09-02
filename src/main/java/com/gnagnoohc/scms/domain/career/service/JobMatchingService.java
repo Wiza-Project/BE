@@ -41,7 +41,7 @@ public class JobMatchingService {
      * [학생] 맞춤 추천 채용공고 목록 조회
      * <li>PROFILING 미동의 시: 빈 목록 반환 (FE에서 동의 유도 UI 노출)</li>
      * <li>취업희망조건(NCS 벡터) 미등록 시: 빈 목록 반환 (FE에서 희망조건 설정 유도 UI 노출)</li>
-     * <li>정상 조건 충족 시: 코사인 유사도 Top-10 공고 반환</li>
+     * <li>정상 조건 충족 시: 코사인 유사도 Top-10 공고 반환 (결과 0건 시 최신 활성 공고 Fallback)</li>
      */
     public List<JobPostingSummaryResponseDTO> getRecommendedPostingsForStudent(Integer studentUserId) {
         Instant now = Instant.now();
@@ -58,7 +58,7 @@ public class JobMatchingService {
         // 2. 학생 벡터 조회
         StudentProfile profile = studentProfileRepository.findByUserId(studentUserId).orElse(null);
         if (profile == null || profile.getEmbeddingVector() == null || profile.getEmbeddingVector().length == 0) {
-            log.debug("[JobMatchingService] 학생(userId: {}) 벡터 부재로 기본 공고 반환", studentUserId);
+            log.debug("[JobMatchingService] 학생(userId: {}) 벡터 부재로 빈 공고 반환", studentUserId);
             return List.of();
         }
 
@@ -82,14 +82,7 @@ public class JobMatchingService {
      */
     private List<JobPostingSummaryResponseDTO> getFallbackPostings(Instant now) {
         List<JobPosting> activePostings = jobPostingRepository.findDefaultActivePostingsWithDetails(now);
-        if (activePostings.isEmpty()) {
-            // 마감일 미지정 공고 포함 전체 PUBLISHED 공고 fallback
-            activePostings = jobPostingRepository.findAll().stream()
-                    .filter(jp -> "PUBLISHED".equalsIgnoreCase(jp.getPostingStatus()))
-                    .sorted((a, b) -> b.getJobPostingId().compareTo(a.getJobPostingId()))
-                    .limit(topKMatchLimit)
-                    .toList();
-        }
+
         return activePostings.stream()
                 .limit(topKMatchLimit)
                 .map(this::convertToSummaryDTO)
