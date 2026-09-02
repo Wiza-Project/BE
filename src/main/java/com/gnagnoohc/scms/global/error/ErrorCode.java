@@ -157,6 +157,9 @@ public enum ErrorCode {
     // expectedScheduleId(화면이 기억하던 예약 당시 일정)와 DB의 실제 현재 일정이 달라졌을 때 사용하는
     // 에러코드. 새 일정의 마감·정원 문제(S002)와는 원인이 다르므로 별도 코드로 구분한다.
     RESERVATION_SCHEDULE_CONFLICT(HttpStatus.CONFLICT, "S013", "예약 일정이 이미 변경되었습니다. 최신 예약 정보를 확인해 주세요."),
+    // 활성 버전(STRESS/1) 문항이 11개가 아니거나 번호·선택지 구성이 확정값과 다를 때 사용하는 에러코드.
+    // 불완전한 문항을 학생에게 그대로 내려주지 않기 위해 문항 조회·제출 양쪽에서 이 코드로 통일해 막는다.
+    STRESS_TEST_NOT_AVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "S014", "현재 스트레스 검사를 이용할 수 없습니다."),
 
     // ── 마일리지 ──────────────────────────────────────────────────
     MILEAGE_ITEM_NOT_FOUND(HttpStatus.NOT_FOUND, "M001", "마일리지 항목을 찾을 수 없습니다."),
