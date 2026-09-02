@@ -42,7 +42,8 @@ public class ProgramApplicationStaffController {
             @PathVariable Integer applicationId,
             // 지금 로그인한 운영부서 담당자 정보. 처리자(processedBy)는 이 값으로만 결정한다.
             @AuthenticationPrincipal AuthUser authUser) {
-        return ApiResponse.ok(programApplicationService.approve(programId, applicationId, authUser.getId()));
+        return ApiResponse.ok(programApplicationService.approve(
+                programId, applicationId, authUser.getId(), authUser.getDepartmentCodeId()));
     }
 
     @Operation(summary = "참여 신청 반려", description = "참여 신청을 반려합니다. 반려 사유(reason)는 필수입니다.")
@@ -53,7 +54,7 @@ public class ProgramApplicationStaffController {
             @Valid @RequestBody ProgramApplicationRejectRequestDTO request,
             @AuthenticationPrincipal AuthUser authUser) {
         return ApiResponse.ok(programApplicationService.reject(
-                programId, applicationId, request.reason(), authUser.getId()));
+                programId, applicationId, request.reason(), authUser.getId(), authUser.getDepartmentCodeId()));
     }
 
     @Operation(summary = "참여 신청 목록 조회", description = "프로그램 하나의 전체 신청자를 상태 필터·이름/학번 키워드 검색과 함께 페이지 단위로 조회합니다.")
@@ -64,8 +65,10 @@ public class ProgramApplicationStaffController {
             @RequestParam(required = false) String status,
             // 학생 이름/학번 부분 일치 검색. 생략하면 검색 없이 전체 신청자를 조회한다.
             @RequestParam(required = false) String keyword,
-            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
-        return ApiResponse.ok(programApplicationService.listByProgram(programId, status, keyword, pageable));
+            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable,
+            @AuthenticationPrincipal AuthUser authUser) {
+        return ApiResponse.ok(programApplicationService.listByProgram(
+                programId, status, keyword, pageable, authUser.getId(), authUser.getDepartmentCodeId()));
     }
 
     @Operation(summary = "참여 신청 일괄 승인", description = "선택한 여러 신청 건을 한 번에 승인합니다. 정원 초과 등으로 일부만 실패할 수 있습니다.")
@@ -75,7 +78,7 @@ public class ProgramApplicationStaffController {
             @Valid @RequestBody ProgramApplicationBulkApproveRequestDTO request,
             @AuthenticationPrincipal AuthUser authUser) {
         return ApiResponse.ok(programApplicationService.bulkApprove(
-                programId, request.applicationIds(), authUser.getId()));
+                programId, request.applicationIds(), authUser.getId(), authUser.getDepartmentCodeId()));
     }
 
     @Operation(summary = "참여 신청 일괄 반려", description = "선택한 여러 신청 건을 한 번에 반려합니다. 반려 사유는 모든 건에 공통 적용됩니다.")
@@ -85,6 +88,6 @@ public class ProgramApplicationStaffController {
             @Valid @RequestBody ProgramApplicationBulkRejectRequestDTO request,
             @AuthenticationPrincipal AuthUser authUser) {
         return ApiResponse.ok(programApplicationService.bulkReject(
-                programId, request.applicationIds(), request.reason(), authUser.getId()));
+                programId, request.applicationIds(), request.reason(), authUser.getId(), authUser.getDepartmentCodeId()));
     }
 }
