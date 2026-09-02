@@ -6,9 +6,12 @@ import com.gnagnoohc.scms.domain.career.dto.posting.JobPostingSummaryResponseDTO
 import com.gnagnoohc.scms.domain.career.service.JobPostingService;
 import com.gnagnoohc.scms.global.common.entity.StoredFile;
 import com.gnagnoohc.scms.global.common.helper.FileUploadValidator;
+import com.gnagnoohc.scms.global.common.ncs.NcsEmbeddingSyncRunner;
+import com.gnagnoohc.scms.global.common.ncs.NcsSubcategorySyncRunner;
 import com.gnagnoohc.scms.global.common.repository.FileGroupRepository;
 import com.gnagnoohc.scms.global.common.service.FileGroupService;
 import com.gnagnoohc.scms.global.common.service.FileStorageService;
+import com.gnagnoohc.scms.global.config.LocalDevDataSeeder;
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
 import io.swagger.v3.oas.annotations.Operation;
@@ -42,7 +45,7 @@ import org.springframework.web.bind.annotation.*;
  *    - GET /api/v1/job-postings/{jobPostingId}
  *    - 정책 : 공고 본문, 직무/지역명, 자격요건(JSON), 추천채용 혜택 반환
  * </pre>
- *
+ * // TODO: 파일첨부 분기 0902추가리펙필요, 현재교직원분기의 첨부 - 학생분기의 액박오류는 오늘 내로 리펙예정
  * @author YUN
  */
 @Tag(name = "[학생] 채용공고 API", description = "학생 사용자 전용 채용공고 탐색 및 상세 조회")

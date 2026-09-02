@@ -57,7 +57,7 @@ import java.util.Map;
  * 4. 공고 검수 (승인 / 반려) 처리
  *    - PATCH /api/staff/career/job-postings/{jobPostingId}/review
  *    - Body : JobPostingReviewRequestDTO (reviewStatus, rejectionReason)
- *    - 정책 : 승인 시 즉시 게시(PUBLISHED), 반려 시 사유 필수 기록 및 DRAFT 유지
+ *    - 정책 : 승인 시 즉시 게시 PUBLISHED, 반려 시 사유 필수 기록 및 DRAFT 유지
  *
  * 5. 공고 데이터 삭제
  *    - DELETE /api/staff/career/job-postings/{jobPostingId}
