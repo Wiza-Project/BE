@@ -37,7 +37,7 @@ public class CareerSecurityHelper {
      * <pre>{@code
      * // 컨트롤러 적용 예시:
      * @PreAuthorize("@careerSecurity.isCareerStaff(principal)")
-     * @GetMapping("/admin/career/postings")
+     * @GetMapping("/staff/career/postings")
      * public ApiResponse<...> getList(...) { ... }
      * }</pre>
      *
