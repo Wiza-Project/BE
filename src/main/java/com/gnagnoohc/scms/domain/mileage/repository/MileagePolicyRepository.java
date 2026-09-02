@@ -15,7 +15,6 @@ import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -62,6 +61,40 @@ public interface MileagePolicyRepository extends JpaRepository<MileagePolicy, In
             @Param("asOfDate") LocalDate asOfDate
     );
 
+    /** 외부활동 신청일에 적용되는 활성 정책을 최신 버전부터 조회한다. */
+    @Query("""
+            select p
+            from MileagePolicy p
+            join fetch p.activityType activityType
+            where activityType.activityTypeId = :activityTypeId
+              and activityType.active = true
+              and p.policyStatus = 'ACTIVE'
+              and p.validFrom <= :activityDate
+              and (p.validTo is null or p.validTo >= :activityDate)
+            order by p.versionNo desc
+            """)
+    List<MileagePolicy> findActivePoliciesByActivityTypeOn(
+            @Param("activityTypeId") Integer activityTypeId,
+            @Param("activityDate") LocalDate activityDate
+    );
+
+    /** 학생 외부활동 등록 화면에 표시할 현재 적용 가능한 외부활동 정책을 조회한다. */
+    @Query("""
+            select p
+            from MileagePolicy p
+            join fetch p.activityType activityType
+            where activityType.programTypeCode is null
+              and activityType.competency is not null
+              and upper(activityType.earningRoute) <> 'PROGRAM_COMPLETION'
+              and activityType.active = true
+              and p.policyStatus = 'ACTIVE'
+              and p.points > 0
+              and p.validFrom <= :asOfDate
+              and (p.validTo is null or p.validTo >= :asOfDate)
+            order by activityType.activityName asc, p.academicYear desc, p.versionNo desc
+            """)
+    List<MileagePolicy> findActiveExternalPoliciesOn(@Param("asOfDate") LocalDate asOfDate);
+
     /**
      * 정책 row에 비관적 락을 걸어 조회한다(ExtracurricularProgramRepository.findByIdForUpdate와 동일 패턴).
      * update()의 조회→null-병합→UPDATE 전체를 이 락 아래에서 수행해야, 두 교직원이 같은 정책을
@@ -98,22 +131,4 @@ public interface MileagePolicyRepository extends JpaRepository<MileagePolicy, In
     @EntityGraph(attributePaths = "activityType")
     Page<MileagePolicy> findAll(Specification<MileagePolicy> spec, Pageable pageable);
 
-    /** 학생 시뮬레이션에서 선택할 수 있는 현재 활성 마일리지 활동 정책을 조회한다. */
-    @Query("""
-            select p
-            from MileagePolicy p
-            join fetch p.activityType activityType
-            where p.academicYear = :academicYear
-              and p.semesterCode in :semesterCodes
-              and p.policyStatus = 'ACTIVE'
-              and activityType.active = true
-              and p.validFrom <= :asOfDate
-              and (p.validTo is null or p.validTo >= :asOfDate)
-            order by activityType.activityName asc, p.versionNo desc
-            """)
-    List<MileagePolicy> findSimulationPolicies(
-            @Param("academicYear") Integer academicYear,
-            @Param("semesterCodes") Collection<String> semesterCodes,
-            @Param("asOfDate") LocalDate asOfDate
-    );
 }
