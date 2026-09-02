@@ -42,9 +42,6 @@ public record ProgramUpdateRequestDTO(
         // 이 프로그램과 연결된 핵심역량 id. 필수값.
         @NotNull Integer competencyId,
 
-        // 마일리지 정책 id. 정책이 없는 프로그램도 있을 수 있으므로 선택값(널 허용).
-        Integer mileagePolicyId,
-
         /**
          * 프로그램명. @NotBlank는 null/빈 문자열/공백만 있는 문자열을 모두 막고,
          * @Size(max=200)은 엔티티 컬럼 길이(200자)를 넘지 않도록 미리 검증한다.
