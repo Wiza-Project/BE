@@ -116,6 +116,7 @@ public class JobPostingRepositoryImpl implements JobPostingRepositoryCustom {
                 .leftJoin(jobPosting.ncsCode, ncsCommonCode).fetchJoin()         // ncsCode 필드 참조
                 .leftJoin(jobPosting.regionCode, regionCommonCode).fetchJoin()   // regionCode 필드 참조
                 .where(
+                        postingStatusEq(cond.getPostingStatus()),
                         reviewStatusEq(cond.getReviewStatus()),
                         postingTypeEq(cond.getPostingType()),
                         companyNameContains(cond.getCompanyName())
@@ -129,6 +130,7 @@ public class JobPostingRepositoryImpl implements JobPostingRepositoryCustom {
                 .select(jobPosting.count())
                 .from(jobPosting)
                 .where(
+                        postingStatusEq(cond.getPostingStatus()),
                         reviewStatusEq(cond.getReviewStatus()),
                         postingTypeEq(cond.getPostingType()),
                         companyNameContains(cond.getCompanyName())
@@ -163,5 +165,9 @@ public class JobPostingRepositoryImpl implements JobPostingRepositoryCustom {
 
     private BooleanExpression reviewStatusEq(String reviewStatus) {
         return StringUtils.hasText(reviewStatus) ? jobPosting.reviewStatus.eq(reviewStatus) : null;
+    }
+
+    private BooleanExpression postingStatusEq(String postingStatus) {
+        return StringUtils.hasText(postingStatus) ? jobPosting.postingStatus.eq(postingStatus) : null;
     }
 }
