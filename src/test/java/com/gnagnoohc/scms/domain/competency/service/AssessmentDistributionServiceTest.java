@@ -69,9 +69,9 @@ class AssessmentDistributionServiceTest {
         // 쿼리가 이미 displayOrder ASC로 내려주지만, 정렬이 안 됐다고 가정한 순서로 목을 만들어
         // 서비스가 groupingBy 이후 다시 정렬함을 검증한다.
         List<GroupCompetencyAggregate> rows = List.of(
-                new GroupCompetencyAggregate("3", "3학년", 2, "문제해결", 2, new BigDecimal("70.00"), 10L),
-                new GroupCompetencyAggregate("3", "3학년", 1, "의사소통", 1, new BigDecimal("80.00"), 10L),
-                new GroupCompetencyAggregate("1", "1학년", 1, "의사소통", 1, new BigDecimal("60.00"), 5L)
+                new GroupCompetencyAggregate("3", "3학년", 2, "문제해결", 2, 70.0, 10L),
+                new GroupCompetencyAggregate("3", "3학년", 1, "의사소통", 1, 80.0, 10L),
+                new GroupCompetencyAggregate("1", "1학년", 1, "의사소통", 1, 60.0, 5L)
         );
         when(assessmentDistributionQueryRepository.aggregateByGroupAxis(1, AssessmentGroupAxis.GRADE))
                 .thenReturn(rows);

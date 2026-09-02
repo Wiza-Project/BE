@@ -7,7 +7,6 @@ import com.querydsl.jpa.impl.JPAQueryFactory;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
-import java.math.BigDecimal;
 import java.util.List;
 
 import static com.gnagnoohc.scms.domain.academic.entity.QStudentAcademicDetail.studentAcademicDetail;
@@ -70,6 +69,11 @@ public class AssessmentDistributionQueryRepository {
      * assessment_score는 제출 트랜잭션에서 attempt당 역량별로 한 행씩만 생성되므로(AssessmentSubmissionService),
      * respondentCount(=이 (그룹,역량) 조합의 행 수)는 같은 그룹 내 모든 역량에서 항상 동일하다 —
      * 서비스 계층이 그룹당 값을 조립할 때 어느 역량의 값을 가져와도 무방하다.
+     *
+     * <p>averageScore/respondentCount 타입은 QueryDSL 표현식이 내는 그대로 둔다 — avg()는 Double,
+     * count()는 Long이다. BigDecimal이나 primitive long으로 바꾸면 Projections.constructor가
+     * 이 시그니처에 맞는 생성자를 못 찾아 쿼리 빌드 단계에서 ExpressionException이 난다.
+     * 화면 표시용 BigDecimal 반올림은 서비스가 맡는다.
      */
     public record GroupCompetencyAggregate(
             String groupKey,
@@ -77,7 +81,7 @@ public class AssessmentDistributionQueryRepository {
             Integer competencyId,
             String competencyName,
             Integer displayOrder,
-            BigDecimal averageScore,
-            long respondentCount
+            Double averageScore,
+            Long respondentCount
     ) {}
 }
