@@ -29,6 +29,7 @@ import java.time.Instant;
  * <pre>
  * DRAFT(등록/신청) ──► 교직원 승인 ──► PUBLISHED(게시/학생조회) ──► 기간만료/수동마감 ──► CLOSED(마감)
  * </pre>
+ * <li>공통 파일첨부 기능 연동</li>
  */
 @Entity
 @Getter
