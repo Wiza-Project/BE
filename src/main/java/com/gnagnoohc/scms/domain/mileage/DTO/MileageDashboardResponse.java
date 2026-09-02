@@ -12,7 +12,7 @@ public record MileageDashboardResponse(
         Period period,
         Summary summary,
         List<BenefitProgress> benefitProgress,
-        List<CategorySummary> categoryBreakdown,
+        List<ProgramTypeSummary> programTypeBreakdown,
         List<CompetencySummary> competencyBreakdown,
         List<SemesterTrendSummary> semesterTrend,
         List<TransactionSummary> recentTransactions,
@@ -56,8 +56,8 @@ public record MileageDashboardResponse(
     ) {
     }
 
-    public record CategorySummary(
-            String categoryCode,
+    public record ProgramTypeSummary(
+            String programTypeName,
             BigDecimal points
     ) {
     }

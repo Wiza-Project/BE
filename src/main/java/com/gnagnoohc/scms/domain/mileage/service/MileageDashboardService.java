@@ -61,11 +61,11 @@ public class MileageDashboardService {
 
         PageRequest recentItems = PageRequest.of(0, RECENT_ITEM_LIMIT);
 
-        var categoryBreakdown = mileageTransactionRepository
-                .findCategoryBreakdown(studentId, academicYear, selectedSemesterCode)
+        var programTypeBreakdown = mileageTransactionRepository
+                .findProgramTypeBreakdown(studentId, academicYear, selectedSemesterCode)
                 .stream()
-                .map(item -> new MileageDashboardResponse.CategorySummary(
-                        item.getCategoryCode(), item.getPoints()))
+                .map(item -> new MileageDashboardResponse.ProgramTypeSummary(
+                        item.getProgramTypeName(), item.getPoints()))
                 .toList();
 
         var competencyBreakdown = getCompetencyBreakdown(
@@ -88,7 +88,7 @@ public class MileageDashboardService {
                         cumulativePoints,
                         mileageTransactionRepository.findLastPostedAt(studentId)),
                 benefitProgress,
-                categoryBreakdown,
+                programTypeBreakdown,
                 competencyBreakdown,
                 semesterTrend,
                 recentTransactions,

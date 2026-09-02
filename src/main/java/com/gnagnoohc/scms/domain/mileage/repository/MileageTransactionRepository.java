@@ -107,20 +107,22 @@ public interface MileageTransactionRepository extends JpaRepository<MileageTrans
             @Param("studentId") Integer studentId
     );
 
-    /** 선택 학기의 확정 적립 점수를 핵심역량별로 합산한다. */
+    /** 선택 학기의 확정 적립 점수를 비교과 프로그램 유형별로 합산한다. 외부활동처럼 프로그램 유형이 없는 정책은 제외한다. */
     @Query("""
-            select p.activityType.categoryCode as categoryCode,
+            select pt.codeName as programTypeName,
                    coalesce(sum(t.points), 0) as points
             from MileageTransaction t
             join t.mileagePolicy p
+            join p.activityType activityType
+            join activityType.programTypeCode pt
             where t.student.userId = :studentId
               and t.transactionStatus = 'POSTED'
               and p.academicYear = :academicYear
               and (p.semesterCode = :semesterCode or p.semesterCode = 'ALL')
-            group by p.activityType.categoryCode
+            group by pt.codeName
             order by sum(t.points) desc
             """)
-    List<CategorySummaryProjection> findCategoryBreakdown(
+    List<ProgramTypeSummaryProjection> findProgramTypeBreakdown(
             @Param("studentId") Integer studentId,
             @Param("academicYear") Integer academicYear,
             @Param("semesterCode") String semesterCode
@@ -258,9 +260,9 @@ public interface MileageTransactionRepository extends JpaRepository<MileageTrans
             String transactionStatus
     );
 
-    /** 카테고리별 점수 집계 쿼리의 조회 전용 결과다. */
-    interface CategorySummaryProjection {
-        String getCategoryCode();
+    /** 프로그램 유형별 점수 집계 쿼리의 조회 전용 결과다. */
+    interface ProgramTypeSummaryProjection {
+        String getProgramTypeName();
 
         BigDecimal getPoints();
     }
