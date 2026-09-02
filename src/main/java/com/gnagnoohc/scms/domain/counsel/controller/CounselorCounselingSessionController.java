@@ -1,9 +1,9 @@
 package com.gnagnoohc.scms.domain.counsel.controller;
 
-import com.gnagnoohc.scms.domain.counsel.dto.CounselingSessionCancelRequest;
-import com.gnagnoohc.scms.domain.counsel.dto.CounselingSessionCompleteRequest;
-import com.gnagnoohc.scms.domain.counsel.dto.CounselingSessionCreateRequest;
-import com.gnagnoohc.scms.domain.counsel.dto.CounselingSessionResponse;
+import com.gnagnoohc.scms.domain.counsel.dto.request.CounselingSessionCancelRequest;
+import com.gnagnoohc.scms.domain.counsel.dto.request.CounselingSessionCompleteRequest;
+import com.gnagnoohc.scms.domain.counsel.dto.request.CounselingSessionCreateRequest;
+import com.gnagnoohc.scms.domain.counsel.dto.response.CounselingSessionResponse;
 import com.gnagnoohc.scms.domain.counsel.service.CounselingSessionService;
 import com.gnagnoohc.scms.global.common.dto.ApiResponse;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;

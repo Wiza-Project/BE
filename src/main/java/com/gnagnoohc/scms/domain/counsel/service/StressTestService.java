@@ -1,9 +1,9 @@
 package com.gnagnoohc.scms.domain.counsel.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.gnagnoohc.scms.domain.counsel.dto.StressTestQuestionsResponse;
-import com.gnagnoohc.scms.domain.counsel.dto.StressTestResultResponse;
-import com.gnagnoohc.scms.domain.counsel.dto.StressTestSubmitRequest;
+import com.gnagnoohc.scms.domain.counsel.dto.response.StressTestQuestionsResponse;
+import com.gnagnoohc.scms.domain.counsel.dto.response.StressTestResultResponse;
+import com.gnagnoohc.scms.domain.counsel.dto.request.StressTestSubmitRequest;
 import com.gnagnoohc.scms.domain.counsel.entity.PsychologicalTestQuestion;
 import com.gnagnoohc.scms.domain.counsel.entity.PsychologicalTestResult;
 import com.gnagnoohc.scms.domain.counsel.repository.CounselUserRepository;
