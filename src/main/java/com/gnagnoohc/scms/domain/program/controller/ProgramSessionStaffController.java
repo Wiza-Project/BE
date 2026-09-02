@@ -37,8 +37,11 @@ public class ProgramSessionStaffController {
 
     @Operation(summary = "회차 목록 조회", description = "프로그램에 등록된 회차 목록을 회차 번호 순으로 조회합니다.")
     @GetMapping
-    public ApiResponse<List<ProgramSessionResponseDTO>> listSessions(@PathVariable Integer programId) {
-        return ApiResponse.ok(programSessionService.listSessions(programId));
+    public ApiResponse<List<ProgramSessionResponseDTO>> listSessions(
+            @PathVariable Integer programId,
+            @AuthenticationPrincipal AuthUser authUser) {
+        return ApiResponse.ok(programSessionService.listSessions(
+                programId, authUser.getId(), authUser.getDepartmentCodeId()));
     }
 
     @Operation(summary = "회차 수정", description = "프로그램의 회차(장소 포함)를 수정합니다.")

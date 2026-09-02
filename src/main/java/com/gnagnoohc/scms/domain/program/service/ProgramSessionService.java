@@ -89,9 +89,21 @@ public class ProgramSessionService {
                 request.startsAt(), request.endsAt(), location);
     }
 
-    public List<ProgramSessionResponseDTO> listSessions(Integer programId) {
-        if (!programRepository.existsById(programId)) {
-            throw new BusinessException(ErrorCode.PROGRAM_NOT_FOUND);
+    /**
+     * 운영부서가 프로그램의 회차 목록을 조회한다.
+     *   currentUserId    : 지금 로그인해서 이 요청을 보낸 사용자의 id (인증 정보에서 옴)
+     *   departmentCodeId : 로그인한 사용자가 소속된 부서의 CommonCode PK (인증 정보에서 옴)
+     *                    → updateSession()과 동일하게, 비교과운영부서(D200) 소속 + 프로그램 등록자 본인인지 검증한다.
+     */
+    public List<ProgramSessionResponseDTO> listSessions(Integer programId, Integer currentUserId, Integer departmentCodeId) {
+        ExtracurricularProgram program = programRepository.findById(programId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PROGRAM_NOT_FOUND));
+
+        if (!isOperatingDepartment(departmentCodeId)) {
+            throw new BusinessException(ErrorCode.DEPARTMENT_FORBIDDEN);
+        }
+        if (!program.getManagerUser().getUserId().equals(currentUserId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
         }
 
         return sessionRepository.findByProgram_ProgramIdOrderBySessionNoAsc(programId)
