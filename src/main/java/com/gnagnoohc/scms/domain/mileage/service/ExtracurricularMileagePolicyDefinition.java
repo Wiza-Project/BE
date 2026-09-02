@@ -2,7 +2,6 @@ package com.gnagnoohc.scms.domain.mileage.service;
 
 import com.gnagnoohc.scms.domain.mileage.entity.MileageActivityType;
 
-import java.math.BigDecimal;
 import java.util.List;
 
 /** 비교과 프로그램 유형별 마일리지 정책의 고정된 업무 식별값을 한 곳에서 관리한다. */
@@ -13,7 +12,6 @@ public final class ExtracurricularMileagePolicyDefinition {
     public static final String ACTIVITY_CODE_PREFIX = "EXTRACURRICULAR_";
     public static final String CATEGORY_CODE = "EXTRACURRICULAR";
     public static final String EARNING_ROUTE = "PROGRAM_COMPLETION";
-    public static final BigDecimal POINTS = new BigDecimal("5.00");
 
     private ExtracurricularMileagePolicyDefinition() {
     }
