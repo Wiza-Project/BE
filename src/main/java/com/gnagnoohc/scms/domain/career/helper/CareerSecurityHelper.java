@@ -62,8 +62,8 @@ public class CareerSecurityHelper {
     /**
      * [서비스 비즈니스 로직 전용] 취창업지원과 교직원/관리자 권한 검증 및 사용자 엔티티 반환
      *
-     * <p>서비스 계층 내부에서 권한을 재검증(2차 방어)하고, 승인/반려 심사자 정보 주입 등을 위해 검증 완료된 {@link AppUser} 엔티티를 반환합니다.<br>
-     * 권한이 유효하지 않을 경우 {@link BusinessException} 예외를 즉시 발생시켜 트랜잭션을 차단합니다.</p>
+     * <p>서비스 계층 내부에서 권한을 재검증(2차 방어)하고, 승인/반려 심사자 정보 주입 등을 위해 검증 완료된 {@link AppUser} 엔티티를 반환<br>
+     * 권한이 유효하지 않을 경우 {@link BusinessException} 예외를 즉시 발생시켜 트랜잭션을 차단</p>
      *
      * @param userId 검증할 사용자 식별자 PK ({@code app_user.user_id})
      * @return 인가 검증이 완료된 영속 {@link AppUser} 엔티티
@@ -92,6 +92,7 @@ public class CareerSecurityHelper {
      *
      * <p>도메인 인가 규칙의 단일 진실 공급원(Single Source of Truth) 역할을 수행하며,
      * {@link #isCareerStaff(Object)}와 {@link #validateAndGetCareerStaff(Integer)}에서 공통 호출하는 판별용 로직</p>
+     * 내부 호출 로직으로 사용하므로 public으로 두어도 보안 취약점이 없다고 판단
      *
      * <ul>
      *   <li>부서 코드 일치: {@code user.departmentCode.code == "D400"}</li>

@@ -277,7 +277,7 @@ public class StudentJobRelationService {
 
     /**
      * 학생-채용공고 관계 엔티티를 클라이언트 반환용 응답 DTO로 매핑 변환
-     * 시간 데이터는 공통 시간 유틸리티({@link DateTimeUtils})지정한 KST 오프셋 메소드를 호출-변환 처리
+     * 시간 데이터는 공통 시간 유틸리티({@link DateTimeUtils})지정한 KST 오프셋 메소드를 호출, 변환 처리
      *
      * @param relation 학생-공고 관계 엔티티 원장
      * @return 상세 지원 현황 및 전형 응답 DTO

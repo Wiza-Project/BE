@@ -39,9 +39,9 @@ public class JobMatchingService {
 
     /**
      * [학생] 맞춤 추천 채용공고 목록 조회
-     * - PROFILING 미동의 시: 빈 목록 반환 (FE에서 동의 유도 UI 노출)
-     * - 취업희망조건(NCS 벡터) 미등록 시: 빈 목록 반환 (FE에서 희망조건 설정 유도 UI 노출)
-     * - 정상 조건 충족 시: 코사인 유사도 Top-10 공고 반환
+     * <li>PROFILING 미동의 시: 빈 목록 반환 (FE에서 동의 유도 UI 노출)</li>
+     * <li>취업희망조건(NCS 벡터) 미등록 시: 빈 목록 반환 (FE에서 희망조건 설정 유도 UI 노출)</li>
+     * <li>정상 조건 충족 시: 코사인 유사도 Top-10 공고 반환</li>
      */
     public List<JobPostingSummaryResponseDTO> getRecommendedPostingsForStudent(Integer studentUserId) {
         Instant now = Instant.now();
