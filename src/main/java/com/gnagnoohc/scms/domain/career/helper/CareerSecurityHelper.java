@@ -86,7 +86,6 @@ public class CareerSecurityHelper {
      *
      * <p>도메인 인가 규칙의 단일 진실 공급원(Single Source of Truth) 역할을 수행하며,
      * {@link #isCareerStaff(Object)}와 {@link #validateAndGetCareerStaff(Integer)}에서 공통 호출하는 판별용 로직</p>
-     * 내부 호출 로직으로 사용하므로 public으로 두어도 보안 취약점이 없다고 판단
      *
      * <ul>
      *   <li>부서 코드 일치: {@code user.departmentCode.code == "D400"}</li>

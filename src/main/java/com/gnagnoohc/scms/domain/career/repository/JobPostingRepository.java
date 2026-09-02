@@ -70,7 +70,7 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, Integer>
     );
 
     /**
-     * Fallback용 최신 공고 조회
+     * [Fallback용] 전체 게시(PUBLISHED) 공고 중 최신순 상위 N건 조회
      */
     @Query("SELECT DISTINCT jp FROM JobPosting jp " +
             "JOIN FETCH jp.companyAccount ca " +
