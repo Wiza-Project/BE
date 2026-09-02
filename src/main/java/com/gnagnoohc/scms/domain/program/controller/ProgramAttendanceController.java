@@ -1,7 +1,7 @@
 package com.gnagnoohc.scms.domain.program.controller;
 
-import com.gnagnoohc.scms.domain.program.dto.response.ProgramAttendanceResponseDTO;
-import com.gnagnoohc.scms.domain.program.dto.response.ProgramMyAttendanceResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.attendance.ProgramAttendanceResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.attendance.ProgramMyAttendanceResponseDTO;
 import com.gnagnoohc.scms.domain.program.service.ProgramAttendanceService;
 import com.gnagnoohc.scms.global.common.dto.ApiResponse;
 import com.gnagnoohc.scms.global.security.AuthUser;

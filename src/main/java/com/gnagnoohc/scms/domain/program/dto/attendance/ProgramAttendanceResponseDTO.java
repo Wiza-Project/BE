@@ -1,4 +1,4 @@
-package com.gnagnoohc.scms.domain.program.dto.response;
+package com.gnagnoohc.scms.domain.program.dto.attendance;
 
 import com.gnagnoohc.scms.domain.program.entity.ProgramAttendance;
 

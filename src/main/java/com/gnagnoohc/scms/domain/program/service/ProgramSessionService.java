@@ -1,8 +1,8 @@
 package com.gnagnoohc.scms.domain.program.service;
 
-import com.gnagnoohc.scms.domain.program.dto.request.ProgramSessionRegisterRequestDTO;
-import com.gnagnoohc.scms.domain.program.dto.request.ProgramSessionUpdateRequestDTO;
-import com.gnagnoohc.scms.domain.program.dto.response.ProgramSessionResponseDTO;
+import com.gnagnoohc.scms.domain.program.dto.session.ProgramSessionRegisterRequestDTO;
+import com.gnagnoohc.scms.domain.program.dto.session.ProgramSessionUpdateRequestDTO;
+import com.gnagnoohc.scms.domain.program.dto.session.ProgramSessionResponseDTO;
 import com.gnagnoohc.scms.domain.program.entity.ExtracurricularProgram;
 import com.gnagnoohc.scms.domain.program.entity.ProgramSession;
 import com.gnagnoohc.scms.domain.program.entity.SessionLocationType;

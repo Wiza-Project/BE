@@ -1,6 +1,7 @@
-package com.gnagnoohc.scms.domain.program.dto.request;
+package com.gnagnoohc.scms.domain.program.dto.program;
 
-// 유효성 검사(Validation) 어노테이션들을 사용하기 위해 import 한다.
+import com.gnagnoohc.scms.domain.program.dto.session.ProgramSessionRegisterRequestDTO;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
@@ -12,31 +13,25 @@ import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 // 날짜+시간+시간대를 함께 표현하는 타입(모집/운영 시작·종료 시각에 사용).
 import java.time.Instant;
+import java.util.List;
 
 /**
- * 비교과프로그램 "수정" 요청 DTO. record 키워드로 만들면 필드값이 바뀌지 않는(불변) 데이터 객체가 자동으로 생성된다.
- * PUT 방식이라 등록(register) 때처럼 전체 필드를 한 번에 다시 받는다(일부 필드만 보내는 PATCH 방식이 아님).
+ * 비교과프로그램 "등록" 요청 DTO. record 키워드로 만들면 필드값이 바뀌지 않는(불변) 데이터 객체가 자동으로 생성된다.
+ * 클라이언트(프론트엔드)가 보내는 입력값만 여기에 담는다.
  *
  * 아래 필드에는 일부러 넣지 않은 값들이 있다.
- *   - programId(수정 대상 PK)      : 요청 바디가 아니라 URL 경로(/programs/{programId})로 받는다.
- *   - managerUserId(등록자)        : 이 API로 등록자(소유권)를 바꿀 수 없게 하기 위해 아예 요청 항목에서 뺐다.
- *   - programStatus                : 상태값은 별도의 "상태 변경" 기능에서 다루도록 하고, 이 수정 API에서는 손대지 않는다.
- *
- * fileGroupId를 비워서(null) 보내면 기존 첨부파일이 그대로 유지된다(record 특성상 "키 생략"과
- * "명시적 null"을 구분할 수 없기 때문). 첨부파일을 삭제하려면 fileGroupId는 비워두고
- * clearFileGroup=true를 명시적으로 보내야 한다(MileagePolicyUpdateRequestDTO의 clearValidTo와 동일한 패턴).
+ *   - managerUserId(등록 담당자) : 클라이언트가 마음대로 "이 사람이 등록한 걸로 해줘"라고 위조하지 못하도록,
+ *                                요청 항목에서 빼고 서버가 로그인한 사용자(authUser)의 id로 직접 채운다.
+ *   - programStatus            : 새로 등록되는 프로그램은 항상 "모집중" 상태로 고정되므로 클라이언트 입력을 받지 않는다.
  */
-public record ProgramUpdateRequestDTO(
-        // 첨부파일 그룹 id. 파일이 없을 수도 있으므로 @NotNull을 붙이지 않았다(선택값).
+public record ProgramRegisterRequestDTO(
+        // 첨부파일 그룹 id. 포스터 등 이미지가 없을 수도 있으므로 @NotNull을 붙이지 않았다(선택값).
         Integer fileGroupId,
-
-        // 위 fileGroupId를 비워두고 이 값을 true로 보내면 기존 첨부파일 연결을 해제(삭제)한다.
-        boolean clearFileGroup,
 
         // 운영 단위(부서) 코드 id. 프론트가 드롭다운으로 선택해서 보내야 하는 필수값.
         @NotNull Integer operatingUnitCodeId,
 
-        // 프로그램 유형(분류) 코드 id. 마찬가지로 필수값.
+        // 프로그램 유형(분류) 코드 id. 프론트가 드롭다운으로 선택해서 보내야 하는 필수값.
         @NotNull Integer programTypeCodeId,
 
         // 이 프로그램과 연결된 핵심역량 id. 필수값.
@@ -70,6 +65,14 @@ public record ProgramUpdateRequestDTO(
         @NotNull @Positive Integer capacity,
 
         // 이수 기준 출석률(%). 0~100 사이 값만 허용. 요청에 안 담겨오면(null) 서비스에서 기본값(80)으로 채운다.
-        @DecimalMin("0") @DecimalMax("100") BigDecimal completionRate
+        @DecimalMin("0") @DecimalMax("100") BigDecimal completionRate,
+
+        /**
+         * 이 프로그램의 회차 목록. "최소 1개 이상"은 여기서 @NotEmpty로 막지 않고 서비스 계층(ProgramService.register())에서
+         * 전용 에러 코드(PROGRAM_SESSION_REQUIRED)로 검증한다 — 프론트가 이 케이스만 구분해 안내 모달을 띄워야 하기 때문
+         * (@NotEmpty 위반은 여러 필드 오류가 한 문자열로 합쳐진 범용 400으로 내려가 구분이 어렵다).
+         * 원소 각각의 형식(회차번호/기간 등)은 @Valid로 ProgramSessionRegisterRequestDTO의 제약을 그대로 적용받는다.
+         */
+        @Valid List<@NotNull ProgramSessionRegisterRequestDTO> sessions
 ) {
 }

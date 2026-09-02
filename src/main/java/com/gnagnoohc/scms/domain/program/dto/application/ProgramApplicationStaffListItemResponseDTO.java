@@ -1,4 +1,4 @@
-package com.gnagnoohc.scms.domain.program.dto.response;
+package com.gnagnoohc.scms.domain.program.dto.application;
 
 import com.gnagnoohc.scms.domain.program.entity.ProgramApplication;
 import com.gnagnoohc.scms.domain.program.service.ApplicationStatus;
