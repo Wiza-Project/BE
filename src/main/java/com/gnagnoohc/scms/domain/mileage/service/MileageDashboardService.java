@@ -136,8 +136,8 @@ public class MileageDashboardService {
             BigDecimal cumulativePoints
     ) {
         var benefitPolicies = mileageBenefitPolicyRepository
-                .findByActiveTrueAndAcademicYearAndSemesterCodeInOrderByMinimumPointsAsc(
-                        academicYear, List.of(semesterCode, ALL_SEMESTER_CODE));
+                .findByActiveTrueAndSemesterCodeInOrderByMinimumPointsAsc(
+                        List.of(semesterCode, ALL_SEMESTER_CODE));
 
         if (benefitPolicies.isEmpty()) {
             return List.of();

@@ -49,7 +49,7 @@ public class MileageScholarshipService {
     ) {
         String selectedSemesterCode = validatePeriod(academicYear, semesterCode);
         List<MileageBenefitPolicy> policies = benefitPolicyRepository
-                .findByActiveTrueAndBenefitTypeAndAcademicYearAndSemesterCodeInOrderByMinimumPointsAsc(
+                git .findByActiveTrueAndBenefitTypeAndAcademicYearAndSemesterCodeInOrderByMinimumPointsAsc(
                         SCHOLARSHIP, academicYear, List.of(selectedSemesterCode, ALL_SEMESTER_CODE));
 
         if (policies.isEmpty()) {

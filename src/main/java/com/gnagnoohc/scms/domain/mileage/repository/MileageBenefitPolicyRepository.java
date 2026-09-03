@@ -17,9 +17,8 @@ public interface MileageBenefitPolicyRepository extends JpaRepository<MileageBen
     );
 
     /** 선택 학기에 적용되는 활성 마일리지 등급 정책을 최소 점수 오름차순으로 조회한다. */
-    List<MileageBenefitPolicy> findByActiveTrueAndBenefitTypeAndAcademicYearAndSemesterCodeInOrderByMinimumPointsAsc(
+    List<MileageBenefitPolicy> findByActiveTrueAndBenefitTypeAndSemesterCodeInOrderByMinimumPointsAsc(
             String benefitType,
-            Integer academicYear,
             Collection<String> semesterCodes
     );
 
@@ -30,8 +29,7 @@ public interface MileageBenefitPolicyRepository extends JpaRepository<MileageBen
     );
 
     /** 해당 학기와 연간(ALL) 정책을 목표 점수 오름차순으로 조회한다. */
-    List<MileageBenefitPolicy> findByActiveTrueAndAcademicYearAndSemesterCodeInOrderByMinimumPointsAsc(
-            Integer academicYear,
+    List<MileageBenefitPolicy> findByActiveTrueAndSemesterCodeInOrderByMinimumPointsAsc(
             Collection<String> semesterCodes
     );
 }

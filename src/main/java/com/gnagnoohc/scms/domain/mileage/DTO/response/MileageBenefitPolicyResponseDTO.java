@@ -10,7 +10,6 @@ import java.time.Instant;
 public record MileageBenefitPolicyResponseDTO(
         Integer benefitPolicyId,
         String benefitType,
-        Integer academicYear,
         String semesterCode,
         String benefitName,
         BigDecimal minimumPoints,
@@ -29,7 +28,6 @@ public record MileageBenefitPolicyResponseDTO(
         return new MileageBenefitPolicyResponseDTO(
                 policy.getBenefitPolicyId(),
                 policy.getBenefitType(),
-                policy.getAcademicYear(),
                 policy.getSemesterCode(),
                 policy.getBenefitName(),
                 policy.getMinimumPoints(),

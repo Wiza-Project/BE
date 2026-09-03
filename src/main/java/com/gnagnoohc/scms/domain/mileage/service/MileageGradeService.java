@@ -38,9 +38,8 @@ public class MileageGradeService {
                 mileageTransactionRepository.sumPostedPointsByStudent(studentId));
 
         List<MileageBenefitPolicy> policies = mileageBenefitPolicyRepository
-                .findByActiveTrueAndBenefitTypeAndAcademicYearAndSemesterCodeInOrderByMinimumPointsAsc(
+                .findByActiveTrueAndBenefitTypeAndSemesterCodeInOrderByMinimumPointsAsc(
                         GRADE_BENEFIT_TYPE,
-                        academicYear,
                         List.of(selectedSemesterCode, ALL_SEMESTER_CODE));
 
         List<MileageBenefitPolicy> effectivePolicies = removeDuplicateThresholds(

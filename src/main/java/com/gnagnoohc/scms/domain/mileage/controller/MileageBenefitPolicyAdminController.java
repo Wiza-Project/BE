@@ -46,16 +46,15 @@ public class MileageBenefitPolicyAdminController {
         return ApiResponse.ok(mileageBenefitPolicyService.register(request, authUser.getId()));
     }
 
-    @Operation(summary = "혜택 정책 목록 조회", description = "혜택유형/학년도/학기/활성여부로 필터링하여 정책 목록을 페이지 단위로 조회합니다.")
+    @Operation(summary = "혜택 정책 목록 조회", description = "혜택유형/학기/활성여부로 필터링하여 정책 목록을 페이지 단위로 조회합니다.")
     @GetMapping
     public ApiResponse<PageResponse<MileageBenefitPolicyResponseDTO>> list(
             @RequestParam(required = false) String benefitType,
-            @RequestParam(required = false) Integer academicYear,
             @RequestParam(required = false) String semesterCode,
             @RequestParam(required = false) Boolean active,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
         return ApiResponse.ok(
-                mileageBenefitPolicyService.list(benefitType, academicYear, semesterCode, active, pageable));
+                mileageBenefitPolicyService.list(benefitType, semesterCode, active, pageable));
     }
 
     @Operation(summary = "혜택 정책 상세 조회")
@@ -64,7 +63,7 @@ public class MileageBenefitPolicyAdminController {
         return ApiResponse.ok(mileageBenefitPolicyService.getDetail(benefitPolicyId));
     }
 
-    @Operation(summary = "혜택 정책 수정", description = "목표점수/금액/신청기간/활성여부를 부분 수정합니다. 혜택유형·학년도·학기는 변경할 수 없습니다.")
+    @Operation(summary = "혜택 정책 수정", description = "목표점수/금액/신청기간/활성여부를 부분 수정합니다. 혜택유형·학기는 변경할 수 없습니다.")
     @PatchMapping("/{benefitPolicyId}")
     public ApiResponse<MileageBenefitPolicyResponseDTO> update(
             @PathVariable Integer benefitPolicyId,

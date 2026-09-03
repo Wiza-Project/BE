@@ -13,7 +13,6 @@ import java.time.Instant;
 // 인증·장학 등 마일리지 혜택 정책 등록 요청 DTO.
 public record MileageBenefitPolicyRegisterRequestDTO(
         @NotBlank @Size(max = 20) String benefitType,
-        @NotNull @Positive Integer academicYear,
         // 학기 코드. 생략(null/빈 문자열)하면 서비스에서 "ALL"(연간 공통)로 채운다.
         @Size(max = 20) String semesterCode,
         @NotBlank @Size(max = 150) String benefitName,
