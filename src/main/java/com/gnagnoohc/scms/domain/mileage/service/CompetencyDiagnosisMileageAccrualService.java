@@ -11,6 +11,7 @@ import com.gnagnoohc.scms.domain.mileage.repository.MileageTransactionRepository
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,6 +21,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 
 /** 역량진단(사전/사후) 제출 완료 건에 연결된 정책 점수만 마일리지 원장에 적립한다. */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class CompetencyDiagnosisMileageAccrualService {
@@ -30,6 +32,7 @@ public class CompetencyDiagnosisMileageAccrualService {
     private final MileageTransactionRepository mileageTransactionRepository;
     private final MileageActivityTypeRepository mileageActivityTypeRepository;
     private final MileagePolicyRepository mileagePolicyRepository;
+    private final MileageAccrualCapService mileageAccrualCapService;
 
     /** 특정 응시 회차가 제출 완료된 경우 고정 정책 점수로 한 번만 적립한다. */
     @Transactional
@@ -56,8 +59,17 @@ public class CompetencyDiagnosisMileageAccrualService {
         MileagePolicy policy = resolvePolicy(submittedDate);
         validatePolicy(policy, submittedDate);
 
+        Integer studentId = attempt.getStudent().getUserId();
+        BigDecimal grantablePoints = mileageAccrualCapService.computeGrantablePoints(
+                studentId, policy, policy.getPoints());
+        if (grantablePoints.signum() <= 0) {
+            log.info("마일리지 적립 한도 초과로 역량진단 완료 적립을 건너뜁니다. attemptId={}, studentId={}",
+                    attemptId, studentId);
+            return false;
+        }
+
         mileageTransactionRepository.save(
-                MileageTransaction.earnFromAssessmentCompletion(attempt, policy, Instant.now()));
+                MileageTransaction.earnFromAssessmentCompletion(attempt, policy, grantablePoints, Instant.now()));
         return true;
     }
 

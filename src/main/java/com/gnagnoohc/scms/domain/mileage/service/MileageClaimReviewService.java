@@ -44,6 +44,7 @@ public class MileageClaimReviewService {
     private final ExternalActivityClaimRepository externalActivityClaimRepository;
     private final MileageTransactionRepository mileageTransactionRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final MileageAccrualCapService mileageAccrualCapService;
 
     /** 기본적으로 심사 대기 신청을 조회하고, 상태·학생명·학번·활동명으로 필터링한다. */
     public PageResponse<MileageClaimReviewListResponse> listClaims(
@@ -85,10 +86,17 @@ public class MileageClaimReviewService {
             throw new BusinessException(ErrorCode.APPLICATION_ALREADY_PROCESSED);
         }
 
+        Integer studentId = claim.getStudent().getUserId();
+        BigDecimal grantablePoints = mileageAccrualCapService.computeGrantablePoints(
+                studentId, claim.getMileagePolicy(), claim.getMileagePolicy().getPoints());
+        if (grantablePoints.signum() <= 0) {
+            throw new BusinessException(ErrorCode.MILEAGE_CAP_EXCEEDED, "마일리지 적립 한도를 초과하여 승인할 수 없습니다.");
+        }
+
         Instant now = Instant.now();
         claim.approve(validReviewerId, now);
         MileageTransaction transaction = mileageTransactionRepository.save(
-                MileageTransaction.earnFromExternalClaim(claim, now, validReviewerId));
+                MileageTransaction.earnFromExternalClaim(claim, now, validReviewerId, grantablePoints));
         eventPublisher.publishEvent(new ExternalActivityClaimDecisionEvent(
                 validClaimId,
                 claim.getStudent().getUserId(),

@@ -35,22 +35,25 @@ public class ProgramMileageAccrualService {
     private final ProgramApplicationMileageRepository programApplicationRepository;
     private final MileageTransactionRepository mileageTransactionRepository;
     private final MileagePolicyRepository mileagePolicyRepository;
+    private final MileageAccrualCapService mileageAccrualCapService;
 
     @Autowired
     public ProgramMileageAccrualService(
             ProgramApplicationMileageRepository programApplicationRepository,
             MileageTransactionRepository mileageTransactionRepository,
-            MileagePolicyRepository mileagePolicyRepository) {
+            MileagePolicyRepository mileagePolicyRepository,
+            MileageAccrualCapService mileageAccrualCapService) {
         this.programApplicationRepository = programApplicationRepository;
         this.mileageTransactionRepository = mileageTransactionRepository;
         this.mileagePolicyRepository = mileagePolicyRepository;
+        this.mileageAccrualCapService = mileageAccrualCapService;
     }
 
-    /** 기존 마일리지 단위 테스트와의 생성 호환을 유지한다. 운영 빈은 3개 의존성을 주입한다. */
+    /** 기존 마일리지 단위 테스트와의 생성 호환을 유지한다. 운영 빈은 4개 의존성을 주입한다. */
     public ProgramMileageAccrualService(
             ProgramApplicationMileageRepository programApplicationRepository,
             MileageTransactionRepository mileageTransactionRepository) {
-        this(programApplicationRepository, mileageTransactionRepository, null);
+        this(programApplicationRepository, mileageTransactionRepository, null, null);
     }
 
     /** 특정 비교과 신청이 이수 완료된 경우 고정 정책 점수로 한 번만 적립한다. */
@@ -91,8 +94,18 @@ public class ProgramMileageAccrualService {
         MileagePolicy policy = resolvePolicy(application, programTypeCode, completionDate, policyCache);
         validatePolicy(policy, programTypeCode, completionDate);
 
+        Integer studentId = application.getStudent().getUserId();
+        BigDecimal grantablePoints = mileageAccrualCapService == null
+                ? policy.getPoints()
+                : mileageAccrualCapService.computeGrantablePoints(studentId, policy, policy.getPoints());
+        if (grantablePoints.signum() <= 0) {
+            log.info("마일리지 적립 한도 초과로 비교과 이수 적립을 건너뜁니다. applicationId={}, studentId={}",
+                    applicationId, studentId);
+            return false;
+        }
+
         mileageTransactionRepository.save(
-                MileageTransaction.earnFromProgramCompletion(application, policy, Instant.now()));
+                MileageTransaction.earnFromProgramCompletion(application, policy, grantablePoints, Instant.now()));
         return true;
     }
 
