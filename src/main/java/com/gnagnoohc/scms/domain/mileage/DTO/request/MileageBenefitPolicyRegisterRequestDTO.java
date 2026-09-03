@@ -22,6 +22,12 @@ public record MileageBenefitPolicyRegisterRequestDTO(
         // 판정 기준의 부가 정보. 구조는 서버 계약으로 관리되며 여기서는 구조를 강제하지 않는다.
         JsonNode criteriaData,
         Instant applicationStartsAt,
-        Instant applicationEndsAt
+        Instant applicationEndsAt,
+        // 배타적 단계(tier) 그룹 식별자. 같은 값을 지정한 정책끼리는 학생이 그중 하나만 신청할 수 있다. 생략하면 배타 그룹 없음.
+        @Size(max = 50) String benefitGroupCode,
+        // 자격 판정 시 합산할 연속 연도 수. 생략하면 1(단일 학년도 합산)로 처리된다. 2 이상이면 여러 학년도 누적 합산("4년누적" 등).
+        @Positive Integer cumulativeYears,
+        // true면 minimumPoints "이상"이 아니라 정확히 일치해야 자격을 충족한다. 생략하면 false.
+        boolean requiresExactPoints
 ) {
 }

@@ -46,9 +46,9 @@ public class MileageBenefitPolicyService {
                 request.applicationStartsAt(),
                 request.applicationEndsAt(),
                 staffId,
-                null,
-                1,
-                false
+                request.benefitGroupCode(),
+                request.cumulativeYears(),
+                request.requiresExactPoints()
         );
 
         return MileageBenefitPolicyResponseDTO.from(benefitPolicyRepository.saveAndFlush(policy));
