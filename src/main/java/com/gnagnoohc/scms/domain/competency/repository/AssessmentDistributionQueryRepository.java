@@ -2,6 +2,7 @@ package com.gnagnoohc.scms.domain.competency.repository;
 
 import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentGroupAxis;
 import com.querydsl.core.types.Projections;
+import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.core.types.dsl.StringExpression;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +25,13 @@ import static com.gnagnoohc.scms.domain.user.entity.QAppUser.appUser;
 public class AssessmentDistributionQueryRepository {
 
     private static final String STUDENT_USER_TYPE = "STUDENT";
+    // academic_status가 실제로 쓰는 라벨은 재학/휴학/졸업/제적/자퇴 5개. 이 중 재학만 대상자로 본다.
+    private static final String ENROLLED_ACADEMIC_STATUS = "재학";
+
+    // 대상자 = STUDENT 중 학적상태 '재학'. 응시율·미응시자 명단과 같은 모수를 쓴다 —
+    // 졸업·제적·자퇴·휴학 학생의 점수는 집단 평균에 섞이지 않는다.
+    private static final BooleanExpression ENROLLED_STUDENT =
+            appUser.userType.eq(STUDENT_USER_TYPE).and(appUser.academicStatus.eq(ENROLLED_ACADEMIC_STATUS));
 
     private final JPAQueryFactory queryFactory;
 
@@ -55,7 +63,7 @@ public class AssessmentDistributionQueryRepository {
                 .join(studentAcademicDetail).on(studentAcademicDetail.userId.eq(appUser.userId))
                 .where(
                         assessmentAttempt.assessmentRound.assessmentRoundId.eq(assessmentRoundId),
-                        appUser.userType.eq(STUDENT_USER_TYPE)
+                        ENROLLED_STUDENT
                 )
                 .groupBy(groupKey, groupLabel,
                         assessmentScore.competency.competencyId,
