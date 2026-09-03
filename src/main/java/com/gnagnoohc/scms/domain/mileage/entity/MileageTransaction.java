@@ -1,5 +1,6 @@
 package com.gnagnoohc.scms.domain.mileage.entity;
 
+import com.gnagnoohc.scms.domain.competency.entity.AssessmentAttempt;
 import com.gnagnoohc.scms.domain.competency.entity.Competency;
 import com.gnagnoohc.scms.domain.program.entity.ProgramApplication;
 import com.gnagnoohc.scms.domain.user.entity.AppUser;
@@ -26,6 +27,7 @@ public class MileageTransaction extends BaseCreatedAtEntity {
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "competency_id", nullable = false) private Competency competency;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "source_program_application_id", unique = true) private ProgramApplication sourceProgramApplication;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "source_external_claim_id", unique = true) private ExternalActivityClaim sourceExternalClaim;
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "source_assessment_attempt_id", unique = true) private AssessmentAttempt sourceAssessmentAttempt;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "reversal_of_transaction_id", unique = true) private MileageTransaction reversalOfTransaction;
     @Column(name = "transaction_type", nullable = false, length = 20) private String transactionType;
     @Column(name = "points", nullable = false, precision = 10, scale = 2) private BigDecimal points;
@@ -84,6 +86,28 @@ public class MileageTransaction extends BaseCreatedAtEntity {
         transaction.requestedBy = claim.getStudent().getUserId();
         transaction.processedBy = processedBy;
         transaction.transactionReason = "외부활동 마일리지 심사 승인 자동 적립";
+        transaction.postedAt = postedAt;
+        return transaction;
+    }
+
+    /** 역량진단(사전/사후) 제출을 완료했을 때 정책에 등록된 점수로 적립 원장을 생성한다. */
+    public static MileageTransaction earnFromAssessmentCompletion(
+            AssessmentAttempt attempt,
+            MileagePolicy policy,
+            Instant postedAt
+    ) {
+        MileageTransaction transaction = new MileageTransaction();
+        transaction.student = attempt.getStudent();
+        transaction.mileagePolicy = policy;
+        // 진단 결과는 역량별 점수 여러 개를 담고 있어 하나로 특정할 수 없으므로,
+        // 외부활동 적립과 동일하게 활동유형에 미리 지정된 대표 역량을 사용한다.
+        transaction.competency = policy.getActivityType().getCompetency();
+        transaction.sourceAssessmentAttempt = attempt;
+        transaction.transactionType = "EARN";
+        transaction.points = policy.getPoints();
+        transaction.transactionStatus = "POSTED";
+        transaction.requestedBy = attempt.getStudent().getUserId();
+        transaction.transactionReason = "역량진단 완료 자동 적립";
         transaction.postedAt = postedAt;
         return transaction;
     }

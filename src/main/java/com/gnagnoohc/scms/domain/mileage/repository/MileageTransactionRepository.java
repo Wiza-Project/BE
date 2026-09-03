@@ -21,6 +21,9 @@ public interface MileageTransactionRepository extends JpaRepository<MileageTrans
     /** 동일 외부활동 신청의 승인 적립 원장을 찾아 중복 적립을 막는다. */
     Optional<MileageTransaction> findBySourceExternalClaim_ExternalClaimId(Integer externalClaimId);
 
+    /** 동일 역량진단 응시 회차로 이미 생성된 적립 원장을 찾아 중복 적립을 막는다. */
+    Optional<MileageTransaction> findBySourceAssessmentAttempt_AttemptId(Integer attemptId);
+
     /** 동일 승인 원장에 이미 역분개가 생성됐는지 확인해 중복 취소를 막는다. */
     Optional<MileageTransaction> findByReversalOfTransaction_MileageTransactionId(Integer transactionId);
 
