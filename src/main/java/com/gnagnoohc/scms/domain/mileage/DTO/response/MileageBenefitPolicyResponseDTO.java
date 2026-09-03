@@ -20,7 +20,10 @@ public record MileageBenefitPolicyResponseDTO(
         Instant applicationEndsAt,
         boolean active,
         Instant createdAt,
-        Integer createdBy
+        Integer createdBy,
+        String benefitGroupCode,
+        Integer cumulativeYears,
+        boolean requiresExactPoints
 ) {
     public static MileageBenefitPolicyResponseDTO from(MileageBenefitPolicy policy) {
         return new MileageBenefitPolicyResponseDTO(
@@ -36,7 +39,10 @@ public record MileageBenefitPolicyResponseDTO(
                 policy.getApplicationEndsAt(),
                 policy.isActive(),
                 policy.getCreatedAt(),
-                policy.getCreatedBy()
+                policy.getCreatedBy(),
+                policy.getBenefitGroupCode(),
+                policy.getCumulativeYears(),
+                policy.isRequiresExactPoints()
         );
     }
 }

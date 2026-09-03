@@ -45,7 +45,10 @@ public class MileageBenefitPolicyService {
                 request.criteriaData(),
                 request.applicationStartsAt(),
                 request.applicationEndsAt(),
-                staffId
+                staffId,
+                null,
+                1,
+                false
         );
 
         return MileageBenefitPolicyResponseDTO.from(benefitPolicyRepository.saveAndFlush(policy));

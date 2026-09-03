@@ -20,8 +20,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /** 학생의 장학금 정책 조회, 신청, 본인 신청 이력을 담당한다. */
@@ -55,6 +57,8 @@ public class MileageScholarshipService {
         }
 
         Map<Integer, String> applicationStatuses = getApplicationStatuses(studentId, policies);
+        Set<String> claimedGroupCodes = new HashSet<>(
+                benefitApplicationRepository.findClaimedBenefitGroupCodes(studentId));
         BigDecimal semesterPoints = valueOrZero(
                 mileageTransactionRepository.sumPostedPointsByStudentAndPeriod(
                         studentId, academicYear, selectedSemesterCode));
@@ -66,8 +70,9 @@ public class MileageScholarshipService {
         return policies.stream()
                 .map(policy -> toScholarshipItem(
                         policy,
-                        pointsFor(policy, semesterPoints, academicYearPoints),
+                        resolvePoints(studentId, policy, semesterPoints, academicYearPoints),
                         applicationStatuses.get(policy.getBenefitPolicyId()),
+                        isGroupAlreadyClaimedByOther(policy, claimedGroupCodes),
                         now))
                 .toList();
     }
@@ -83,8 +88,12 @@ public class MileageScholarshipService {
                 .map(MileageBenefitApplication::getApplicationStatus)
                 .orElse(null);
         BigDecimal currentPoints = calculatePoints(studentId, policy);
+        boolean groupAlreadyClaimedByOther = policy.getBenefitGroupCode() != null
+                && benefitApplicationRepository.existsByStudent_UserIdAndBenefitPolicy_BenefitGroupCode(
+                        studentId, policy.getBenefitGroupCode());
 
-        return toScholarshipItem(policy, currentPoints, applicationStatus, Instant.now());
+        return toScholarshipItem(
+                policy, currentPoints, applicationStatus, groupAlreadyClaimedByOther, Instant.now());
     }
 
     /** 학생이 기준을 충족한 장학금을 신청하고 신청 시점 점수를 보존한다. */
@@ -102,11 +111,18 @@ public class MileageScholarshipService {
                     ErrorCode.MILEAGE_ALREADY_CLAIMED, "이미 해당 장학금을 신청했습니다.");
         }
 
+        if (policy.getBenefitGroupCode() != null
+                && benefitApplicationRepository.existsByStudent_UserIdAndBenefitPolicy_BenefitGroupCode(
+                        studentId, policy.getBenefitGroupCode())) {
+            throw new BusinessException(
+                    ErrorCode.MILEAGE_ALREADY_CLAIMED, "이미 동일 유형의 장학금을 신청했습니다.");
+        }
+
         Instant now = Instant.now();
         validateApplicationPeriod(policy, now);
 
         BigDecimal currentPoints = calculatePoints(studentId, policy);
-        if (currentPoints.compareTo(policy.getMinimumPoints()) < 0) {
+        if (!meetsPointRequirement(policy, currentPoints)) {
             throw new BusinessException(ErrorCode.INSUFFICIENT_MILEAGE);
         }
 
@@ -164,15 +180,16 @@ public class MileageScholarshipService {
             MileageBenefitPolicy policy,
             BigDecimal currentPoints,
             String applicationStatus,
+            boolean groupAlreadyClaimedByOther,
             Instant now
     ) {
         BigDecimal shortagePoints = policy.getMinimumPoints()
                 .subtract(currentPoints)
                 .max(BigDecimal.ZERO);
         boolean applicationOpen = isApplicationOpen(policy, now);
-        boolean enoughPoints = shortagePoints.signum() == 0;
+        boolean enoughPoints = meetsPointRequirement(policy, currentPoints);
         String eligibilityStatus = resolveEligibilityStatus(
-                policy, currentPoints, applicationStatus, now);
+                policy, currentPoints, applicationStatus, groupAlreadyClaimedByOther, now);
 
         return new MileageScholarshipResponse.ScholarshipItem(
                 policy.getBenefitPolicyId(),
@@ -189,19 +206,24 @@ public class MileageScholarshipService {
                 policy.getApplicationEndsAt(),
                 eligibilityStatus,
                 applicationStatus,
-                applicationStatus == null && enoughPoints && applicationOpen);
+                applicationStatus == null && enoughPoints && applicationOpen
+                        && !groupAlreadyClaimedByOther);
     }
 
     private String resolveEligibilityStatus(
             MileageBenefitPolicy policy,
             BigDecimal currentPoints,
             String applicationStatus,
+            boolean groupAlreadyClaimedByOther,
             Instant now
     ) {
         if (applicationStatus != null) {
             return applicationStatus;
         }
-        if (currentPoints.compareTo(policy.getMinimumPoints()) < 0) {
+        if (groupAlreadyClaimedByOther) {
+            return "GROUP_ALREADY_CLAIMED";
+        }
+        if (!meetsPointRequirement(policy, currentPoints)) {
             return "INSUFFICIENT_POINTS";
         }
         if (policy.getApplicationStartsAt() != null
@@ -213,6 +235,20 @@ public class MileageScholarshipService {
             return "APPLICATION_CLOSED";
         }
         return "ELIGIBLE";
+    }
+
+    /** requiresExactPoints면 정확히 일치, 아니면 기존과 동일하게 최소 점수 이상인지 판정한다. */
+    private boolean meetsPointRequirement(MileageBenefitPolicy policy, BigDecimal currentPoints) {
+        int comparison = currentPoints.compareTo(policy.getMinimumPoints());
+        return policy.isRequiresExactPoints() ? comparison == 0 : comparison >= 0;
+    }
+
+    private boolean isGroupAlreadyClaimedByOther(
+            MileageBenefitPolicy policy,
+            Set<String> claimedGroupCodes
+    ) {
+        return policy.getBenefitGroupCode() != null
+                && claimedGroupCodes.contains(policy.getBenefitGroupCode());
     }
 
     private boolean isApplicationOpen(MileageBenefitPolicy policy, Instant now) {
@@ -229,6 +265,12 @@ public class MileageScholarshipService {
     }
 
     private BigDecimal calculatePoints(Integer studentId, MileageBenefitPolicy policy) {
+        if (policy.getCumulativeYears() != null && policy.getCumulativeYears() > 1) {
+            int entryYear = resolveEntryYear(studentId);
+            int endYear = entryYear + policy.getCumulativeYears() - 1;
+            return valueOrZero(mileageTransactionRepository
+                    .sumPostedPointsByStudentAndAcademicYearRange(studentId, entryYear, endYear));
+        }
         if (ALL_SEMESTER_CODE.equalsIgnoreCase(policy.getSemesterCode())) {
             return valueOrZero(mileageTransactionRepository
                     .sumPostedPointsByStudentAndAcademicYear(studentId, policy.getAcademicYear()));
@@ -236,6 +278,25 @@ public class MileageScholarshipService {
         return valueOrZero(mileageTransactionRepository
                 .sumPostedPointsByStudentAndPeriod(
                         studentId, policy.getAcademicYear(), policy.getSemesterCode()));
+    }
+
+    /**
+     * 학생의 학번(university_no) 앞 4자리를 실제 입학년도로 파싱한다. 편입·휴학 등으로 학생마다
+     * 입학년도가 다를 수 있어, 4년 누적 정책(cumulativeYears &gt; 1)의 academicYear에서
+     * 역산하지 않고 학생 본인의 학번을 기준으로 삼는다.
+     */
+    private int resolveEntryYear(Integer studentId) {
+        AppUser student = appUserRepository.findById(studentId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+        String universityNo = student.getUniversityNo();
+        if (universityNo == null || universityNo.length() < 4) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "학번에서 입학년도를 확인할 수 없습니다.");
+        }
+        try {
+            return Integer.parseInt(universityNo.substring(0, 4));
+        } catch (NumberFormatException exception) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "학번에서 입학년도를 확인할 수 없습니다.");
+        }
     }
 
     private BigDecimal pointsFor(
@@ -246,6 +307,19 @@ public class MileageScholarshipService {
         return ALL_SEMESTER_CODE.equalsIgnoreCase(policy.getSemesterCode())
                 ? academicYearPoints
                 : semesterPoints;
+    }
+
+    /** 목록 조회는 학기/연간 점수를 사전 집계해 재사용하지만, 다년 누적 정책만은 별도로 계산한다. */
+    private BigDecimal resolvePoints(
+            Integer studentId,
+            MileageBenefitPolicy policy,
+            BigDecimal semesterPoints,
+            BigDecimal academicYearPoints
+    ) {
+        if (policy.getCumulativeYears() != null && policy.getCumulativeYears() > 1) {
+            return calculatePoints(studentId, policy);
+        }
+        return pointsFor(policy, semesterPoints, academicYearPoints);
     }
 
     private MileageScholarshipResponse.ApplicationItem toApplicationItem(

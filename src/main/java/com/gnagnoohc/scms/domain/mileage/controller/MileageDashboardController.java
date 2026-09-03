@@ -1,7 +1,9 @@
 package com.gnagnoohc.scms.domain.mileage.controller;
 
+import com.gnagnoohc.scms.domain.mileage.DTO.MileageAcademicPeriodResponse;
 import com.gnagnoohc.scms.domain.mileage.DTO.MileageDashboardResponse;
 import com.gnagnoohc.scms.domain.mileage.DTO.MileageGradeResponse;
+import com.gnagnoohc.scms.domain.mileage.service.MileageAcademicPeriodService;
 import com.gnagnoohc.scms.domain.mileage.service.MileageDashboardService;
 import com.gnagnoohc.scms.domain.mileage.service.MileageGradeService;
 import com.gnagnoohc.scms.global.common.dto.ApiResponse;
@@ -24,6 +26,13 @@ public class MileageDashboardController {
 
     private final MileageDashboardService mileageDashboardService;
     private final MileageGradeService mileageGradeService;
+    private final MileageAcademicPeriodService mileageAcademicPeriodService;
+
+    /** 오늘 날짜 기준 현재 학년도/학기를 판별한다. FE가 날짜로 직접 계산하던 것을 대체한다. */
+    @GetMapping("/current-period")
+    public ApiResponse<MileageAcademicPeriodResponse> getCurrentPeriod() {
+        return ApiResponse.ok(mileageAcademicPeriodService.resolveCurrentPeriod());
+    }
 
     /** 학생 본인의 누적 확정 마일리지 기준 현재 등급과 다음 등급을 조회한다. */
     @PreAuthorize("hasRole('STUDENT')")
