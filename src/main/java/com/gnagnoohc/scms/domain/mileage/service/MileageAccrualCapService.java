@@ -2,14 +2,15 @@ package com.gnagnoohc.scms.domain.mileage.service;
 
 import com.gnagnoohc.scms.domain.mileage.entity.MileagePolicy;
 import com.gnagnoohc.scms.domain.mileage.repository.MileageTransactionRepository;
-import lombok.RequiredArgsConstructor;
+import com.gnagnoohc.scms.global.common.util.DateTimeUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 /** 학기·학년도·전체 누적 마일리지 적립 상한을 반영해 실제 지급 가능 점수를 계산한다. */
 @Component
-@RequiredArgsConstructor
 public class MileageAccrualCapService {
 
     static final BigDecimal SEMESTER_CAP = new BigDecimal("50");
@@ -18,28 +19,65 @@ public class MileageAccrualCapService {
     private static final String ALL_SEMESTER_CODE = "ALL";
 
     private final MileageTransactionRepository mileageTransactionRepository;
+    private final MileageAcademicPeriodService mileageAcademicPeriodService;
+
+    @Autowired
+    public MileageAccrualCapService(
+            MileageTransactionRepository mileageTransactionRepository,
+            MileageAcademicPeriodService mileageAcademicPeriodService
+    ) {
+        this.mileageTransactionRepository = mileageTransactionRepository;
+        this.mileageAcademicPeriodService = mileageAcademicPeriodService;
+    }
+
+    /** 기존 호출부와 테스트의 생성 호환을 유지한다. 운영 빈은 학사기간 서비스를 함께 주입한다. */
+    public MileageAccrualCapService(MileageTransactionRepository mileageTransactionRepository) {
+        this(mileageTransactionRepository, new MileageAcademicPeriodService());
+    }
 
     /**
      * 요청 점수를 학기(50)·학년도(100)·전체 누적(400) 상한에 맞춰 클램프한다.
      * 정책이 특정 학기에 귀속되지 않은 연간(ALL) 정책이면 학기 상한 검사는 건너뛴다.
      */
-    public BigDecimal computeGrantablePoints(Integer studentId, MileagePolicy policy, BigDecimal requestedPoints) {
+    public BigDecimal computeGrantablePoints(
+            Integer studentId,
+            MileagePolicy policy,
+            BigDecimal requestedPoints
+    ) {
+        return computeGrantablePoints(
+                studentId,
+                policy,
+                requestedPoints,
+                LocalDate.now(DateTimeUtils.KST_ZONE));
+    }
+
+    /** 적립 기준일이 속한 학사기간을 기준으로 학기·학년도 상한을 계산한다. */
+    public BigDecimal computeGrantablePoints(
+            Integer studentId,
+            MileagePolicy policy,
+            BigDecimal requestedPoints,
+            LocalDate accrualDate
+    ) {
         if (requestedPoints == null || requestedPoints.signum() <= 0) {
             return BigDecimal.ZERO;
         }
 
         BigDecimal remaining = requestedPoints;
+        MileageAcademicPeriodService.AcademicYearBounds academicYearBounds =
+                mileageAcademicPeriodService.resolveAcademicYearBounds(
+                        mileageAcademicPeriodService.resolveAcademicYear(accrualDate));
 
-        if (policy.getAcademicYear() != null && !ALL_SEMESTER_CODE.equals(policy.getSemesterCode())) {
+        if (!ALL_SEMESTER_CODE.equalsIgnoreCase(policy.getSemesterCode())) {
             BigDecimal semesterUsed = mileageTransactionRepository.sumPostedPointsByStudentAndPeriod(
-                    studentId, policy.getAcademicYear(), policy.getSemesterCode());
+                    studentId,
+                    academicYearBounds.startAt(),
+                    academicYearBounds.endAt(),
+                    policy.getSemesterCode());
             remaining = remaining.min(remainingOf(SEMESTER_CAP, semesterUsed));
         }
-        if (policy.getAcademicYear() != null) {
-            BigDecimal yearUsed = mileageTransactionRepository.sumPostedPointsByStudentAndAcademicYear(
-                    studentId, policy.getAcademicYear());
-            remaining = remaining.min(remainingOf(ACADEMIC_YEAR_CAP, yearUsed));
-        }
+        BigDecimal yearUsed = mileageTransactionRepository.sumPostedPointsByStudentBetween(
+                studentId, academicYearBounds.startAt(), academicYearBounds.endAt());
+        remaining = remaining.min(remainingOf(ACADEMIC_YEAR_CAP, yearUsed));
         BigDecimal lifetimeUsed = mileageTransactionRepository.sumPostedPointsByStudent(studentId);
         remaining = remaining.min(remainingOf(LIFETIME_CAP, lifetimeUsed));
 

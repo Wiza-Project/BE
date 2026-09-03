@@ -8,7 +8,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 /**
- * 마일리지 정책 수정 요청 DTO. 활동유형/학년도/학기/버전(식별 필드)은 변경할 수 없고,
+ * 마일리지 정책 수정 요청 DTO. 활동유형/학기/버전(식별 필드)은 변경할 수 없고,
  * 그 외 필드는 부분 수정을 허용한다 — 각 필드가 null이면 기존 값을 그대로 유지한다.
  * validTo를 다시 무기한(null)으로 되돌리려면 validTo는 비워두고 clearValidTo=true를 명시적으로 보낸다.
  */

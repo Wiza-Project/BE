@@ -97,7 +97,8 @@ public class ProgramMileageAccrualService {
         Integer studentId = application.getStudent().getUserId();
         BigDecimal grantablePoints = mileageAccrualCapService == null
                 ? policy.getPoints()
-                : mileageAccrualCapService.computeGrantablePoints(studentId, policy, policy.getPoints());
+                : mileageAccrualCapService.computeGrantablePoints(
+                        studentId, policy, policy.getPoints(), completionDate);
         if (grantablePoints.signum() <= 0) {
             log.info("마일리지 적립 한도 초과로 비교과 이수 적립을 건너뜁니다. applicationId={}, studentId={}",
                     applicationId, studentId);

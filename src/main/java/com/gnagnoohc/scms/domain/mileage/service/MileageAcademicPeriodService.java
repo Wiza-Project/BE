@@ -4,6 +4,7 @@ import com.gnagnoohc.scms.domain.mileage.DTO.MileageAcademicPeriodResponse;
 import com.gnagnoohc.scms.global.common.util.DateTimeUtils;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.time.LocalDate;
 
 /**
@@ -19,7 +20,7 @@ public class MileageAcademicPeriodService {
     /** 1학기: 3/2~8/31, 2학기: 9/1~(익년)3/1. 1/1~3/1은 전년도 2학기로 취급한다. */
     public MileageAcademicPeriodResponse resolveCurrentPeriod() {
         LocalDate today = LocalDate.now(DateTimeUtils.KST_ZONE);
-        int year = today.getYear();
+        int year = resolveAcademicYear(today);
         int monthDay = today.getMonthValue() * 100 + today.getDayOfMonth();
 
         if (monthDay >= 302 && monthDay <= 831) {
@@ -28,6 +29,35 @@ public class MileageAcademicPeriodService {
         if (monthDay >= 901) {
             return new MileageAcademicPeriodResponse(year, FALL);
         }
-        return new MileageAcademicPeriodResponse(year - 1, FALL);
+        return new MileageAcademicPeriodResponse(year, FALL);
+    }
+
+    /** 한국 시간 기준 날짜가 속한 학년도를 계산한다. 학년도는 매년 3월 2일에 시작한다. */
+    public int resolveAcademicYear(LocalDate date) {
+        LocalDate targetDate = date == null ? LocalDate.now(DateTimeUtils.KST_ZONE) : date;
+        int monthDay = targetDate.getMonthValue() * 100 + targetDate.getDayOfMonth();
+        return monthDay >= 302 ? targetDate.getYear() : targetDate.getYear() - 1;
+    }
+
+    /** 거래 시각을 한국 시간으로 변환해 해당 학년도를 계산한다. */
+    public int resolveAcademicYear(Instant occurredAt) {
+        LocalDate date = occurredAt == null
+                ? LocalDate.now(DateTimeUtils.KST_ZONE)
+                : occurredAt.atZone(DateTimeUtils.KST_ZONE).toLocalDate();
+        return resolveAcademicYear(date);
+    }
+
+    /** 학년도 조회에 사용할 [시작일시, 다음 학년도 시작일시) 범위를 반환한다. */
+    public AcademicYearBounds resolveAcademicYearBounds(int academicYear) {
+        Instant startAt = LocalDate.of(academicYear, 3, 2)
+                .atStartOfDay(DateTimeUtils.KST_ZONE)
+                .toInstant();
+        Instant endAt = LocalDate.of(academicYear + 1, 3, 2)
+                .atStartOfDay(DateTimeUtils.KST_ZONE)
+                .toInstant();
+        return new AcademicYearBounds(startAt, endAt);
+    }
+
+    public record AcademicYearBounds(Instant startAt, Instant endAt) {
     }
 }

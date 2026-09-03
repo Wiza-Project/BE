@@ -7,6 +7,8 @@ import com.gnagnoohc.scms.domain.mileage.repository.ExternalActivityClaimReposit
 import com.gnagnoohc.scms.domain.mileage.repository.MileageBenefitApplicationRepository;
 import com.gnagnoohc.scms.domain.mileage.repository.MileageBenefitPolicyRepository;
 import com.gnagnoohc.scms.domain.mileage.repository.MileageTransactionRepository;
+import com.gnagnoohc.scms.global.common.entity.CommonCode;
+import com.gnagnoohc.scms.global.common.repository.CommonCodeRepository;
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -16,11 +18,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
@@ -32,12 +34,15 @@ public class MileageDashboardService {
     private static final int RECENT_ITEM_LIMIT = 5;
     private static final int SEMESTER_TREND_LIMIT = 4;
     private static final String ALL_SEMESTER_CODE = "ALL";
+    private static final String SEMESTER_CODE_GROUP = "SEMESTER";
 
     private final MileageTransactionRepository mileageTransactionRepository;
     private final ExternalActivityClaimRepository externalActivityClaimRepository;
     private final MileageBenefitPolicyRepository mileageBenefitPolicyRepository;
     private final MileageBenefitApplicationRepository mileageBenefitApplicationRepository;
     private final CompetencyRepository competencyRepository;
+    private final MileageAcademicPeriodService mileageAcademicPeriodService;
+    private final CommonCodeRepository commonCodeRepository;
 
     /**
      * 로그인한 학생의 선택 학기 기준 대시보드 데이터를 생성한다.
@@ -49,32 +54,48 @@ public class MileageDashboardService {
             String semesterCode
     ) {
         String selectedSemesterCode = validatePeriod(academicYear, semesterCode);
+        MileageAcademicPeriodService.AcademicYearBounds academicYearBounds =
+                mileageAcademicPeriodService.resolveAcademicYearBounds(academicYear);
 
         BigDecimal currentSemesterPoints = valueOrZero(
                 mileageTransactionRepository.sumPostedPointsByStudentAndPeriod(
-                        studentId, academicYear, selectedSemesterCode));
+                        studentId,
+                        academicYearBounds.startAt(),
+                        academicYearBounds.endAt(),
+                        selectedSemesterCode));
         BigDecimal annualPoints = valueOrZero(
-                mileageTransactionRepository.sumPostedPointsByStudentAndAcademicYearAllSemester(
-                        studentId, academicYear));
+                mileageTransactionRepository.sumPostedPointsByStudentAndAllSemester(
+                        studentId, academicYearBounds.startAt(), academicYearBounds.endAt()));
         BigDecimal cumulativePoints = valueOrZero(
                 mileageTransactionRepository.sumPostedPointsByStudent(studentId));
 
         PageRequest recentItems = PageRequest.of(0, RECENT_ITEM_LIMIT);
 
         var programTypeBreakdown = mileageTransactionRepository
-                .findProgramTypeBreakdown(studentId, academicYear, selectedSemesterCode)
+                .findProgramTypeBreakdown(
+                        studentId,
+                        academicYearBounds.startAt(),
+                        academicYearBounds.endAt(),
+                        selectedSemesterCode)
                 .stream()
                 .map(item -> new MileageDashboardResponse.ProgramTypeSummary(
                         item.getProgramTypeName(), item.getPoints()))
                 .toList();
 
         var competencyBreakdown = getCompetencyBreakdown(
-                studentId, academicYear, selectedSemesterCode);
+                studentId,
+                academicYearBounds.startAt(),
+                academicYearBounds.endAt(),
+                selectedSemesterCode);
 
         var benefitProgress = getBenefitProgress(
                 studentId, academicYear, selectedSemesterCode, cumulativePoints);
 
-        var semesterTrend = getSemesterTrend(studentId, academicYear, selectedSemesterCode);
+        var semesterTrend = getSemesterTrend(
+                studentId,
+                academicYear,
+                selectedSemesterCode,
+                academicYearBounds);
 
         var recentTransactions = getRecentTransactions(studentId, recentItems);
 
@@ -214,11 +235,12 @@ public class MileageDashboardService {
     /** 활성 최상위 핵심역량을 모두 반환해 점수가 0인 역량도 차트에 표시한다. */
     private List<MileageDashboardResponse.CompetencySummary> getCompetencyBreakdown(
             Integer studentId,
-            Integer academicYear,
+            Instant periodStart,
+            Instant periodEnd,
             String semesterCode
     ) {
         Map<Integer, BigDecimal> pointsByCompetencyId = mileageTransactionRepository
-                .findCompetencyBreakdown(studentId, academicYear, semesterCode)
+                .findCompetencyBreakdown(studentId, periodStart, periodEnd, semesterCode)
                 .stream()
                 .collect(Collectors.toMap(
                         MileageTransactionRepository.CompetencySummaryProjection::getCompetencyId,
@@ -234,7 +256,7 @@ public class MileageDashboardService {
 
         if (topLevelCompetencies.isEmpty()) {
             return mileageTransactionRepository
-                    .findCompetencyBreakdown(studentId, academicYear, semesterCode)
+                    .findCompetencyBreakdown(studentId, periodStart, periodEnd, semesterCode)
                     .stream()
                     .map(item -> new MileageDashboardResponse.CompetencySummary(
                             item.getCompetencyId(), item.getCompetencyName(), item.getPoints()))
@@ -250,71 +272,77 @@ public class MileageDashboardService {
                 .toList();
     }
 
-    /** 선택 학기까지의 최근 최대 4개 학기 적립 점수를 시간순으로 반환한다. */
+    /** 선택 학사기간 안의 학기별 적립 점수를 백엔드 학기 정의 순서로 반환한다. */
     private List<MileageDashboardResponse.SemesterTrendSummary> getSemesterTrend(
             Integer studentId,
             Integer academicYear,
-            String semesterCode
+            String semesterCode,
+            MileageAcademicPeriodService.AcademicYearBounds academicYearBounds
     ) {
-        var selectedPeriod = new MileageDashboardResponse.SemesterTrendSummary(
-                academicYear, semesterCode, BigDecimal.ZERO);
-
-        List<MileageDashboardResponse.SemesterTrendSummary> trend = mileageTransactionRepository
-                .findSemesterTrendByStudent(studentId)
+        Map<String, BigDecimal> pointsBySemester = mileageTransactionRepository
+                .findSemesterTrendByStudent(
+                        studentId,
+                        academicYearBounds.startAt(),
+                        academicYearBounds.endAt())
                 .stream()
-                .map(item -> new MileageDashboardResponse.SemesterTrendSummary(
-                        item.getAcademicYear(),
-                        item.getSemesterCode(),
-                        valueOrZero(item.getPoints())))
-                .filter(item -> comparePeriods(item, selectedPeriod) <= 0)
                 .collect(Collectors.toMap(
-                        item -> item.academicYear() + ":" + item.semesterCode(),
-                        Function.identity(),
-                        (first, ignored) -> first))
-                .values()
+                        item -> normalizeSemesterCode(item.getSemesterCode()),
+                        item -> valueOrZero(item.getPoints()),
+                        BigDecimal::add));
+
+        List<CommonCode> definedSemesters = commonCodeRepository
+                .findByCodeGroupAndActiveTrueOrderBySortOrderAsc(SEMESTER_CODE_GROUP)
                 .stream()
-                .collect(Collectors.toList());
+                .toList();
+        Map<String, String> definedCodeByNormalizedCode = definedSemesters
+                .stream()
+                .collect(Collectors.toMap(
+                        code -> normalizeSemesterCode(code.getCode()),
+                        CommonCode::getCode,
+                        (first, ignored) -> first));
+        Map<String, Integer> semesterOrderByCode = definedSemesters.stream()
+                .collect(Collectors.toMap(
+                        code -> normalizeSemesterCode(code.getCode()),
+                        CommonCode::getSortOrder,
+                        (first, ignored) -> first));
+
+        List<MileageDashboardResponse.SemesterTrendSummary> trend = new ArrayList<>();
+        definedCodeByNormalizedCode.forEach((normalizedCode, definedCode) -> trend.add(
+                new MileageDashboardResponse.SemesterTrendSummary(
+                        academicYear,
+                        definedCode,
+                        pointsBySemester.getOrDefault(normalizedCode, BigDecimal.ZERO))));
+
+        // 공통코드에 아직 반영되지 않은 기존 정책 코드도 데이터 유실 없이 마지막에 보존한다.
+        pointsBySemester.forEach((code, points) -> {
+            if (!definedCodeByNormalizedCode.containsKey(code)) {
+                trend.add(new MileageDashboardResponse.SemesterTrendSummary(
+                        academicYear, code, points));
+            }
+        });
 
         boolean selectedPeriodExists = trend.stream().anyMatch(item ->
                 item.academicYear().equals(academicYear)
-                        && item.semesterCode().equals(semesterCode));
+                        && item.semesterCode().equalsIgnoreCase(semesterCode));
         if (!selectedPeriodExists) {
-            trend.add(selectedPeriod);
+            trend.add(new MileageDashboardResponse.SemesterTrendSummary(
+                    academicYear, semesterCode, BigDecimal.ZERO));
         }
 
         return trend.stream()
-                .sorted(this::comparePeriods)
+                .sorted(Comparator
+                        .comparingInt((MileageDashboardResponse.SemesterTrendSummary item) ->
+                                semesterOrderByCode.getOrDefault(
+                                        normalizeSemesterCode(item.semesterCode()),
+                                        Integer.MAX_VALUE))
+                        .thenComparing(MileageDashboardResponse.SemesterTrendSummary::semesterCode))
                 .skip(Math.max(0, trend.size() - SEMESTER_TREND_LIMIT))
                 .toList();
     }
 
-    /** 학년도와 학기 코드의 순서로 두 학기를 비교한다. */
-    private int comparePeriods(
-            MileageDashboardResponse.SemesterTrendSummary first,
-            MileageDashboardResponse.SemesterTrendSummary second
-    ) {
-        int academicYearComparison = first.academicYear().compareTo(second.academicYear());
-        if (academicYearComparison != 0) {
-            return academicYearComparison;
-        }
-
-        int semesterOrderComparison = Integer.compare(
-                semesterOrder(first.semesterCode()), semesterOrder(second.semesterCode()));
-        if (semesterOrderComparison != 0) {
-            return semesterOrderComparison;
-        }
-        return first.semesterCode().compareTo(second.semesterCode());
-    }
-
-    /** 서로 다른 학기 코드 표기를 차트 정렬을 위한 순서 값으로 변환한다. */
-    private int semesterOrder(String semesterCode) {
-        return switch (semesterCode.toUpperCase(Locale.ROOT)) {
-            case "1", "1ST", "FIRST", "SPRING" -> 1;
-            case "SUMMER" -> 2;
-            case "2", "2ND", "SECOND", "FALL" -> 3;
-            case "WINTER" -> 4;
-            default -> 100;
-        };
+    /** 백엔드 공통코드와 비교할 수 있도록 학기 코드를 표준화한다. */
+    private String normalizeSemesterCode(String semesterCode) {
+        return semesterCode == null ? "" : semesterCode.trim().toUpperCase(Locale.ROOT);
     }
 
     /** 요청 학기가 실제 개별 학기 형식인지 확인하고 공백을 제거한다. */

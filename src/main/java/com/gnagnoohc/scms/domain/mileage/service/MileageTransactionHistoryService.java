@@ -28,6 +28,7 @@ public class MileageTransactionHistoryService {
     private static final String POSTED = "POSTED";
 
     private final MileageTransactionRepository mileageTransactionRepository;
+    private final MileageAcademicPeriodService mileageAcademicPeriodService;
 
     /**
      * 학생 본인의 확정 적립 내역을 10건 단위로 조회한다.
@@ -40,9 +41,17 @@ public class MileageTransactionHistoryService {
             Pageable pageable
     ) {
         PageRequest pageRequest = PageRequest.of(pageable.getPageNumber(), PAGE_SIZE);
+        MileageAcademicPeriodService.AcademicYearBounds academicYearBounds = academicYear == null
+                ? null
+                : mileageAcademicPeriodService.resolveAcademicYearBounds(academicYear);
         return PageResponse.from(
                 mileageTransactionRepository
-                        .findEarnedTransactions(studentId, academicYear, semesterCode, pageRequest)
+                        .findEarnedTransactions(
+                                studentId,
+                                academicYearBounds == null ? null : academicYearBounds.startAt(),
+                                academicYearBounds == null ? null : academicYearBounds.endAt(),
+                                semesterCode,
+                                pageRequest)
                         .map(item -> new MileageTransactionHistoryResponse.ListItem(
                                 item.getTransactionId(),
                                 item.getActivityName(),
@@ -136,7 +145,6 @@ public class MileageTransactionHistoryService {
                 activityType == null ? null : activityType.getActivityName(),
                 activityType == null ? null : activityType.getCategoryCode(),
                 activityType == null ? null : activityType.getEarningRoute(),
-                policy.getAcademicYear(),
                 policy.getSemesterCode(),
                 policy.getPoints());
     }

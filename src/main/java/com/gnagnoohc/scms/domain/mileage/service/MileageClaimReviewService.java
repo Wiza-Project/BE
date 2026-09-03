@@ -88,7 +88,10 @@ public class MileageClaimReviewService {
 
         Integer studentId = claim.getStudent().getUserId();
         BigDecimal grantablePoints = mileageAccrualCapService.computeGrantablePoints(
-                studentId, claim.getMileagePolicy(), claim.getMileagePolicy().getPoints());
+                studentId,
+                claim.getMileagePolicy(),
+                claim.getMileagePolicy().getPoints(),
+                claim.getActivityDate());
         if (grantablePoints.signum() <= 0) {
             throw new BusinessException(ErrorCode.MILEAGE_CAP_EXCEEDED, "마일리지 적립 한도를 초과하여 승인할 수 없습니다.");
         }

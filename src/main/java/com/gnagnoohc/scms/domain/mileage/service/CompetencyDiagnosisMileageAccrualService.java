@@ -61,7 +61,7 @@ public class CompetencyDiagnosisMileageAccrualService {
 
         Integer studentId = attempt.getStudent().getUserId();
         BigDecimal grantablePoints = mileageAccrualCapService.computeGrantablePoints(
-                studentId, policy, policy.getPoints());
+                studentId, policy, policy.getPoints(), submittedDate);
         if (grantablePoints.signum() <= 0) {
             log.info("마일리지 적립 한도 초과로 역량진단 완료 적립을 건너뜁니다. attemptId={}, studentId={}",
                     attemptId, studentId);
