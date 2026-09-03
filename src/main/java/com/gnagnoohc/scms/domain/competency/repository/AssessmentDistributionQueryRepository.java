@@ -2,7 +2,6 @@ package com.gnagnoohc.scms.domain.competency.repository;
 
 import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentGroupAxis;
 import com.querydsl.core.types.Projections;
-import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.core.types.dsl.StringExpression;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import lombok.RequiredArgsConstructor;
@@ -13,25 +12,20 @@ import java.util.List;
 import static com.gnagnoohc.scms.domain.academic.entity.QStudentAcademicDetail.studentAcademicDetail;
 import static com.gnagnoohc.scms.domain.competency.entity.QAssessmentAttempt.assessmentAttempt;
 import static com.gnagnoohc.scms.domain.competency.entity.QAssessmentScore.assessmentScore;
+import static com.gnagnoohc.scms.domain.competency.support.AssessmentTargetPolicy.ENROLLED_STUDENT;
 import static com.gnagnoohc.scms.domain.user.entity.QAppUser.appUser;
 
 /**
  * 역량별 분포·집단별 비교. assessment_score를 (집단축, competency_id)로 GROUP BY하는
  * 같은 쿼리라 그룹 축을 파라미터로 받는 메서드 하나로 구현한다 — 두 화면을 따로 구현하면
  * 축 순서가 어긋날 위험이 있어서다.
+ *
+ * <p>대상자 = STUDENT 중 학적상태 '재학'(AssessmentTargetPolicy.ENROLLED_STUDENT). 응시율·미응시자
+ * 명단과 같은 모수를 쓴다 — 졸업·제적·자퇴·휴학 학생의 점수는 집단 평균에 섞이지 않는다.
  */
 @Repository
 @RequiredArgsConstructor
 public class AssessmentDistributionQueryRepository {
-
-    private static final String STUDENT_USER_TYPE = "STUDENT";
-    // academic_status가 실제로 쓰는 라벨은 재학/휴학/졸업/제적/자퇴 5개. 이 중 재학만 대상자로 본다.
-    private static final String ENROLLED_ACADEMIC_STATUS = "재학";
-
-    // 대상자 = STUDENT 중 학적상태 '재학'. 응시율·미응시자 명단과 같은 모수를 쓴다 —
-    // 졸업·제적·자퇴·휴학 학생의 점수는 집단 평균에 섞이지 않는다.
-    private static final BooleanExpression ENROLLED_STUDENT =
-            appUser.userType.eq(STUDENT_USER_TYPE).and(appUser.academicStatus.eq(ENROLLED_ACADEMIC_STATUS));
 
     private final JPAQueryFactory queryFactory;
 

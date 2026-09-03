@@ -7,6 +7,7 @@ import com.gnagnoohc.scms.domain.competency.entity.AssessmentRound;
 import com.gnagnoohc.scms.domain.competency.repository.AssessmentAttemptRepository;
 import com.gnagnoohc.scms.domain.competency.repository.AssessmentRoundQuestionRepository;
 import com.gnagnoohc.scms.domain.competency.repository.AssessmentRoundRepository;
+import com.gnagnoohc.scms.domain.competency.support.AssessmentTargetPolicy;
 import com.gnagnoohc.scms.domain.user.entity.AppUser;
 import com.gnagnoohc.scms.domain.user.entity.UserConsent;
 import com.gnagnoohc.scms.domain.user.repository.AppUserRepository;
@@ -74,6 +75,17 @@ public class AssessmentIntroService {
             return toResponse(existing.get());
         }
 
+        /**
+         * 재학생만 새 응시를 시작할 수 있다. 이 검증을 멱등 반환 뒤에 둬야 재학 중 시작해둔 학생이
+         * 휴학해도 이어하기가 안 막힌다. 시작 후 학적이 바뀐 경우는 assertStillEnrolled가 막는다.
+         * academicStatus를 읽어야 하므로 getReferenceById가 아닌 findById를 쓴다.
+         */
+        AppUser student = appUserRepository.findById(studentId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+        if (!AssessmentTargetPolicy.isEnrolledStudent(student)) {
+            throw new BusinessException(ErrorCode.ASSESSMENT_NOT_ENROLLED_STUDENT);
+        }
+
         Instant now = Instant.now();
         if (now.isBefore(round.getStartsAt()) || now.isAfter(round.getEndsAt())) {
             throw new BusinessException(ErrorCode.DIAGNOSIS_PERIOD_CLOSED);
@@ -83,7 +95,6 @@ public class AssessmentIntroService {
             throw new BusinessException(ErrorCode.REQUIRED_CONSENT_NOT_AGREED);
         }
 
-        AppUser student = appUserRepository.getReferenceById(studentId);
         UserConsent linkedConsent = findRepresentativeConsent(studentId, now);
 
         AssessmentAttempt attempt;
