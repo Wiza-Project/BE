@@ -2,6 +2,7 @@ package com.gnagnoohc.scms.domain.competency.service;
 
 import com.gnagnoohc.scms.domain.competency.entity.AssessmentAttempt;
 import com.gnagnoohc.scms.domain.competency.repository.AssessmentAttemptRepository;
+import com.gnagnoohc.scms.domain.competency.support.AssessmentTargetPolicy;
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +35,17 @@ public class AssessmentAttemptAccessGuard {
     public void assertNotSubmitted(AssessmentAttempt attempt) {
         if (attempt.getSubmittedAt() != null) {
             throw new BusinessException(ErrorCode.DIAGNOSIS_ALREADY_SUBMITTED);
+        }
+    }
+
+    /**
+     * 응시 시작 후 학적이 바뀐 경우(재학 → 휴학·자퇴 등)의 응답 저장·제출을 막는다. 시작 시점 검증
+     * (AssessmentIntroService)만으로는 진행 중 변경이 안 걸려, 그대로 제출을 허용하면 응시율·결과
+     * 통계 어디에도 안 잡히는 기록이 남는다. 조회(이어하기·결과)는 확정된 본인 데이터라 막지 않는다.
+     */
+    public void assertStillEnrolled(AssessmentAttempt attempt) {
+        if (!AssessmentTargetPolicy.isEnrolledStudent(attempt.getStudent())) {
+            throw new BusinessException(ErrorCode.ASSESSMENT_NOT_ENROLLED_STUDENT);
         }
     }
 
