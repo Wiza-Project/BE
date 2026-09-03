@@ -37,7 +37,6 @@ public class MileageBenefitPolicyService {
 
         MileageBenefitPolicy policy = MileageBenefitPolicy.create(
                 request.benefitType(),
-                request.academicYear(),
                 semesterCode,
                 request.benefitName(),
                 request.minimumPoints(),
@@ -45,7 +44,10 @@ public class MileageBenefitPolicyService {
                 request.criteriaData(),
                 request.applicationStartsAt(),
                 request.applicationEndsAt(),
-                staffId
+                staffId,
+                request.benefitGroupCode(),
+                request.cumulativeYears(),
+                request.requiresExactPoints()
         );
 
         return MileageBenefitPolicyResponseDTO.from(benefitPolicyRepository.saveAndFlush(policy));
@@ -53,12 +55,11 @@ public class MileageBenefitPolicyService {
 
     public PageResponse<MileageBenefitPolicyResponseDTO> list(
             String benefitType,
-            Integer academicYear,
             String semesterCode,
             Boolean active,
             Pageable pageable
     ) {
-        Specification<MileageBenefitPolicy> spec = buildFilter(benefitType, academicYear, semesterCode, active);
+        Specification<MileageBenefitPolicy> spec = buildFilter(benefitType, semesterCode, active);
         Page<MileageBenefitPolicy> page = benefitPolicyRepository.findAll(spec, pageable);
         return PageResponse.from(page.map(MileageBenefitPolicyResponseDTO::from));
     }
@@ -110,7 +111,6 @@ public class MileageBenefitPolicyService {
 
     private Specification<MileageBenefitPolicy> buildFilter(
             String benefitType,
-            Integer academicYear,
             String semesterCode,
             Boolean active
     ) {
@@ -118,9 +118,6 @@ public class MileageBenefitPolicyService {
             var predicate = cb.conjunction();
             if (benefitType != null) {
                 predicate = cb.and(predicate, cb.equal(root.get("benefitType"), benefitType));
-            }
-            if (academicYear != null) {
-                predicate = cb.and(predicate, cb.equal(root.get("academicYear"), academicYear));
             }
             if (semesterCode != null) {
                 predicate = cb.and(predicate, cb.equal(root.get("semesterCode"), semesterCode));

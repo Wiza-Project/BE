@@ -10,7 +10,6 @@ import java.time.Instant;
 public record MileageBenefitPolicyResponseDTO(
         Integer benefitPolicyId,
         String benefitType,
-        Integer academicYear,
         String semesterCode,
         String benefitName,
         BigDecimal minimumPoints,
@@ -20,13 +19,15 @@ public record MileageBenefitPolicyResponseDTO(
         Instant applicationEndsAt,
         boolean active,
         Instant createdAt,
-        Integer createdBy
+        Integer createdBy,
+        String benefitGroupCode,
+        Integer cumulativeYears,
+        boolean requiresExactPoints
 ) {
     public static MileageBenefitPolicyResponseDTO from(MileageBenefitPolicy policy) {
         return new MileageBenefitPolicyResponseDTO(
                 policy.getBenefitPolicyId(),
                 policy.getBenefitType(),
-                policy.getAcademicYear(),
                 policy.getSemesterCode(),
                 policy.getBenefitName(),
                 policy.getMinimumPoints(),
@@ -36,7 +37,10 @@ public record MileageBenefitPolicyResponseDTO(
                 policy.getApplicationEndsAt(),
                 policy.isActive(),
                 policy.getCreatedAt(),
-                policy.getCreatedBy()
+                policy.getCreatedBy(),
+                policy.getBenefitGroupCode(),
+                policy.getCumulativeYears(),
+                policy.isRequiresExactPoints()
         );
     }
 }

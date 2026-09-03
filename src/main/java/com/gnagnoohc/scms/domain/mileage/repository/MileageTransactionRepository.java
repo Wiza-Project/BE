@@ -21,6 +21,9 @@ public interface MileageTransactionRepository extends JpaRepository<MileageTrans
     /** 동일 외부활동 신청의 승인 적립 원장을 찾아 중복 적립을 막는다. */
     Optional<MileageTransaction> findBySourceExternalClaim_ExternalClaimId(Integer externalClaimId);
 
+    /** 동일 역량진단 응시 회차로 이미 생성된 적립 원장을 찾아 중복 적립을 막는다. */
+    Optional<MileageTransaction> findBySourceAssessmentAttempt_AttemptId(Integer attemptId);
+
     /** 동일 승인 원장에 이미 역분개가 생성됐는지 확인해 중복 취소를 막는다. */
     Optional<MileageTransaction> findByReversalOfTransaction_MileageTransactionId(Integer transactionId);
 
@@ -45,6 +48,21 @@ public interface MileageTransactionRepository extends JpaRepository<MileageTrans
     BigDecimal sumPostedPointsByStudentAndAcademicYear(
             @Param("studentId") Integer studentId,
             @Param("academicYear") Integer academicYear
+    );
+
+    /** 다년 누적 장학금 정책(cumulativeYears > 1)에 사용할 학년도 범위 확정 점수를 합산한다. */
+    @Query("""
+            select coalesce(sum(t.points), 0)
+            from MileageTransaction t
+            join t.mileagePolicy p
+            where t.student.userId = :studentId
+              and t.transactionStatus = 'POSTED'
+              and p.academicYear between :startYear and :endYear
+            """)
+    BigDecimal sumPostedPointsByStudentAndAcademicYearRange(
+            @Param("studentId") Integer studentId,
+            @Param("startYear") Integer startYear,
+            @Param("endYear") Integer endYear
     );
 
     /** 선택 학기 또는 연간 정책에 귀속된 확정 거래를 합산한다. */

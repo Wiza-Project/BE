@@ -19,7 +19,6 @@ public class MileageBenefitPolicy extends BaseTimeEntity {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "benefit_policy_id", nullable = false) private Integer benefitPolicyId;
     @Column(name = "benefit_type", nullable = false, length = 20) private String benefitType;
-    @Column(name = "academic_year", nullable = false) private Integer academicYear;
     @Column(name = "semester_code", nullable = false, length = 20) private String semesterCode = "ALL";
     @Column(name = "benefit_name", nullable = false, length = 150) private String benefitName;
     @Column(name = "minimum_points", nullable = false, precision = 10, scale = 2) private BigDecimal minimumPoints;
@@ -29,10 +28,15 @@ public class MileageBenefitPolicy extends BaseTimeEntity {
     @Column(name = "application_ends_at") private Instant applicationEndsAt;
     @Column(name = "is_active", nullable = false) private boolean active = true;
     @Column(name = "created_by", nullable = false) private Integer createdBy;
+    /** 배타적 단계(tier) 그룹 식별자. 같은 값을 공유하는 정책끼리는 학생이 그중 하나만 신청할 수 있다. null이면 배타 그룹 없음. */
+    @Column(name = "benefit_group_code", length = 50) private String benefitGroupCode;
+    /** 자격 판정 시 합산할 연속 연도 수(학생의 입학년도부터 합산). 1이면 단일 연도 합산(기존 동작). */
+    @Column(name = "cumulative_years", nullable = false) private Integer cumulativeYears = 1;
+    /** true면 minimumPoints "이상"이 아니라 정확히 일치해야 자격을 충족한다. */
+    @Column(name = "requires_exact_points", nullable = false) private boolean requiresExactPoints = false;
 
     public static MileageBenefitPolicy create(
             String benefitType,
-            Integer academicYear,
             String semesterCode,
             String benefitName,
             BigDecimal minimumPoints,
@@ -40,11 +44,13 @@ public class MileageBenefitPolicy extends BaseTimeEntity {
             JsonNode criteriaData,
             Instant applicationStartsAt,
             Instant applicationEndsAt,
-            Integer createdBy
+            Integer createdBy,
+            String benefitGroupCode,
+            Integer cumulativeYears,
+            boolean requiresExactPoints
     ) {
         MileageBenefitPolicy policy = new MileageBenefitPolicy();
         policy.benefitType = benefitType;
-        policy.academicYear = academicYear;
         policy.semesterCode = semesterCode;
         policy.benefitName = benefitName;
         policy.minimumPoints = minimumPoints;
@@ -53,6 +59,9 @@ public class MileageBenefitPolicy extends BaseTimeEntity {
         policy.applicationStartsAt = applicationStartsAt;
         policy.applicationEndsAt = applicationEndsAt;
         policy.createdBy = createdBy;
+        policy.benefitGroupCode = benefitGroupCode;
+        policy.cumulativeYears = cumulativeYears == null ? 1 : cumulativeYears;
+        policy.requiresExactPoints = requiresExactPoints;
         return policy;
     }
 

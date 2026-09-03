@@ -173,6 +173,7 @@ public enum ErrorCode {
     MILEAGE_POLICY_VALID_TO_CONFLICT(HttpStatus.BAD_REQUEST, "M008", "validTo와 clearValidTo를 동시에 지정할 수 없습니다."),
     MILEAGE_BENEFIT_POLICY_NOT_FOUND(HttpStatus.NOT_FOUND, "M009", "인증·장학 정책을 찾을 수 없습니다."),
     MILEAGE_BENEFIT_POLICY_INVALID_PERIOD(HttpStatus.BAD_REQUEST, "M010", "신청 시작일은 종료일보다 빨라야 합니다."),
+    MILEAGE_CAP_EXCEEDED(HttpStatus.BAD_REQUEST, "M011", "마일리지 적립 한도를 초과했습니다."),
 
     // ── 취창업 ────────────────────────────────────────────────────
     JOB_POSTING_NOT_FOUND(HttpStatus.NOT_FOUND, "J001", "구인공고를 찾을 수 없습니다."),
