@@ -19,6 +19,7 @@ import java.util.List;
 
 import static com.gnagnoohc.scms.domain.academic.entity.QStudentAcademicDetail.studentAcademicDetail;
 import static com.gnagnoohc.scms.domain.competency.entity.QAssessmentAttempt.assessmentAttempt;
+import static com.gnagnoohc.scms.domain.competency.support.AssessmentTargetPolicy.ENROLLED_STUDENT;
 import static com.gnagnoohc.scms.domain.user.entity.QAppUser.appUser;
 import static com.gnagnoohc.scms.global.common.entity.QCommonCode.commonCode;
 
@@ -26,19 +27,14 @@ import static com.gnagnoohc.scms.global.common.entity.QCommonCode.commonCode;
  * 미응시자 목록 전용 QueryDSL 레포지토리. AssessmentAttendanceQueryRepository와 대상자
  * 판정 기준(재학 학생 + target_condition 해석 + 완료 기준)은 같지만, 개인정보가 담긴 행을
  * 그대로 반환하므로 응시율 집계와는 별도 클래스로 분리한다.
+ *
+ * <p>대상자 = STUDENT 중 학적상태 '재학'(AssessmentTargetPolicy.ENROLLED_STUDENT). 응시율
+ * (AssessmentAttendanceQueryRepository)·결과 통계(AssessmentDistributionQueryRepository)와 같은
+ * 모수를 쓰도록 조건을 맞춘다.
  */
 @Repository
 @RequiredArgsConstructor
 public class AssessmentNonParticipantQueryRepository {
-
-    private static final String STUDENT_USER_TYPE = "STUDENT";
-    // academic_status가 실제로 쓰는 라벨은 재학/휴학/졸업/제적/자퇴 5개. 이 중 재학만 대상자로 본다.
-    private static final String ENROLLED_ACADEMIC_STATUS = "재학";
-
-    // 대상자 = STUDENT 중 학적상태 '재학'. 응시율(AssessmentAttendanceQueryRepository)·
-    // 결과 통계(AssessmentDistributionQueryRepository)와 같은 모수를 쓰도록 조건을 맞춘다.
-    private static final BooleanExpression ENROLLED_STUDENT =
-            appUser.userType.eq(STUDENT_USER_TYPE).and(appUser.academicStatus.eq(ENROLLED_ACADEMIC_STATUS));
 
     private final JPAQueryFactory queryFactory;
     private final TargetConditionInterpreter targetConditionInterpreter;

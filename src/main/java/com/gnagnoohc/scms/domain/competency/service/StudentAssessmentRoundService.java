@@ -45,8 +45,18 @@ public class StudentAssessmentRoundService {
             return List.of();
         }
 
-        // 대상 조건 판정에 필요한 학적(학년·전공)을 1회만 조회하고, 회차별 판정은 메모리에서 한다.
+        // 대상 조건 판정에 필요한 학적(재학 여부·학년·전공)을 1회만 조회하고, 회차별 판정은 메모리에서 한다.
         StudentTargetSnapshot snapshot = studentAssessmentRoundQueryRepository.loadTargetSnapshot(studentId);
+
+        /**
+         * 재학생이 아니면 어떤 회차도 응시할 수 없다. matches()에 맡기지 않고 여기서 먼저 끊는 이유:
+         * target_condition이 없는(=전체 학생 대상) 회차에 대해 matches()는 무조건 true를 반환하므로,
+         * 이 조기 반환이 없으면 학년·전공 조건이 걸린 회차만 걸러지고 전체 대상 회차는 그대로 노출된다.
+         */
+        if (!snapshot.enrolled()) {
+            return List.of();
+        }
+
         List<AssessmentRound> targetedRounds = openRounds.stream()
                 .filter(round -> targetConditionInterpreter.matches(round.getTargetCondition(), snapshot))
                 .toList();
