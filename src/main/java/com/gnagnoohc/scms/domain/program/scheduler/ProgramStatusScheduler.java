@@ -1,5 +1,7 @@
 package com.gnagnoohc.scms.domain.program.scheduler;
 
+import com.gnagnoohc.scms.domain.program.entity.ProgramApplication;
+import com.gnagnoohc.scms.domain.program.event.ExtracurricularActivityCompletedEvent;
 import com.gnagnoohc.scms.domain.program.event.ProgramCompletionJudgedEvent;
 import com.gnagnoohc.scms.domain.program.repository.ExtracurricularProgramRepository;
 import com.gnagnoohc.scms.domain.program.repository.ProgramApplicationRepository;
@@ -11,6 +13,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.List;
 
 @Component
 @RequiredArgsConstructor
@@ -46,8 +49,17 @@ public class ProgramStatusScheduler {
          * domain/program/package-info.java의 설계 메모(도메인 간 양방향 직접 의존 방지) 참고.
          */
         if (completionJudged > 0) {
-            for (Integer applicationId : applicationRepository.findApplicationIdsJudgedCompletedAt(now)) {
+            List<Integer> judgedApplicationIds = applicationRepository.findApplicationIdsJudgedCompletedAt(now);
+            for (Integer applicationId : judgedApplicationIds) {
                 eventPublisher.publishEvent(new ProgramCompletionJudgedEvent(applicationId));
+            }
+            /**
+             * 취창업/이력서 도메인용 이벤트. ExtracurricularActivityCompletedEvent 참고 —
+             * 구독 측은 @TransactionalEventListener(phase = AFTER_COMMIT)으로 받아야 한다.
+             */
+            for (ProgramApplication application :
+                    applicationRepository.findWithProgramDetailsByApplicationIdIn(judgedApplicationIds)) {
+                eventPublisher.publishEvent(ExtracurricularActivityCompletedEvent.from(application));
             }
         }
 
