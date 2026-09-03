@@ -27,7 +27,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
 
 /**
- * 공지사항/FAQ 게시글 관리 API. SecurityConfig가 "/api/admin/**"을 hasRole("STAFF")로 이미 거르므로
+ * 공지사항/FAQ 게시글 관리 API. SecurityConfig가 "/api/staff/**"을 hasRole("STAFF")로 이미 거르므로
  * 이 컨트롤러에는 별도 인가 어노테이션이 없다. 부서별 추가 제한은 이번 스코프에 없다.
  *
  * FAQ 카테고리는 새 테이블 대신 CommonCode(FAQ_CATEGORY 그룹)를 그대로 참조하므로, 카테고리
@@ -40,7 +40,7 @@ import java.util.List;
  */
 @Tag(name = "BoardAdmin", description = "공지사항/FAQ 게시글 관리(교직원)")
 @RestController
-@RequestMapping("/api/admin/boards/{boardType}")
+@RequestMapping("/api/staff/boards/{boardType}")
 @RequiredArgsConstructor
 public class BoardAdminController {
 

@@ -1,9 +1,9 @@
 package com.gnagnoohc.scms.domain.competency.controller;
 
-import com.gnagnoohc.scms.domain.competency.dto.CompetencyActiveStatusRequest;
-import com.gnagnoohc.scms.domain.competency.dto.CompetencyDisplayOrderRequest;
-import com.gnagnoohc.scms.domain.competency.dto.CompetencyRegisterRequest;
-import com.gnagnoohc.scms.domain.competency.dto.CompetencyResponse;
+import com.gnagnoohc.scms.domain.competency.dto.request.CompetencyActiveStatusRequest;
+import com.gnagnoohc.scms.domain.competency.dto.request.CompetencyDisplayOrderRequest;
+import com.gnagnoohc.scms.domain.competency.dto.request.CompetencyRegisterRequest;
+import com.gnagnoohc.scms.domain.competency.dto.response.CompetencyResponse;
 import com.gnagnoohc.scms.domain.competency.service.CompetencyService;
 import com.gnagnoohc.scms.global.common.dto.ApiResponse;
 import com.gnagnoohc.scms.global.security.AuthUser;
@@ -12,6 +12,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -23,11 +24,18 @@ import java.util.List;
 
 @Tag(name = "Competency", description = "핵심역량 관리")
 @RestController
-@RequestMapping("/api/admin/competencies")
+@RequestMapping("/api/staff/competencies")
 @RequiredArgsConstructor
 public class CompetencyController {
 
     private final CompetencyService competencyService;
+
+    @Operation(summary = "핵심역량 관리 목록 조회", description = "교직원 핵심역량 관리 화면용 목록입니다. 비활성 역량까지 축순서대로 모두 내려주며, "
+            + "영문명·설명·사용여부를 포함합니다. (활성 역량만 주는 공용 드롭다운 목록은 GET /api/competencies)")
+    @GetMapping
+    public ApiResponse<List<CompetencyResponse>> getCompetencies() {
+        return ApiResponse.ok(competencyService.getCompetenciesForManagement());
+    }
 
     @Operation(summary = "핵심역량 등록", description = "최상위 핵심역량을 등록합니다. 역량코드는 C100~C600로 자동채번됩니다.")
     @PostMapping

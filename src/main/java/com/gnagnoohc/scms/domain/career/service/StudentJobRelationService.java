@@ -21,7 +21,6 @@ import com.gnagnoohc.scms.global.common.notification.ModuleCode;
 import com.gnagnoohc.scms.global.common.notification.NotificationRequest;
 import com.gnagnoohc.scms.global.common.notification.NotificationSender;
 import com.gnagnoohc.scms.global.common.notification.NotificationType;
-import com.gnagnoohc.scms.global.common.service.NotificationService;
 import com.gnagnoohc.scms.global.common.util.DateTimeUtils;
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
@@ -33,8 +32,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.OffsetDateTime;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 /**
@@ -140,9 +140,13 @@ public class StudentJobRelationService {
      * [스케줄러 호출용] D-3 마감 임박 관심 공고 알림 일괄 발송
      */
     public void sendDeadlineApproachingNotifications() {
-        Instant now = Instant.now();
-        Instant d3Start = now.plus(3, ChronoUnit.DAYS).truncatedTo(ChronoUnit.DAYS);
-        Instant d3End = d3Start.plus(1, ChronoUnit.DAYS).minusNanos(1);
+        // KST 기준 오늘로부터 3일 뒤 일자(LocalDate) 계산
+        LocalDate targetDate = LocalDate.now(DateTimeUtils.KST_ZONE).plusDays(3);
+        // KST 자정(00:00:00) -> UTC Instant 변환
+        Instant d3Start = targetDate.atStartOfDay(DateTimeUtils.KST_ZONE).toInstant();
+
+        // KST 하루 끝(23:59:59.999999999) -> UTC Instant 변환
+        Instant d3End = targetDate.atTime(LocalTime.MAX).atZone(DateTimeUtils.KST_ZONE).toInstant();
 
         List<StudentJobRelation> targets = relationRepository.findScrappedPostingsEndingBetween(d3Start, d3End);
 
@@ -212,13 +216,6 @@ public class StudentJobRelationService {
      */
     @Transactional
     public JobScrapToggleResponseDTO toggleScrap(Integer studentUserId, Integer jobPostingId) {
-        Instant now = Instant.now();
-
-        // 스크랩 쓰기 개인정보 동의 검증
-        if (!consentVerifier.hasValidConsent(studentUserId, ConsentModuleCode.CAREER, ConsentType.PERSONAL_INFO, now)) {
-            throw new BusinessException(ErrorCode.REQUIRED_CONSENT_NOT_AGREED);
-        }
-
         JobPosting jobPosting = jobPostingRepository.findById(jobPostingId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.JOB_POSTING_NOT_FOUND));
 
@@ -280,7 +277,7 @@ public class StudentJobRelationService {
 
     /**
      * 학생-채용공고 관계 엔티티를 클라이언트 반환용 응답 DTO로 매핑 변환
-     * 시간 데이터는 공통 시간 유틸리티({@link DateTimeUtils})지정한 KST 오프셋 메소드를 호출-변환 처리
+     * 시간 데이터는 공통 시간 유틸리티({@link DateTimeUtils})지정한 KST 오프셋 메소드를 호출, 변환 처리
      *
      * @param relation 학생-공고 관계 엔티티 원장
      * @return 상세 지원 현황 및 전형 응답 DTO

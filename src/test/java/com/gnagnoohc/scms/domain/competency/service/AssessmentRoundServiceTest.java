@@ -1,11 +1,17 @@
 package com.gnagnoohc.scms.domain.competency.service;
 
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentRoundRequest;
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentRoundResponse;
+import com.gnagnoohc.scms.domain.competency.dto.request.AssessmentRoundRequest;
+import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentRoundResponse;
+import com.gnagnoohc.scms.domain.competency.entity.AssessmentQuestion;
 import com.gnagnoohc.scms.domain.competency.entity.AssessmentRound;
+import com.gnagnoohc.scms.domain.competency.entity.AssessmentRoundQuestion;
+import com.gnagnoohc.scms.domain.competency.entity.Competency;
 import com.gnagnoohc.scms.domain.competency.repository.AssessmentAttemptRepository;
+import com.gnagnoohc.scms.domain.competency.repository.AssessmentQuestionRepository;
+import com.gnagnoohc.scms.domain.competency.repository.AssessmentRoundQuestionRepository;
 import com.gnagnoohc.scms.domain.competency.repository.AssessmentRoundRepository;
 import com.gnagnoohc.scms.domain.competency.support.TargetConditionInterpreter;
+import org.mockito.ArgumentCaptor;
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,6 +45,12 @@ class AssessmentRoundServiceTest {
     @Mock
     AssessmentAttemptRepository assessmentAttemptRepository;
 
+    @Mock
+    AssessmentQuestionRepository assessmentQuestionRepository;
+
+    @Mock
+    AssessmentRoundQuestionRepository assessmentRoundQuestionRepository;
+
     // TargetConditionInterpreter는 의존성 없는 순수 컴포넌트라 목(mock) 대신 실제 인스턴스를 쓴다 —
     // isValidShape()를 목으로 두면 boolean 기본값(false)이 반환돼 targetCondition을 넘기는
     // 기존 테스트가 전부 INVALID_INPUT으로 깨지기 때문에, 매 테스트마다 스텁하는 대신 실제 판정 로직을 쓴다.
@@ -46,8 +58,11 @@ class AssessmentRoundServiceTest {
 
     @BeforeEach
     void setUp() {
+        // 편성용 문항 조회는 미스텁 시 Mockito 기본값(빈 List)을 돌려주므로 등록 성공 경로에서 문항 0개로 편성된다.
         assessmentRoundService = new AssessmentRoundService(
-                assessmentRoundRepository, assessmentAttemptRepository, new TargetConditionInterpreter());
+                assessmentRoundRepository, assessmentAttemptRepository,
+                assessmentQuestionRepository, assessmentRoundQuestionRepository,
+                new TargetConditionInterpreter());
     }
 
     // 테스트에서 IDENTITY 채번 없이도 assessmentRoundId를 세팅하기 위한 리플렉션 헬퍼(엔티티에 세터가 없으므로)
@@ -82,6 +97,33 @@ class AssessmentRoundServiceTest {
         assertThat(response.assessmentType()).isEqualTo("PRE");
         assertThat(response.roundStatus()).isEqualTo("DRAFT");
         assertThat(response.targetCondition()).containsEntry("grades", List.of(3));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void registerRound_composesActiveQuestionsInRowOrder() {
+        Instant startsAt = Instant.now();
+        Instant endsAt = startsAt.plus(7, ChronoUnit.DAYS);
+        when(assessmentRoundRepository.findByAcademicYearAndSemesterCodeAndAssessmentType(2026, "SPRING", "PRE"))
+                .thenReturn(Optional.empty());
+        when(assessmentRoundRepository.save(any(AssessmentRound.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        Competency competency = Competency.createTop("C100", "자기관리 역량", null, null, 100, 1);
+        AssessmentQuestion first = AssessmentQuestion.createFromUpload(competency, "문항1", null, 1);
+        AssessmentQuestion second = AssessmentQuestion.createFromUpload(competency, "문항2", null, 1);
+        when(assessmentQuestionRepository.findAllActiveForRoundComposition())
+                .thenReturn(List.of(first, second));
+
+        assessmentRoundService.registerRound(buildRequest(startsAt, endsAt, null), 1);
+
+        ArgumentCaptor<List<AssessmentRoundQuestion>> captor = ArgumentCaptor.forClass(List.class);
+        verify(assessmentRoundQuestionRepository).saveAll(captor.capture());
+        List<AssessmentRoundQuestion> composed = captor.getValue();
+        assertThat(composed).hasSize(2);
+        assertThat(composed.get(0).getQuestion()).isSameAs(first);
+        assertThat(composed.get(0).getDisplayOrder()).isEqualTo(1);
+        assertThat(composed.get(1).getDisplayOrder()).isEqualTo(2);
     }
 
     @Test

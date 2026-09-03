@@ -1,9 +1,9 @@
 package com.gnagnoohc.scms.domain.competency.service;
 
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentDistributionResponse;
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentDistributionResponse.CompetencyAverage;
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentDistributionResponse.GroupScores;
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentGroupAxis;
+import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentDistributionResponse;
+import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentDistributionResponse.CompetencyAverage;
+import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentDistributionResponse.GroupScores;
+import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentGroupAxis;
 import com.gnagnoohc.scms.domain.competency.repository.AssessmentDistributionQueryRepository;
 import com.gnagnoohc.scms.domain.competency.repository.AssessmentDistributionQueryRepository.GroupCompetencyAggregate;
 import com.gnagnoohc.scms.domain.competency.repository.AssessmentRoundRepository;
@@ -13,6 +13,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -47,9 +49,11 @@ public class AssessmentDistributionService {
         return new AssessmentDistributionResponse(roundId, groupAxis, groups);
     }
 
-    // GRADE/MAJOR 둘 중 하나가 아니면 Q021로 차단한다 — TargetConditionInterpreter가 인식 못 하는
-    // target_condition 키를 조용히 무시하지 않고 에러로 실패시키는 것과 같은 이유(잘못된 값을 무시하면
-    // FE가 의도한 축과 다른 데이터를 받고도 알아채기 어렵다).
+    /**
+     * GRADE/MAJOR 둘 중 하나가 아니면 Q021로 차단한다 — TargetConditionInterpreter가 인식 못 하는
+     * target_condition 키를 조용히 무시하지 않고 에러로 실패시키는 것과 같은 이유(잘못된 값을 무시하면
+     * FE가 의도한 축과 다른 데이터를 받고도 알아채기 어렵다).
+     */
     private AssessmentGroupAxis parseGroupAxis(String groupByParam) {
         try {
             return AssessmentGroupAxis.valueOf(groupByParam.toUpperCase());
@@ -61,10 +65,16 @@ public class AssessmentDistributionService {
     private GroupScores toGroupScores(List<GroupCompetencyAggregate> groupRows) {
         GroupCompetencyAggregate first = groupRows.get(0);
         List<CompetencyAverage> competencyAverages = groupRows.stream()
-                // 방사형 차트(SCR-S02)와 축 순서를 맞추기 위해 displayOrder로 다시 정렬한다.
+                // 방사형 차트와 축 순서를 맞추기 위해 displayOrder로 다시 정렬한다.
                 .sorted(Comparator.comparing(GroupCompetencyAggregate::displayOrder))
-                .map(r -> new CompetencyAverage(r.competencyId(), r.competencyName(), r.displayOrder(), r.averageScore()))
+                .map(r -> new CompetencyAverage(r.competencyId(), r.competencyName(), r.displayOrder(),
+                        toScore(r.averageScore())))
                 .toList();
         return new GroupScores(first.groupKey(), first.groupLabel(), first.respondentCount(), competencyAverages);
+    }
+
+    // QueryDSL avg()가 준 Double을 화면 표시용 소수 2자리 BigDecimal로 맞춘다.
+    private static BigDecimal toScore(Double average) {
+        return average == null ? null : BigDecimal.valueOf(average).setScale(2, RoundingMode.HALF_UP);
     }
 }

@@ -28,7 +28,7 @@ import org.springframework.web.bind.annotation.*;
  */
 @Tag(name = "교직원 - 취창업 관계 관리 API", description = "공고별 지원자 목록 및 전형 진행 상태 관리 API")
 @RestController
-@RequestMapping("/api/admin/career")
+@RequestMapping("/api/staff/career")
 @RequiredArgsConstructor
 @PreAuthorize("@careerSecurity.isCareerStaff(principal)")
 public class StaffJobRelationController {

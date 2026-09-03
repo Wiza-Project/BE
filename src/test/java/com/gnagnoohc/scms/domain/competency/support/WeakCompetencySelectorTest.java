@@ -1,6 +1,6 @@
 package com.gnagnoohc.scms.domain.competency.support;
 
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentResultResponse.CompetencyResult;
+import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentResultResponse.CompetencyResult;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;

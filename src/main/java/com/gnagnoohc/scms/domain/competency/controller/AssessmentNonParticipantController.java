@@ -1,8 +1,8 @@
 package com.gnagnoohc.scms.domain.competency.controller;
 
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentNonParticipantNotifyRequest;
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentNonParticipantNotifyResponse;
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentNonParticipantResponse;
+import com.gnagnoohc.scms.domain.competency.dto.request.AssessmentNonParticipantNotifyRequest;
+import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentNonParticipantNotifyResponse;
+import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentNonParticipantResponse;
 import com.gnagnoohc.scms.domain.competency.service.AssessmentNonParticipantService;
 import com.gnagnoohc.scms.global.common.dto.ApiResponse;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;
@@ -23,12 +23,12 @@ import java.util.List;
 
 /**
  * 미응시자 목록 조회. 담당 교직원이 미응시자를 확인해야 하는 기능이라 STAFF 전반에게
- * 열어둔다. {@code SecurityConfig}가 {@code /api/admin/**}를 이미 STAFF role로 막고
+ * 열어둔다. {@code SecurityConfig}가 {@code /api/staff/**}를 이미 STAFF role로 막고
  * 있고, 여기 {@code @PreAuthorize}는 AdminStudentController와 같은 보조 안전장치일 뿐이다.
  */
 @Tag(name = "AssessmentNonParticipant", description = "진단 미응시자 조회")
 @RestController
-@RequestMapping("/api/admin/assessment-rounds")
+@RequestMapping("/api/staff/assessment-rounds")
 @RequiredArgsConstructor
 @PreAuthorize("hasRole('STAFF')")
 public class AssessmentNonParticipantController {

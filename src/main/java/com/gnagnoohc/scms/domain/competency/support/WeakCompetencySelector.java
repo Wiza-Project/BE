@@ -1,6 +1,6 @@
 package com.gnagnoohc.scms.domain.competency.support;
 
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentResultResponse.CompetencyResult;
+import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentResultResponse.CompetencyResult;
 import org.springframework.stereotype.Component;
 
 import java.util.Comparator;

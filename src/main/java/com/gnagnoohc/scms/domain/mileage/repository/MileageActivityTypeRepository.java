@@ -14,6 +14,8 @@ public interface MileageActivityTypeRepository extends JpaRepository<MileageActi
 
     boolean existsByActivityCode(String activityCode);
 
+    Optional<MileageActivityType> findByActivityCode(String activityCode);
+
     List<MileageActivityType> findAllByActiveTrueOrderByActivityNameAsc();
 
     /**

@@ -40,12 +40,21 @@ public class MileageTransaction extends BaseCreatedAtEntity {
             ProgramApplication application,
             Instant postedAt
     ) {
-        MileagePolicy policy = application.getProgram().getMileagePolicy();
+        return earnFromProgramCompletion(application, application.getProgram().getMileagePolicy(), postedAt);
+    }
+
+    /** 마일리지 영역에서 프로그램 유형으로 해석한 비교과 정책으로 적립 원장을 생성한다. */
+    public static MileageTransaction earnFromProgramCompletion(
+            ProgramApplication application,
+            MileagePolicy policy,
+            Instant postedAt
+    ) {
 
         MileageTransaction transaction = new MileageTransaction();
         transaction.student = application.getStudent();
         transaction.mileagePolicy = policy;
-        transaction.competency = policy.getActivityType().getCompetency();
+        // 정책 기준은 프로그램 유형이지만, 원장에는 프로그램 자체의 핵심역량을 보존한다.
+        transaction.competency = application.getProgram().getCompetency();
         transaction.sourceProgramApplication = application;
         transaction.transactionType = "EARN";
         transaction.points = policy.getPoints();

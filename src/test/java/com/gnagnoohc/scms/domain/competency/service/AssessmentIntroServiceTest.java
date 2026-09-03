@@ -1,7 +1,7 @@
 package com.gnagnoohc.scms.domain.competency.service;
 
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentAttemptResponse;
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentIntroResponse;
+import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentAttemptResponse;
+import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentIntroResponse;
 import com.gnagnoohc.scms.domain.competency.entity.AssessmentAttempt;
 import com.gnagnoohc.scms.domain.competency.entity.AssessmentRound;
 import com.gnagnoohc.scms.domain.competency.repository.AssessmentAttemptRepository;

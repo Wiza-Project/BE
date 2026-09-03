@@ -44,7 +44,7 @@ public class JobPostingScheduler {
     /**
      * 매 시 정각(0분 0초)에 접수 기간이 지난 게시 공고를 CLOSED로 상태 전이
      */
-    @Scheduled(cron = "0 0 * * * *")
+    @Scheduled(cron = "0 0 * * * *", zone = "Asia/Seoul")
     @Transactional
     public void autoCloseExpiredJobPostings() {
         Instant now = Instant.now();
@@ -57,7 +57,7 @@ public class JobPostingScheduler {
     /**
      * 매일 오전 09:00 정각에 마감 D-3 관심 공고 알림 자동 발송
      */
-    @Scheduled(cron = "0 0 9 * * *")
+    @Scheduled(cron = "0 0 9 * * *", zone = "Asia/Seoul")
     public void runJobDeadlineNotificationBatch() {
         log.info("[JobPostingScheduler] 마감 D-3 관심 공고 알림 배치 실행 시작");
         studentJobRelationService.sendDeadlineApproachingNotifications();

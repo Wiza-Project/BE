@@ -4,7 +4,9 @@ import com.gnagnoohc.scms.domain.competency.entity.AssessmentRoundQuestion;
 import com.gnagnoohc.scms.domain.competency.entity.AssessmentRoundQuestionId;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 
 public interface AssessmentRoundQuestionRepository extends JpaRepository<AssessmentRoundQuestion, AssessmentRoundQuestionId> {
@@ -20,4 +22,11 @@ public interface AssessmentRoundQuestionRepository extends JpaRepository<Assessm
 
     // 진행률(totalCount) 계산용 — fetch join 없이 개수만 필요할 때 사용.
     long countByAssessmentRound_AssessmentRoundId(Integer assessmentRoundId);
+
+    // 학생 응시 가능 회차 목록 — 여러 회차의 문항 수를 한 번에 집계한다(회차별 count N+1 방지).
+    // row[0] = assessmentRoundId(Integer), row[1] = 문항 수(Long). 문항이 0개인 회차는 결과에 나오지 않는다.
+    @Query("select rq.assessmentRound.assessmentRoundId, count(rq) from AssessmentRoundQuestion rq "
+            + "where rq.assessmentRound.assessmentRoundId in :roundIds "
+            + "group by rq.assessmentRound.assessmentRoundId")
+    List<Object[]> countGroupedByAssessmentRoundIds(@Param("roundIds") Collection<Integer> roundIds);
 }

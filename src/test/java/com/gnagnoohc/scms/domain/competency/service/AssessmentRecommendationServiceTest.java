@@ -1,8 +1,8 @@
 package com.gnagnoohc.scms.domain.competency.service;
 
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentResultResponse;
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentResultResponse.CompetencyResult;
-import com.gnagnoohc.scms.domain.competency.dto.RecommendedProgramsResponse;
+import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentResultResponse;
+import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentResultResponse.CompetencyResult;
+import com.gnagnoohc.scms.domain.competency.dto.response.RecommendedProgramsResponse;
 import com.gnagnoohc.scms.domain.competency.support.WeakCompetencySelector;
 import com.gnagnoohc.scms.domain.competency.entity.Competency;
 import com.gnagnoohc.scms.domain.program.entity.ExtracurricularProgram;

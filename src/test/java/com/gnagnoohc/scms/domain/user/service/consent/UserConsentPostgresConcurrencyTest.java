@@ -1,7 +1,7 @@
 package com.gnagnoohc.scms.domain.user.service.consent;
 
-import com.gnagnoohc.scms.domain.counsel.dto.CounselingReservationRequest;
-import com.gnagnoohc.scms.domain.counsel.dto.CounselingReservationResponse;
+import com.gnagnoohc.scms.domain.counsel.dto.request.CounselingReservationRequest;
+import com.gnagnoohc.scms.domain.counsel.dto.response.CounselingReservationResponse;
 import com.gnagnoohc.scms.domain.counsel.entity.CounselingReservation;
 import com.gnagnoohc.scms.domain.counsel.entity.CounselingSchedule;
 import com.gnagnoohc.scms.domain.counsel.entity.CounselingType;

@@ -2,7 +2,7 @@ package com.gnagnoohc.scms.domain.competency.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentAttendanceResponse;
+import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentAttendanceResponse;
 import com.gnagnoohc.scms.domain.competency.entity.AssessmentRound;
 import com.gnagnoohc.scms.domain.competency.repository.AssessmentAttendanceQueryRepository;
 import com.gnagnoohc.scms.domain.competency.repository.AssessmentRoundRepository;

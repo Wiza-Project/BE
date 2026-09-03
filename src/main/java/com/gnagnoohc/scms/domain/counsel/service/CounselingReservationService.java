@@ -1,10 +1,10 @@
 package com.gnagnoohc.scms.domain.counsel.service;
 
-import com.gnagnoohc.scms.domain.counsel.dto.CounselingReservationCancelRequest;
-import com.gnagnoohc.scms.domain.counsel.dto.CounselingReservationDetailResponse;
-import com.gnagnoohc.scms.domain.counsel.dto.CounselingReservationRequest;
-import com.gnagnoohc.scms.domain.counsel.dto.CounselingReservationResponse;
-import com.gnagnoohc.scms.domain.counsel.dto.CounselingReservationScheduleChangeRequest;
+import com.gnagnoohc.scms.domain.counsel.dto.request.CounselingReservationCancelRequest;
+import com.gnagnoohc.scms.domain.counsel.dto.response.CounselingReservationDetailResponse;
+import com.gnagnoohc.scms.domain.counsel.dto.request.CounselingReservationRequest;
+import com.gnagnoohc.scms.domain.counsel.dto.response.CounselingReservationResponse;
+import com.gnagnoohc.scms.domain.counsel.dto.request.CounselingReservationScheduleChangeRequest;
 import com.gnagnoohc.scms.domain.counsel.entity.CounselingAssignment;
 import com.gnagnoohc.scms.domain.counsel.entity.CounselingReservation;
 import com.gnagnoohc.scms.domain.counsel.entity.CounselingSchedule;
@@ -12,7 +12,6 @@ import com.gnagnoohc.scms.domain.counsel.entity.CounselingType;
 import com.gnagnoohc.scms.domain.counsel.repository.CounselUserRepository;
 import com.gnagnoohc.scms.domain.counsel.repository.CounselingAssignmentRepository;
 import com.gnagnoohc.scms.domain.counsel.repository.CounselingReservationRepository;
-import com.gnagnoohc.scms.domain.counsel.repository.CounselingScheduleRepository;
 import com.gnagnoohc.scms.domain.counsel.repository.CounselingTypeRepository;
 import com.gnagnoohc.scms.domain.user.entity.AppUser;
 import com.gnagnoohc.scms.domain.user.entity.UserConsent;
@@ -44,10 +43,10 @@ public class CounselingReservationService {
 
     private final CounselUserRepository counselUserRepository;
     private final CounselingTypeRepository counselingTypeRepository;
-    private final CounselingScheduleRepository counselingScheduleRepository;
     private final CounselingReservationRepository counselingReservationRepository;
     private final CounselingAssignmentRepository counselingAssignmentRepository;
     private final ConsentVerifier consentVerifier;
+    private final CounselingScheduleService counselingScheduleService;
 
     /**
      * 학생 행을 먼저 잠가 같은 학생의 서로 다른 일정 예약도 순서대로 검증한다.
@@ -255,7 +254,9 @@ public class CounselingReservationService {
             Integer excludeReservationId
     ) {
         if (DIRECT_ROUTE.equals(counselingType.getApplicationRoute())) {
-            return getAvailableDirectSchedule(scheduleId, counselingType, studentId, now, excludeReservationId);
+            return counselingScheduleService.requireReservableDirectSchedule(
+                    scheduleId, counselingType, studentId, now, excludeReservationId
+            );
         }
         // CENTER(센터 접수) 온라인 접수는 현재 MVP 범위 밖이며 별도 정책이 확정되기 전까지 거절한다.
         // 프론트 필터만으로는 유형 ID를 직접 보낸 요청을 막지 못하므로 서버가 최종 방어선으로 거절한다.
@@ -270,56 +271,4 @@ public class CounselingReservationService {
         throw new BusinessException(ErrorCode.INVALID_INPUT);
     }
 
-    /**
-     * DIRECT(온라인 직접 신청) 일정 하나가 "지금 이 학생이 예약해도 되는 일정"인지 검증한다.
-     * 유형 일치·마감 전·정원 여유·담당 상담사 활성·본인 시간 중복 없음, 이 다섯 조건을 각각
-     * boolean으로 먼저 구한 뒤 한 번에 검사한다. 어느 조건에서 걸렸는지 클라이언트에 따로
-     * 알려주지 않고 SCHEDULE_NOT_AVAILABLE 하나로 묶어서 던지는 이유는, 예를 들어 "정원 마감"과
-     * "이미 다른 사람이 예약함"을 구분해 알려주면 남의 예약 현황을 추측하는 데 악용될 수 있어서다.
-     */
-    private CounselingSchedule getAvailableDirectSchedule(
-            Integer scheduleId,
-            CounselingType counselingType,
-            Integer studentId,
-            Instant now,
-            Integer excludeReservationId
-    ) {
-        if (scheduleId == null) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT);
-        }
-        CounselingSchedule schedule = counselingScheduleRepository.findByIdForUpdate(scheduleId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.SCHEDULE_NOT_AVAILABLE));
-        boolean matchingType = schedule.getCounselingType().getCounselingTypeId()
-                .equals(counselingType.getCounselingTypeId());
-        boolean beforeDeadline = schedule.getBookingDeadline() == null
-                || schedule.getBookingDeadline().isAfter(now);
-        boolean capacityAvailable = counselingReservationRepository
-                .countOccupiedReservations(scheduleId) < schedule.getCapacity();
-        boolean activeCounselor = "ACTIVE".equals(schedule.getCounselor().getAccountStatus())
-                && counselUserRepository.hasCounselorRole(schedule.getCounselor().getUserId());
-        // 학생의 예약 일정 변경에서는 아직 옛 일정을 참조 중인 이 예약 자기 자신을 겹침 비교에서 빼야 한다.
-        // 그렇지 않으면 옛 일정과 항상 겹쳐 새 일정으로 절대 바꿀 수 없다.
-        boolean overlapsActiveReservation = excludeReservationId == null
-                ? counselingReservationRepository.existsOverlappingActiveReservation(
-                        studentId,
-                        schedule.getStartsAt(),
-                        schedule.getEndsAt()
-                )
-                : counselingReservationRepository.existsOverlappingActiveReservationExcluding(
-                        studentId,
-                        excludeReservationId,
-                        schedule.getStartsAt(),
-                        schedule.getEndsAt()
-                );
-        if (!matchingType
-                || !schedule.isOpen()
-                || !schedule.getStartsAt().isAfter(now)
-                || !beforeDeadline
-                || !capacityAvailable
-                || !activeCounselor
-                || overlapsActiveReservation) {
-            throw new BusinessException(ErrorCode.SCHEDULE_NOT_AVAILABLE);
-        }
-        return schedule;
-    }
 }

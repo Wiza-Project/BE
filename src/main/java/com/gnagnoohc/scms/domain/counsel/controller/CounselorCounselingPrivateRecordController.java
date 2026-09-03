@@ -1,7 +1,7 @@
 package com.gnagnoohc.scms.domain.counsel.controller;
 
-import com.gnagnoohc.scms.domain.counsel.dto.CounselingPrivateRecordResponse;
-import com.gnagnoohc.scms.domain.counsel.dto.CounselingPrivateRecordSaveRequest;
+import com.gnagnoohc.scms.domain.counsel.dto.response.CounselingPrivateRecordResponse;
+import com.gnagnoohc.scms.domain.counsel.dto.request.CounselingPrivateRecordSaveRequest;
 import com.gnagnoohc.scms.domain.counsel.service.CounselingPrivateRecordService;
 import com.gnagnoohc.scms.global.common.dto.ApiResponse;
 import com.gnagnoohc.scms.global.security.AuthUser;

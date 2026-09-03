@@ -6,7 +6,9 @@ import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
 import com.gnagnoohc.scms.global.security.AuthUser;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 취·창업(Career) 도메인 전용 교직원 권한 및 부서 인가 검증 헬퍼 컴포넌트
@@ -21,8 +23,10 @@ import org.springframework.stereotype.Component;
  *
  * @author YUN
  */
+@Slf4j
 @Component("careerSecurity")
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class CareerSecurityHelper {
 
     public static final String CAREER_EMPLOYMENT_DEPT = "D400";
@@ -37,13 +41,14 @@ public class CareerSecurityHelper {
      * <pre>{@code
      * // 컨트롤러 적용 예시:
      * @PreAuthorize("@careerSecurity.isCareerStaff(principal)")
-     * @GetMapping("/admin/career/postings")
+     * @GetMapping("/staff/career/postings")
      * public ApiResponse<...> getList(...) { ... }
      * }</pre>
      *
      * @param principal Spring Security 컨텍스트의 Principal 객체 (일반적으로 {@link AuthUser})
      * @return 취창업지원과(D400) 소속 교직원이거나 ADMIN인 경우 {@code true}, 그 외 {@code false}
      */
+    @Transactional(readOnly = true)
     public boolean isCareerStaff(Object principal) {
         if (!(principal instanceof AuthUser authUser) || authUser.getId() == null) {
             return false;
@@ -57,8 +62,8 @@ public class CareerSecurityHelper {
     /**
      * [서비스 비즈니스 로직 전용] 취창업지원과 교직원/관리자 권한 검증 및 사용자 엔티티 반환
      *
-     * <p>서비스 계층 내부에서 권한을 재검증(2차 방어)하고, 승인/반려 심사자 정보 주입 등을 위해 검증 완료된 {@link AppUser} 엔티티를 반환합니다.<br>
-     * 권한이 유효하지 않을 경우 {@link BusinessException} 예외를 즉시 발생시켜 트랜잭션을 차단합니다.</p>
+     * <p>서비스 계층 내부에서 권한을 재검증(2차 방어)하고, 승인/반려 심사자 정보 주입 등을 위해 검증 완료된 {@link AppUser} 엔티티를 반환<br>
+     * 권한이 유효하지 않을 경우 {@link BusinessException} 예외를 즉시 발생시켜 트랜잭션을 차단</p>
      *
      * @param userId 검증할 사용자 식별자 PK ({@code app_user.user_id})
      * @return 인가 검증이 완료된 영속 {@link AppUser} 엔티티
@@ -66,6 +71,7 @@ public class CareerSecurityHelper {
      *                           사용자 미존재({@link ErrorCode#USER_NOT_FOUND}),
      *                           취창업지원과/관리자 권한 부족({@link ErrorCode#DEPARTMENT_FORBIDDEN})
      */
+    @Transactional(readOnly = true)
     public AppUser validateAndGetCareerStaff(Integer userId) {
         if (userId == null) {
             throw new BusinessException(ErrorCode.UNAUTHORIZED);
@@ -86,6 +92,7 @@ public class CareerSecurityHelper {
      *
      * <p>도메인 인가 규칙의 단일 진실 공급원(Single Source of Truth) 역할을 수행하며,
      * {@link #isCareerStaff(Object)}와 {@link #validateAndGetCareerStaff(Integer)}에서 공통 호출하는 판별용 로직</p>
+     * 내부 호출 로직으로 사용하므로 public으로 두어도 보안 취약점이 없다고 판단
      *
      * <ul>
      *   <li>부서 코드 일치: {@code user.departmentCode.code == "D400"}</li>
@@ -95,7 +102,8 @@ public class CareerSecurityHelper {
      * @param user 검증 대상 {@link AppUser} 엔티티
      * @return 둘 중 하나의 인가 조건을 충족하면 {@code true}, 모두 만족하지 못하면 {@code false}
      */
-    private boolean isCareerStaffOrAdmin(AppUser user) {
+    @Transactional(readOnly = true)
+    public boolean isCareerStaffOrAdmin(AppUser user) {
         boolean isCareerDept = user.getDepartmentCode() != null
                 && CAREER_EMPLOYMENT_DEPT.equals(user.getDepartmentCode().getCode());
         boolean isAdmin = "ADMIN".equalsIgnoreCase(user.getUserType());

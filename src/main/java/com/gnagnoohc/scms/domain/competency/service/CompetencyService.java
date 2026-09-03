@@ -1,9 +1,9 @@
 package com.gnagnoohc.scms.domain.competency.service;
 
-import com.gnagnoohc.scms.domain.competency.dto.CompetencyActiveStatusRequest;
-import com.gnagnoohc.scms.domain.competency.dto.CompetencyDisplayOrderRequest;
-import com.gnagnoohc.scms.domain.competency.dto.CompetencyRegisterRequest;
-import com.gnagnoohc.scms.domain.competency.dto.CompetencyResponse;
+import com.gnagnoohc.scms.domain.competency.dto.request.CompetencyActiveStatusRequest;
+import com.gnagnoohc.scms.domain.competency.dto.request.CompetencyDisplayOrderRequest;
+import com.gnagnoohc.scms.domain.competency.dto.request.CompetencyRegisterRequest;
+import com.gnagnoohc.scms.domain.competency.dto.response.CompetencyResponse;
 import com.gnagnoohc.scms.domain.competency.entity.Competency;
 import com.gnagnoohc.scms.domain.competency.repository.CompetencyRepository;
 import com.gnagnoohc.scms.global.error.BusinessException;
@@ -23,6 +23,16 @@ public class CompetencyService {
     private static final int MAX_TOP_LEVEL_COMPETENCY = 6;
 
     private final CompetencyRepository competencyRepository;
+
+    // 교직원 핵심역량 관리 화면 목록. 축순서·사용여부·영문명 편집 대상이라 비활성 역량까지 축순서대로 모두 내려준다
+    // (활성만 주는 공용 드롭다운 목록 GET /api/competencies 와 용도가 다르다).
+    @Transactional(readOnly = true)
+    public List<CompetencyResponse> getCompetenciesForManagement() {
+        return competencyRepository.findByParentCompetencyIsNullOrderByDisplayOrderAsc()
+                .stream()
+                .map(CompetencyResponse::from)
+                .toList();
+    }
 
     public CompetencyResponse registerCompetency(CompetencyRegisterRequest request, Integer staffId) {
         long existingCount = competencyRepository.countByParentCompetencyIsNull();

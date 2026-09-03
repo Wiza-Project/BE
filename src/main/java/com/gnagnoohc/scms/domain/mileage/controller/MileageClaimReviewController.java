@@ -29,7 +29,7 @@ import org.springframework.web.bind.annotation.RestController;
 /** 교직원이 외부활동 마일리지 신청을 조회하고 승인·반려·취소하는 API다. */
 @Tag(name = "MileageClaimReview", description = "외부활동 마일리지 심사")
 @RestController
-@RequestMapping("/api/admin/mileage/claims")
+@RequestMapping("/api/staff/mileage/claims")
 @RequiredArgsConstructor
 @PreAuthorize("hasRole('STAFF')")
 public class MileageClaimReviewController {

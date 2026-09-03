@@ -31,13 +31,13 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <p><strong>[설정 정보]</strong></p>
  * <ul>
- *   <li><b>기본 경로:</b> {@code /api/v1/students/me/cover-letters}</li>
+ *   <li><b>기본 경로:</b> {@code /api/students/me/cover-letters}</li>
  *   <li><b>접근 권한:</b> {@code ROLE_SD100(학생)} 전용</li>
  * </ul>
  */
 @Tag(name = "03-03. 학생 자기소개서 API", description = "학생 본인의 자기소개서 문항별 작성, 조회, 수정, 삭제 및 버전 관리")
 @RestController
-@RequestMapping("/api/v1/students/me/cover-letters")
+@RequestMapping("/api/students/me/cover-letters")
 @RequiredArgsConstructor
 @PreAuthorize("hasRole('SD100')")
 public class StudentCoverLetterController {

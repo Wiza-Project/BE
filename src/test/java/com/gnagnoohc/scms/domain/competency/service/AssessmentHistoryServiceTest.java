@@ -1,6 +1,6 @@
 package com.gnagnoohc.scms.domain.competency.service;
 
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentHistoryResponse;
+import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentHistoryResponse;
 import com.gnagnoohc.scms.domain.competency.repository.AssessmentHistoryQueryRepository;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;
 import org.junit.jupiter.api.Test;

@@ -11,6 +11,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -19,7 +20,9 @@ import java.time.Instant;
 
 @Entity
 @Getter
-@Table(name = "counseling_proposal")
+@Table(name = "counseling_proposal", uniqueConstraints = @UniqueConstraint(
+        name = "uq_counseling_proposal_test_result",
+        columnNames = {"psychological_test_result_id"}))
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class CounselingProposal extends BaseCreatedAtEntity {
 
@@ -36,7 +39,7 @@ public class CounselingProposal extends BaseCreatedAtEntity {
     private Integer proposedBy;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "psychological_test_result_id")
+    @JoinColumn(name = "psychological_test_result_id", nullable = false)
     private PsychologicalTestResult psychologicalTestResult;
 
     @ManyToOne(fetch = FetchType.LAZY)

@@ -1,6 +1,6 @@
 package com.gnagnoohc.scms.domain.competency.controller;
 
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentDistributionResponse;
+import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentDistributionResponse;
 import com.gnagnoohc.scms.domain.competency.service.AssessmentDistributionService;
 import com.gnagnoohc.scms.global.common.dto.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "AssessmentDistribution", description = "진단 결과 통계 - 역량별 분포·집단별 비교 조회")
 @RestController
-@RequestMapping("/api/admin/assessment-rounds")
+@RequestMapping("/api/staff/assessment-rounds")
 @RequiredArgsConstructor
 public class AssessmentDistributionController {
 

@@ -23,7 +23,7 @@ public interface MileagePolicyRepository extends JpaRepository<MileagePolicy, In
         JpaSpecificationExecutor<MileagePolicy>, MileagePolicyRepositoryCustom {
 
     /**
-     * 활동유형+학년도+학기 조합 내 다음 버전 번호(MAX+1)를 계산한다. 관리자가 직접 입력하지 않고
+     * 활동유형+학년도+학기 조합 내 다음 버전 번호(MAX+1)를 계산한다. 교직원이 직접 입력하지 않고
      * 서버가 자동 채번해서 중복 버전 등록 실수를 막는다.
      */
     @Query("""
@@ -36,9 +36,35 @@ public interface MileagePolicyRepository extends JpaRepository<MileagePolicy, In
                                @Param("academicYear") Integer academicYear,
                                @Param("semesterCode") String semesterCode);
 
+    Optional<MileagePolicy> findTopByActivityType_ActivityTypeIdAndAcademicYearAndSemesterCodeOrderByVersionNoDesc(
+            Integer activityTypeId, Integer academicYear, String semesterCode);
+
+    /** 프로그램 유형에 연결된 비교과 전용 정책을 최신 버전부터 조회한다. */
+    @Query("""
+            select p
+            from MileagePolicy p
+            join fetch p.activityType activityType
+            join fetch activityType.programTypeCode programTypeCode
+            where programTypeCode.codeGroup = 'PROGRAM_TYPE'
+              and programTypeCode.code = :programTypeCode
+              and activityType.categoryCode = :categoryCode
+              and activityType.earningRoute = :earningRoute
+              and p.policyStatus = 'ACTIVE'
+              and activityType.active = true
+              and p.validFrom <= :asOfDate
+              and (p.validTo is null or p.validTo >= :asOfDate)
+            order by p.versionNo desc
+            """)
+    List<MileagePolicy> findActiveExtracurricularPoliciesByProgramTypeOn(
+            @Param("programTypeCode") String programTypeCode,
+            @Param("categoryCode") String categoryCode,
+            @Param("earningRoute") String earningRoute,
+            @Param("asOfDate") LocalDate asOfDate
+    );
+
     /**
      * 정책 row에 비관적 락을 걸어 조회한다(ExtracurricularProgramRepository.findByIdForUpdate와 동일 패턴).
-     * update()의 조회→null-병합→UPDATE 전체를 이 락 아래에서 수행해야, 두 관리자가 같은 정책을
+     * update()의 조회→null-병합→UPDATE 전체를 이 락 아래에서 수행해야, 두 교직원이 같은 정책을
      * 동시에 부분 수정할 때 나중 커밋이 먼저 커밋된 필드를 옛 값으로 덮어쓰는 lost update를 막을 수 있다.
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)

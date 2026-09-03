@@ -1,8 +1,8 @@
 package com.gnagnoohc.scms.domain.competency.controller;
 
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentResponseSaveRequest;
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentResponseSaveResponse;
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentResumeResponse;
+import com.gnagnoohc.scms.domain.competency.dto.request.AssessmentResponseSaveRequest;
+import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentResponseSaveResponse;
+import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentResumeResponse;
 import com.gnagnoohc.scms.domain.competency.service.AssessmentResponseService;
 import com.gnagnoohc.scms.global.common.dto.ApiResponse;
 import com.gnagnoohc.scms.global.security.AuthUser;

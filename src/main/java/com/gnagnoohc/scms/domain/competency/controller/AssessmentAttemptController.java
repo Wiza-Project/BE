@@ -1,7 +1,7 @@
 package com.gnagnoohc.scms.domain.competency.controller;
 
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentResultResponse;
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentSubmitResponse;
+import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentResultResponse;
+import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentSubmitResponse;
 import com.gnagnoohc.scms.domain.competency.service.AssessmentResultService;
 import com.gnagnoohc.scms.domain.competency.service.AssessmentSubmissionService;
 import com.gnagnoohc.scms.global.common.dto.ApiResponse;

@@ -7,7 +7,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * 교직원 학생 목록(GET /api/admin/students) 다중 조건 검색 파라미터 DTO.
+ * 교직원 학생 목록(GET /api/staff/students) 다중 조건 검색 파라미터 DTO.
  * {@link com.gnagnoohc.scms.domain.career.dto.posting.JobPostingSearchConditionDTO}와
  * 같은 관례 — 값이 없는 필드는 QueryDSL 동적 조건에서 무시 처리된다.
  *

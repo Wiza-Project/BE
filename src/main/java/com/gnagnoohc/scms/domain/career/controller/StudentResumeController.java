@@ -27,7 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "03-02. 학생 이력서 API", description = "학생 본인의 고정 이력서 템플릿 저장, 조회 및 버전 관리")
 @RestController
-@RequestMapping("/api/v1/students/me/resumes")
+@RequestMapping("/api/students/me/resumes")
 @RequiredArgsConstructor
 @PreAuthorize("hasRole('SD100')")
 public class StudentResumeController {

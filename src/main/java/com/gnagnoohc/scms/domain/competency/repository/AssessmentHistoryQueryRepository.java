@@ -1,6 +1,6 @@
 package com.gnagnoohc.scms.domain.competency.repository;
 
-import com.gnagnoohc.scms.domain.competency.dto.AssessmentHistoryResponse;
+import com.gnagnoohc.scms.domain.competency.dto.response.AssessmentHistoryResponse;
 import com.querydsl.core.BooleanBuilder;
 import com.querydsl.core.types.Projections;
 import com.querydsl.jpa.impl.JPAQuery;
@@ -24,9 +24,11 @@ public class AssessmentHistoryQueryRepository {
 
     private final JPAQueryFactory queryFactory;
 
-    // 응시완료 = submittedAt IS NOT NULL(제출 트랜잭션에서 환산점수까지 같이 저장되므로 이 시점 이후엔
-    // 항상 채점도 끝난 상태다 — AssessmentNonParticipantQueryRepository의 "제출 완료" 판정 기준과 동일).
-    // 일자순 정렬은 최신 응시가 먼저 보이도록 submittedAt 내림차순으로 고정한다.
+    /**
+     * 응시완료 = submittedAt IS NOT NULL(제출 트랜잭션에서 환산점수까지 같이 저장되므로 이 시점 이후엔
+     * 항상 채점도 끝난 상태다 — AssessmentNonParticipantQueryRepository의 "제출 완료" 판정 기준과 동일).
+     * 일자순 정렬은 최신 응시가 먼저 보이도록 submittedAt 내림차순으로 고정한다.
+     */
     public Page<AssessmentHistoryResponse> findHistory(Integer studentId, String keyword, Pageable pageable) {
         BooleanBuilder condition = new BooleanBuilder()
                 .and(assessmentAttempt.student.userId.eq(studentId))

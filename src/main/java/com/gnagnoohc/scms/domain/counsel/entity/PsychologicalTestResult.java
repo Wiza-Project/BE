@@ -54,4 +54,31 @@ public class PsychologicalTestResult extends BaseCreatedAtEntity {
 
     @Column(name = "tested_at", nullable = false)
     private Instant testedAt;
+
+    /**
+     * 자가 심리검사 결과를 저장할 때 쓰는 생성 지점을 한곳으로 모은다.
+     * 문항별 원응답은 이 메서드의 인자로도 받지 않는다. 서비스가 채점을 마친 합계·수준·설명만 넘겨서,
+     * 결과 엔티티 어디에도 원응답이 스쳐 지나갈 통로조차 만들지 않기 위해서다.
+     * 자가검사는 상담 회기와 직접 연결되지 않으므로 counselingReservation은 항상 null이다.
+     */
+    public static PsychologicalTestResult createSelfTestResult(
+            AppUser student,
+            String testType,
+            String testVersion,
+            int totalScore,
+            String resultLevel,
+            String resultSummary,
+            Instant testedAt
+    ) {
+        PsychologicalTestResult result = new PsychologicalTestResult();
+        result.student = student;
+        result.counselingReservation = null;
+        result.testType = testType;
+        result.testVersion = testVersion;
+        result.totalScore = BigDecimal.valueOf(totalScore);
+        result.resultLevel = resultLevel;
+        result.resultSummary = resultSummary;
+        result.testedAt = testedAt;
+        return result;
+    }
 }
