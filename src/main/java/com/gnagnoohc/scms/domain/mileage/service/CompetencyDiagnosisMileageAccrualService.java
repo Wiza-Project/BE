@@ -9,9 +9,11 @@ import com.gnagnoohc.scms.domain.mileage.repository.MileagePolicyRepository;
 import com.gnagnoohc.scms.domain.mileage.repository.MileageTransactionRepository;
 import com.gnagnoohc.scms.domain.user.repository.AppUserRepository;
 import com.gnagnoohc.scms.global.error.BusinessException;
+import com.gnagnoohc.scms.global.error.DbConstraintViolationMatcher;
 import com.gnagnoohc.scms.global.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -89,7 +91,19 @@ public class CompetencyDiagnosisMileageAccrualService {
             return false;
         }
 
-        return assessmentCompletionMileageAccrualWriter.insert(attempt, policy, grantablePoints, attemptId);
+        try {
+            return assessmentCompletionMileageAccrualWriter.insert(attempt, policy, grantablePoints, attemptId);
+        } catch (DataIntegrityViolationException exception) {
+            // 중복 판별은 insert()의 REQUIRES_NEW 트랜잭션 바깥인 여기서 한다 — 안에서 잡아 정상 반환하면
+            // 이미 rollback-only로 마킹된 트랜잭션이 커밋 시점에 UnexpectedRollbackException을 던져
+            // 이 메서드가 참여 중인 바깥 제출 트랜잭션까지 롤백시킨다.
+            if (!DbConstraintViolationMatcher.contains(
+                    exception, AssessmentCompletionMileageAccrualWriter.DUPLICATE_ATTEMPT_ACCRUAL_CONSTRAINT)) {
+                throw exception;
+            }
+            log.info("동시 요청으로 이미 적립된 역량진단 완료 건입니다. attemptId={}", attemptId);
+            return false;
+        }
     }
 
     private MileagePolicy resolvePolicy(LocalDate submittedDate) {
