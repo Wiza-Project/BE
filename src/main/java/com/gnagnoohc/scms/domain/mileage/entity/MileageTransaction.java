@@ -17,7 +17,8 @@ import java.time.Instant;
  * 학생별 마일리지 적립·차감 원장을 기록한다.
  * POSTED 거래의 합이 잔액이며 정정은 원행 변경 대신 반대 부호의 역분개로 기록한다.
  */
-@Entity @Getter @Table(name = "mileage_transaction")
+@Entity @Getter @Table(name = "mileage_transaction", uniqueConstraints = @UniqueConstraint(
+        name = "uq_mileage_transaction_source_assessment_attempt", columnNames = "source_assessment_attempt_id"))
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class MileageTransaction extends BaseCreatedAtEntity {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -27,7 +28,7 @@ public class MileageTransaction extends BaseCreatedAtEntity {
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "competency_id", nullable = false) private Competency competency;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "source_program_application_id", unique = true) private ProgramApplication sourceProgramApplication;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "source_external_claim_id", unique = true) private ExternalActivityClaim sourceExternalClaim;
-    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "source_assessment_attempt_id", unique = true) private AssessmentAttempt sourceAssessmentAttempt;
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "source_assessment_attempt_id") private AssessmentAttempt sourceAssessmentAttempt;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "reversal_of_transaction_id", unique = true) private MileageTransaction reversalOfTransaction;
     @Column(name = "transaction_type", nullable = false, length = 20) private String transactionType;
     @Column(name = "points", nullable = false, precision = 10, scale = 2) private BigDecimal points;

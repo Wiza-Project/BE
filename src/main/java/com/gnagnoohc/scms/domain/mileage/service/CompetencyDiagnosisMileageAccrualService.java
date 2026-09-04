@@ -10,6 +10,7 @@ import com.gnagnoohc.scms.domain.mileage.repository.MileagePolicyRepository;
 import com.gnagnoohc.scms.domain.mileage.repository.MileageTransactionRepository;
 import com.gnagnoohc.scms.domain.user.repository.AppUserRepository;
 import com.gnagnoohc.scms.global.error.BusinessException;
+import com.gnagnoohc.scms.global.error.DbConstraintViolationMatcher;
 import com.gnagnoohc.scms.global.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,6 +30,8 @@ import java.time.ZoneId;
 public class CompetencyDiagnosisMileageAccrualService {
 
     private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Seoul");
+    private static final String DUPLICATE_ATTEMPT_ACCRUAL_CONSTRAINT =
+            "uq_mileage_transaction_source_assessment_attempt";
 
     private final AssessmentAttemptMileageRepository assessmentAttemptMileageRepository;
     private final MileageTransactionRepository mileageTransactionRepository;
@@ -96,6 +99,9 @@ public class CompetencyDiagnosisMileageAccrualService {
                     MileageTransaction.earnFromAssessmentCompletion(attempt, policy, grantablePoints, Instant.now()));
             return true;
         } catch (DataIntegrityViolationException exception) {
+            if (!DbConstraintViolationMatcher.contains(exception, DUPLICATE_ATTEMPT_ACCRUAL_CONSTRAINT)) {
+                throw exception;
+            }
             log.info("동시 요청으로 이미 적립된 역량진단 완료 건입니다. attemptId={}", attemptId);
             return false;
         }

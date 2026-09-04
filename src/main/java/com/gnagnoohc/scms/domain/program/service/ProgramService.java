@@ -24,6 +24,7 @@ import com.gnagnoohc.scms.domain.program.repository.ProgramSessionRepository;
 import com.gnagnoohc.scms.domain.mileage.entity.MileagePolicy;
 import com.gnagnoohc.scms.domain.mileage.repository.MileagePolicyRepository;
 import com.gnagnoohc.scms.domain.mileage.service.ExtracurricularMileagePolicyDefinition;
+import com.gnagnoohc.scms.domain.mileage.service.MileageAcademicPeriodService;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;
 import com.gnagnoohc.scms.global.common.entity.FileGroup;
 import com.gnagnoohc.scms.global.common.entity.StoredFile;
@@ -86,6 +87,7 @@ public class ProgramService {
     private final CompetencyQueryService competencyQueryService;
     private final CommonCodeRepository commonCodeRepository;
     private final MileagePolicyRepository mileagePolicyRepository;
+    private final MileageAcademicPeriodService mileageAcademicPeriodService;
     private final ProgramSessionRepository programSessionRepository;
     private final ProgramApplicationRepository applicationRepository;
     private final FileGroupService fileGroupService;
@@ -740,6 +742,8 @@ public class ProgramService {
         if (programTypeCodeId == null) {
             return Optional.empty();
         }
+        LocalDate today = LocalDate.now();
+        String semesterCode = mileageAcademicPeriodService.resolveCurrentPeriod().semesterCode();
         return commonCodeRepository.findById(programTypeCodeId)
                 .filter(programTypeCode -> PROGRAM_TYPE_GROUP.equals(programTypeCode.getCodeGroup()))
                 .flatMap(programTypeCode -> mileagePolicyRepository
@@ -747,7 +751,8 @@ public class ProgramService {
                                 programTypeCode.getCode(),
                                 ExtracurricularMileagePolicyDefinition.CATEGORY_CODE,
                                 ExtracurricularMileagePolicyDefinition.EARNING_ROUTE,
-                                LocalDate.now())
+                                today,
+                                semesterCode)
                         .stream()
                         .findFirst());
     }

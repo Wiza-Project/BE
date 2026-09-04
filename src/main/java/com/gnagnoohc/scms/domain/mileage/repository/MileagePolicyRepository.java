@@ -31,7 +31,10 @@ public interface MileagePolicyRepository extends JpaRepository<MileagePolicy, In
     Integer findNextVersionNo(@Param("activityTypeId") Integer activityTypeId,
                                @Param("semesterCode") String semesterCode);
 
-    /** 프로그램 유형에 연결된 비교과 전용 정책을 최신 버전부터 조회한다. */
+    /**
+     * 프로그램 유형에 연결된 비교과 전용 정책을 조회한다. 이수일이 속한 학기(semesterCode) 전용 정책을
+     * 학기 무관(ALL) 정책보다 우선하고, 그 안에서는 최신 버전을 우선한다.
+     */
     @Query("""
             select p
             from MileagePolicy p
@@ -45,13 +48,15 @@ public interface MileagePolicyRepository extends JpaRepository<MileagePolicy, In
               and activityType.active = true
               and p.validFrom <= :asOfDate
               and (p.validTo is null or p.validTo >= :asOfDate)
-            order by p.versionNo desc
+              and (p.semesterCode = :semesterCode or p.semesterCode = 'ALL')
+            order by case when p.semesterCode = :semesterCode then 0 else 1 end, p.versionNo desc
             """)
     List<MileagePolicy> findActiveExtracurricularPoliciesByProgramTypeOn(
             @Param("programTypeCode") String programTypeCode,
             @Param("categoryCode") String categoryCode,
             @Param("earningRoute") String earningRoute,
-            @Param("asOfDate") LocalDate asOfDate
+            @Param("asOfDate") LocalDate asOfDate,
+            @Param("semesterCode") String semesterCode
     );
 
     /**

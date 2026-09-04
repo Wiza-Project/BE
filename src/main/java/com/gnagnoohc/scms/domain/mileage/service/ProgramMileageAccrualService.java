@@ -36,24 +36,27 @@ public class ProgramMileageAccrualService {
     private final MileageTransactionRepository mileageTransactionRepository;
     private final MileagePolicyRepository mileagePolicyRepository;
     private final MileageAccrualCapService mileageAccrualCapService;
+    private final MileageAcademicPeriodService mileageAcademicPeriodService;
 
     @Autowired
     public ProgramMileageAccrualService(
             ProgramApplicationMileageRepository programApplicationRepository,
             MileageTransactionRepository mileageTransactionRepository,
             MileagePolicyRepository mileagePolicyRepository,
-            MileageAccrualCapService mileageAccrualCapService) {
+            MileageAccrualCapService mileageAccrualCapService,
+            MileageAcademicPeriodService mileageAcademicPeriodService) {
         this.programApplicationRepository = programApplicationRepository;
         this.mileageTransactionRepository = mileageTransactionRepository;
         this.mileagePolicyRepository = mileagePolicyRepository;
         this.mileageAccrualCapService = mileageAccrualCapService;
+        this.mileageAcademicPeriodService = mileageAcademicPeriodService;
     }
 
-    /** 기존 마일리지 단위 테스트와의 생성 호환을 유지한다. 운영 빈은 4개 의존성을 주입한다. */
+    /** 기존 마일리지 단위 테스트와의 생성 호환을 유지한다. 운영 빈은 5개 의존성을 주입한다. */
     public ProgramMileageAccrualService(
             ProgramApplicationMileageRepository programApplicationRepository,
             MileageTransactionRepository mileageTransactionRepository) {
-        this(programApplicationRepository, mileageTransactionRepository, null, null);
+        this(programApplicationRepository, mileageTransactionRepository, null, null, null);
     }
 
     /** 특정 비교과 신청이 이수 완료된 경우 고정 정책 점수로 한 번만 적립한다. */
@@ -136,9 +139,15 @@ public class ProgramMileageAccrualService {
                                         LocalDate completionDate,
                                         Map<PolicyLookupKey, MileagePolicy> policyCache) {
         MileagePolicy linkedPolicy = application.getProgram().getMileagePolicy();
+        String semesterCode = mileageAcademicPeriodService == null
+                ? null
+                : mileageAcademicPeriodService.resolvePeriod(completionDate).semesterCode();
         // 프로그램 이수 적립은 비교과 프로그램 유형별 정책만 사용한다.
-        // 비교과가 아닌 연결 정책은 그대로 사용하지 않고, 아래의 유효한 정책 조회로 넘긴다.
-        if (isUsablePolicy(linkedPolicy, programTypeCode, completionDate)) {
+        // 연결 정책이 이수일의 학기와 정확히 일치할 때만 그대로 사용하고, ALL이거나 다른 학기면
+        // 학기 전용 정책이 있는지 아래의 조회로 확인한다.
+        boolean linkedPolicySemesterMatches = semesterCode == null
+                || (linkedPolicy != null && semesterCode.equals(linkedPolicy.getSemesterCode()));
+        if (isUsablePolicy(linkedPolicy, programTypeCode, completionDate) && linkedPolicySemesterMatches) {
             return linkedPolicy;
         }
 
@@ -159,7 +168,8 @@ public class ProgramMileageAccrualService {
                         programTypeCode,
                         ExtracurricularMileagePolicyDefinition.CATEGORY_CODE,
                         ExtracurricularMileagePolicyDefinition.EARNING_ROUTE,
-                        completionDate)
+                        completionDate,
+                        semesterCode)
                 .stream()
                 .filter(policy -> isUsablePolicy(policy, programTypeCode, completionDate))
                 .findFirst()

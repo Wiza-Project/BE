@@ -10,6 +10,7 @@ import com.gnagnoohc.scms.domain.user.entity.AppUser;
 import com.gnagnoohc.scms.domain.user.repository.AppUserRepository;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;
 import com.gnagnoohc.scms.global.error.BusinessException;
+import com.gnagnoohc.scms.global.error.DbConstraintViolationMatcher;
 import com.gnagnoohc.scms.global.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -35,6 +36,8 @@ public class MileageScholarshipService {
     private static final String SCHOLARSHIP = "SCHOLARSHIP";
     private static final String ALL_SEMESTER_CODE = "ALL";
     private static final int APPLICATION_HISTORY_PAGE_SIZE = 10;
+    private static final String BENEFIT_APPLICATION_DUPLICATE_CONSTRAINT =
+            "uq_mileage_benefit_application_policy_student";
 
     private final MileageBenefitPolicyRepository benefitPolicyRepository;
     private final MileageBenefitApplicationRepository benefitApplicationRepository;
@@ -154,6 +157,9 @@ public class MileageScholarshipService {
             return toApplicationItem(benefitApplicationRepository.saveAndFlush(application));
         } catch (DataIntegrityViolationException exception) {
             // 선행 조회 이후 동시에 신청된 경우에도 유니크 제약을 학생용 충돌 응답으로 변환한다.
+            if (!DbConstraintViolationMatcher.contains(exception, BENEFIT_APPLICATION_DUPLICATE_CONSTRAINT)) {
+                throw exception;
+            }
             throw new BusinessException(
                     ErrorCode.MILEAGE_ALREADY_CLAIMED, "이미 해당 장학금을 신청했습니다.");
         }

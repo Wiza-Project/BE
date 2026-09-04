@@ -42,6 +42,7 @@ public class MileageTransactionHistoryService {
             Pageable pageable
     ) {
         validatePeriodOrAbsent(academicYear, semesterCode);
+        String normalizedSemesterCode = semesterCode == null ? null : semesterCode.trim();
         PageRequest pageRequest = PageRequest.of(pageable.getPageNumber(), PAGE_SIZE);
         MileageAcademicPeriodService.AcademicYearBounds academicYearBounds = academicYear == null
                 ? null
@@ -52,7 +53,7 @@ public class MileageTransactionHistoryService {
                                 studentId,
                                 academicYearBounds == null ? null : academicYearBounds.startAt(),
                                 academicYearBounds == null ? null : academicYearBounds.endAt(),
-                                semesterCode,
+                                normalizedSemesterCode,
                                 pageRequest)
                         .map(item -> new MileageTransactionHistoryResponse.ListItem(
                                 item.getTransactionId(),
