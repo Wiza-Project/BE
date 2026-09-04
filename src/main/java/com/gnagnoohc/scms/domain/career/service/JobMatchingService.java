@@ -46,12 +46,17 @@ public class JobMatchingService {
     public List<JobPostingSummaryResponseDTO> getRecommendedPostingsForStudent(Integer studentUserId) {
         Instant now = Instant.now();
 
-        // 1. 개인정보 PROFILING 동의 여부 확인
-        boolean hasProfilingConsent = consentVerifier.hasValidConsent(
-                studentUserId, ConsentModuleCode.CAREER, ConsentType.PROFILING, now);
+        // 공통 가이드 6.2절: AI 맞춤 추천은 CAREER 모듈의 PROFILING 선택 동의 검사
+// (과도기 화면에서 수집된 THIRD_PARTY_SHARE도 함께 허용)
+        boolean hasConsent = consentVerifier.hasValidConsent(
+                studentUserId, ConsentModuleCode.CAREER, ConsentType.PROFILING, now)
+                || consentVerifier.hasValidConsent(
+                studentUserId, ConsentModuleCode.CAREER, ConsentType.THIRD_PARTY_SHARE, now)
+                || consentVerifier.hasValidConsent(
+                studentUserId, ConsentModuleCode.COMMON, ConsentType.THIRD_PARTY_SHARE, now);
 
-        if (!hasProfilingConsent) {
-            log.debug("[JobMatchingService] 학생(userId: {}) PROFILING 미동의 상태", studentUserId);
+        if (!hasConsent) {
+            log.debug("[JobMatchingService] 학생(userId: {}) 맞춤 추천 동의 미완료 상태", studentUserId);
             return List.of();
         }
 
