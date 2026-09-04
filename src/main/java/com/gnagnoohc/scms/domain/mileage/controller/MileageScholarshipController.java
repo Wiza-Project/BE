@@ -33,11 +33,10 @@ public class MileageScholarshipController {
     @GetMapping
     public ApiResponse<List<MileageScholarshipResponse.ScholarshipItem>> getScholarships(
             @AuthenticationPrincipal AuthUser authUser,
-            @RequestParam Integer academicYear,
             @RequestParam String semesterCode
     ) {
         return ApiResponse.ok(mileageScholarshipService.getScholarships(
-                authUser.getId(), academicYear, semesterCode));
+                authUser.getId(), semesterCode));
     }
 
     /** 장학금 정책 상세와 본인의 신청 상태를 조회한다. */

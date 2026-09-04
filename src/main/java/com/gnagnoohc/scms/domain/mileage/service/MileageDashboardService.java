@@ -50,22 +50,21 @@ public class MileageDashboardService {
      */
     public MileageDashboardResponse getDashboard(
             Integer studentId,
-            Integer academicYear,
             String semesterCode
     ) {
-        String selectedSemesterCode = validatePeriod(academicYear, semesterCode);
-        MileageAcademicPeriodService.AcademicYearBounds academicYearBounds =
-                mileageAcademicPeriodService.resolveAcademicYearBounds(academicYear);
+        String selectedSemesterCode = validateSemester(semesterCode);
+        MileageAcademicPeriodService.PeriodBounds periodBounds =
+                mileageAcademicPeriodService.resolveCurrentPeriodBounds();
 
         BigDecimal currentSemesterPoints = valueOrZero(
                 mileageTransactionRepository.sumPostedPointsByStudentAndPeriod(
                         studentId,
-                        academicYearBounds.startAt(),
-                        academicYearBounds.endAt(),
+                        periodBounds.startAt(),
+                        periodBounds.endAt(),
                         selectedSemesterCode));
         BigDecimal annualPoints = valueOrZero(
                 mileageTransactionRepository.sumPostedPointsByStudentAndAllSemester(
-                        studentId, academicYearBounds.startAt(), academicYearBounds.endAt()));
+                        studentId, periodBounds.startAt(), periodBounds.endAt()));
         BigDecimal cumulativePoints = valueOrZero(
                 mileageTransactionRepository.sumPostedPointsByStudent(studentId));
 
@@ -74,8 +73,8 @@ public class MileageDashboardService {
         var programTypeBreakdown = mileageTransactionRepository
                 .findProgramTypeBreakdown(
                         studentId,
-                        academicYearBounds.startAt(),
-                        academicYearBounds.endAt(),
+                        periodBounds.startAt(),
+                        periodBounds.endAt(),
                         selectedSemesterCode)
                 .stream()
                 .map(item -> new MileageDashboardResponse.ProgramTypeSummary(
@@ -84,25 +83,24 @@ public class MileageDashboardService {
 
         var competencyBreakdown = getCompetencyBreakdown(
                 studentId,
-                academicYearBounds.startAt(),
-                academicYearBounds.endAt(),
+                periodBounds.startAt(),
+                periodBounds.endAt(),
                 selectedSemesterCode);
 
         var benefitProgress = getBenefitProgress(
-                studentId, academicYear, selectedSemesterCode, cumulativePoints);
+                studentId, selectedSemesterCode, cumulativePoints);
 
         var semesterTrend = getSemesterTrend(
                 studentId,
-                academicYear,
                 selectedSemesterCode,
-                academicYearBounds);
+                periodBounds);
 
         var recentTransactions = getRecentTransactions(studentId, recentItems);
 
         var recentClaims = getRecentExternalActivityApplications(studentId, recentItems);
 
         return new MileageDashboardResponse(
-                new MileageDashboardResponse.Period(academicYear, selectedSemesterCode),
+                new MileageDashboardResponse.Period(selectedSemesterCode),
                 new MileageDashboardResponse.Summary(
                         currentSemesterPoints,
                         annualPoints,
@@ -154,7 +152,6 @@ public class MileageDashboardService {
     /** 선택 학기에 활성인 인증·장학 정책을 누적 마일리지 기준으로 판정한다. */
     private List<MileageDashboardResponse.BenefitProgress> getBenefitProgress(
             Integer studentId,
-            Integer academicYear,
             String semesterCode,
             BigDecimal cumulativePoints
     ) {
@@ -228,7 +225,7 @@ public class MileageDashboardService {
         if (policy.getApplicationStartsAt() != null && now.isBefore(policy.getApplicationStartsAt())) {
             return "APPLICATION_NOT_OPEN";
         }
-        if (policy.getApplicationEndsAt() != null && now.isAfter(policy.getApplicationEndsAt())) {
+        if (policy.getApplicationEndsAt() != null && !now.isBefore(policy.getApplicationEndsAt())) {
             return "APPLICATION_CLOSED";
         }
         return "ELIGIBLE";
@@ -248,13 +245,8 @@ public class MileageDashboardService {
                         MileageTransactionRepository.CompetencySummaryProjection::getCompetencyId,
                         item -> valueOrZero(item.getPoints())));
 
-        List<Competency> topLevelCompetencies = competencyRepository.findAll().stream()
-                .filter(Competency::isActive)
-                .filter(competency -> competency.getParentCompetency() == null)
-                .sorted(Comparator.comparing(
-                        Competency::getDisplayOrder,
-                        Comparator.nullsLast(Integer::compareTo)))
-                .toList();
+        List<Competency> topLevelCompetencies = competencyRepository
+                .findByParentCompetencyIsNullAndActiveTrueOrderByDisplayOrderAsc();
 
         if (topLevelCompetencies.isEmpty()) {
             return mileageTransactionRepository
@@ -277,15 +269,14 @@ public class MileageDashboardService {
     /** 선택 학사기간 안의 학기별 적립 점수를 백엔드 학기 정의 순서로 반환한다. */
     private List<MileageDashboardResponse.SemesterTrendSummary> getSemesterTrend(
             Integer studentId,
-            Integer academicYear,
             String semesterCode,
-            MileageAcademicPeriodService.AcademicYearBounds academicYearBounds
+            MileageAcademicPeriodService.PeriodBounds periodBounds
     ) {
         Map<String, BigDecimal> pointsBySemester = mileageTransactionRepository
                 .findSemesterTrendByStudent(
                         studentId,
-                        academicYearBounds.startAt(),
-                        academicYearBounds.endAt())
+                        periodBounds.startAt(),
+                        periodBounds.endAt())
                 .stream()
                 .collect(Collectors.toMap(
                         item -> normalizeSemesterCode(item.getSemesterCode()),
@@ -311,7 +302,6 @@ public class MileageDashboardService {
         List<MileageDashboardResponse.SemesterTrendSummary> trend = new ArrayList<>();
         definedCodeByNormalizedCode.forEach((normalizedCode, definedCode) -> trend.add(
                 new MileageDashboardResponse.SemesterTrendSummary(
-                        academicYear,
                         definedCode,
                         pointsBySemester.getOrDefault(normalizedCode, BigDecimal.ZERO))));
 
@@ -319,16 +309,15 @@ public class MileageDashboardService {
         pointsBySemester.forEach((code, points) -> {
             if (!definedCodeByNormalizedCode.containsKey(code)) {
                 trend.add(new MileageDashboardResponse.SemesterTrendSummary(
-                        academicYear, code, points));
+                        code, points));
             }
         });
 
         boolean selectedPeriodExists = trend.stream().anyMatch(item ->
-                item.academicYear().equals(academicYear)
-                        && item.semesterCode().equalsIgnoreCase(semesterCode));
+                item.semesterCode().equalsIgnoreCase(semesterCode));
         if (!selectedPeriodExists) {
             trend.add(new MileageDashboardResponse.SemesterTrendSummary(
-                    academicYear, semesterCode, BigDecimal.ZERO));
+                    semesterCode, BigDecimal.ZERO));
         }
 
         return trend.stream()
@@ -348,9 +337,8 @@ public class MileageDashboardService {
     }
 
     /** 요청 학기가 실제 개별 학기 형식인지 확인하고 공백을 제거한다. */
-    private String validatePeriod(Integer academicYear, String semesterCode) {
-        if (academicYear == null || academicYear < 2000 || academicYear > 9999
-                || semesterCode == null || semesterCode.isBlank()) {
+    private String validateSemester(String semesterCode) {
+        if (semesterCode == null || semesterCode.isBlank()) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "조회 학기 정보가 올바르지 않습니다.");
         }
 

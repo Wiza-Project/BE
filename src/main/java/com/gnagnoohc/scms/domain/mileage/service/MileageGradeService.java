@@ -30,10 +30,9 @@ public class MileageGradeService {
     /** 선택 학기에 적용되는 등급 정책으로 학생의 누적 마일리지 등급을 조회한다. */
     public MileageGradeResponse getGrade(
             Integer studentId,
-            Integer academicYear,
             String semesterCode
     ) {
-        String selectedSemesterCode = validatePeriod(academicYear, semesterCode);
+        String selectedSemesterCode = validateSemester(semesterCode);
         BigDecimal cumulativePoints = valueOrZero(
                 mileageTransactionRepository.sumPostedPointsByStudent(studentId));
 
@@ -112,9 +111,8 @@ public class MileageGradeService {
     }
 
     /** 요청 학기가 실제 개별 학기인지 확인하고 공백을 제거한다. */
-    private String validatePeriod(Integer academicYear, String semesterCode) {
-        if (academicYear == null || academicYear < 2000 || academicYear > 9999
-                || semesterCode == null || semesterCode.isBlank()) {
+    private String validateSemester(String semesterCode) {
+        if (semesterCode == null || semesterCode.isBlank()) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "조회 학기 정보가 올바르지 않습니다.");
         }
 

@@ -13,7 +13,7 @@ public record MileagePolicyRegisterRequestDTO(
         @NotNull Integer activityTypeId,
         // 학기 코드. 생략(null/빈 문자열)하면 서비스에서 "ALL"(전학기 공통)로 채운다.
         @Size(max = 20) String semesterCode,
-        @NotNull @DecimalMin("0") BigDecimal points,
+        @NotNull @DecimalMin(value = "0", inclusive = false) BigDecimal points,
         @DecimalMin("0") BigDecimal maximumPoints,
         @NotNull LocalDate validFrom,
         // 종료일 없음(null)은 "무기한 적용"을 의미한다.

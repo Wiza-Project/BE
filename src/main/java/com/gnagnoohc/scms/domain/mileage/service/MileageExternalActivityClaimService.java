@@ -57,6 +57,7 @@ public class MileageExternalActivityClaimService {
     private final MileagePolicyRepository policyRepository;
     private final AppUserRepository appUserRepository;
     private final MileageAcademicPeriodService mileageAcademicPeriodService;
+    private final MileagePolicyValidator mileagePolicyValidator;
     private final FileGroupRepository fileGroupRepository;
     private final FileGroupService fileGroupService;
     private final FileStorageService fileStorageService;
@@ -70,6 +71,9 @@ public class MileageExternalActivityClaimService {
         Map<Integer, MileagePolicy> latestPoliciesByActivityType = new LinkedHashMap<>();
         for (MileagePolicy policy : policyRepository.findActiveExternalPoliciesOn(
                 asOfDate, uppercaseExcludedEarningRoutes(), semesterCode)) {
+            if (!mileagePolicyValidator.isApplicable(policy, asOfDate, semesterCode)) {
+                continue;
+            }
             latestPoliciesByActivityType.putIfAbsent(
                     policy.getActivityType().getActivityTypeId(), policy);
         }
@@ -143,16 +147,11 @@ public class MileageExternalActivityClaimService {
         List<MileagePolicy> policies = policyRepository.findActivePoliciesByActivityTypeOn(
                 activityType.getActivityTypeId(), activityDate, semesterCode);
         MileagePolicy policy = policies.stream()
+                .filter(candidate -> mileagePolicyValidator.isApplicable(candidate, activityDate, semesterCode))
                 .findFirst()
                 .orElseThrow(() -> new BusinessException(
                         ErrorCode.MILEAGE_POLICY_NOT_FOUND,
                         "활동 일자에 적용되는 마일리지 정책이 없습니다."));
-
-        if (policy.getPoints() == null || policy.getPoints().signum() <= 0) {
-            throw new BusinessException(
-                    ErrorCode.MILEAGE_POLICY_NOT_FOUND,
-                    "활동 일자에 적용되는 유효한 마일리지 정책이 없습니다.");
-        }
         return policy;
     }
 

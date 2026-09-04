@@ -12,12 +12,12 @@ import org.springframework.stereotype.Component;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
-/** 학기·학년도·전체 누적 마일리지 적립 상한을 반영해 실제 지급 가능 점수를 계산한다. */
+/** 학기·연간·전체 누적 마일리지 적립 상한을 반영해 실제 지급 가능 점수를 계산한다. */
 @Component
 public class MileageAccrualCapService {
 
     static final BigDecimal SEMESTER_CAP = new BigDecimal("50");
-    static final BigDecimal ACADEMIC_YEAR_CAP = new BigDecimal("100");
+    static final BigDecimal ANNUAL_CAP = new BigDecimal("100");
     static final BigDecimal LIFETIME_CAP = new BigDecimal("400");
     private static final String ALL_SEMESTER_CODE = "ALL";
 
@@ -37,7 +37,7 @@ public class MileageAccrualCapService {
     }
 
     /**
-     * 요청 점수를 학기(50)·학년도(100)·전체 누적(400) 상한에 맞춰 클램프한다.
+     * 요청 점수를 학기(50)·연간(100)·전체 누적(400) 상한에 맞춰 클램프한다.
      * 정책이 특정 학기에 귀속되지 않은 연간(ALL) 정책이면 학기 상한 검사는 건너뛴다.
      */
     public BigDecimal computeGrantablePoints(
@@ -52,7 +52,7 @@ public class MileageAccrualCapService {
                 LocalDate.now(DateTimeUtils.KST_ZONE));
     }
 
-    /** 적립 기준일이 속한 학사기간을 기준으로 학기·학년도 상한을 계산한다. */
+    /** 적립 기준일이 속한 학사 주기를 기준으로 학기·연간 상한을 계산한다. */
     public BigDecimal computeGrantablePoints(
             Integer studentId,
             MileagePolicy policy,
@@ -67,21 +67,20 @@ public class MileageAccrualCapService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
         BigDecimal remaining = requestedPoints;
-        MileageAcademicPeriodService.AcademicYearBounds academicYearBounds =
-                mileageAcademicPeriodService.resolveAcademicYearBounds(
-                        mileageAcademicPeriodService.resolveAcademicYear(accrualDate));
+        MileageAcademicPeriodService.PeriodBounds periodBounds =
+                mileageAcademicPeriodService.resolvePeriodBounds(accrualDate);
 
         if (!ALL_SEMESTER_CODE.equalsIgnoreCase(policy.getSemesterCode())) {
             BigDecimal semesterUsed = mileageTransactionRepository.sumPostedPointsByStudentAndExactSemester(
                     studentId,
-                    academicYearBounds.startAt(),
-                    academicYearBounds.endAt(),
+                    periodBounds.startAt(),
+                    periodBounds.endAt(),
                     policy.getSemesterCode());
             remaining = remaining.min(remainingOf(SEMESTER_CAP, semesterUsed));
         }
-        BigDecimal yearUsed = mileageTransactionRepository.sumPostedPointsByStudentBetween(
-                studentId, academicYearBounds.startAt(), academicYearBounds.endAt());
-        remaining = remaining.min(remainingOf(ACADEMIC_YEAR_CAP, yearUsed));
+        BigDecimal annualUsed = mileageTransactionRepository.sumPostedPointsByStudentBetween(
+                studentId, periodBounds.startAt(), periodBounds.endAt());
+        remaining = remaining.min(remainingOf(ANNUAL_CAP, annualUsed));
         BigDecimal lifetimeUsed = mileageTransactionRepository.sumPostedPointsByStudent(studentId);
         remaining = remaining.min(remainingOf(LIFETIME_CAP, lifetimeUsed));
 

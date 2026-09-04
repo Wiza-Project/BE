@@ -51,7 +51,7 @@ public class MileagePolicyService {
 
         String semesterCode = resolveSemesterCode(request.semesterCode());
         validatePeriod(request.validFrom(), request.validTo());
-        validateExtracurricularPoints(activityType, request.points());
+        validatePoints(request.points());
 
         Integer nextVersionNo = policyRepository.findNextVersionNo(
                 activityType.getActivityTypeId(), semesterCode);
@@ -122,7 +122,7 @@ public class MileagePolicyService {
         String policyStatus = request.policyStatus() != null ? request.policyStatus() : policy.getPolicyStatus();
 
         validatePeriod(validFrom, validTo);
-        validateExtracurricularPoints(policy.getActivityType(), points);
+        validatePoints(points);
 
         int updatedRows = policyRepository.updatePolicy(
                 mileagePolicyId, points, maximumPoints, validFrom, validTo, writeJson(duplicateRule), policyStatus);
@@ -144,12 +144,11 @@ public class MileagePolicyService {
         }
     }
 
-    private void validateExtracurricularPoints(MileageActivityType activityType, BigDecimal points) {
-        if (ExtracurricularMileagePolicyDefinition.isExtracurricular(activityType)
-                && (points == null || points.compareTo(BigDecimal.ZERO) <= 0)) {
+    private void validatePoints(BigDecimal points) {
+        if (points == null || points.compareTo(BigDecimal.ZERO) <= 0) {
             throw new BusinessException(
                     ErrorCode.INVALID_INPUT,
-                    "비교과 마일리지 정책의 포인트는 0보다 커야 합니다.");
+                    "마일리지 정책의 포인트는 0보다 커야 합니다.");
         }
     }
 

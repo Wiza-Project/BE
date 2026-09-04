@@ -13,7 +13,7 @@ import java.time.LocalDate;
  * validTo를 다시 무기한(null)으로 되돌리려면 validTo는 비워두고 clearValidTo=true를 명시적으로 보낸다.
  */
 public record MileagePolicyUpdateRequestDTO(
-        @DecimalMin("0") BigDecimal points,
+        @DecimalMin(value = "0", inclusive = false) BigDecimal points,
         @DecimalMin("0") BigDecimal maximumPoints,
         LocalDate validFrom,
         LocalDate validTo,

@@ -20,7 +20,6 @@ public record MileageDashboardResponse(
 ) {
 
     public record Period(
-            Integer academicYear,
             String semesterCode
     ) {
     }
@@ -71,7 +70,6 @@ public record MileageDashboardResponse(
 
     /** 선택 학기를 포함한 최근 적립 학기 추이. */
     public record SemesterTrendSummary(
-            Integer academicYear,
             String semesterCode,
             BigDecimal points
     ) {

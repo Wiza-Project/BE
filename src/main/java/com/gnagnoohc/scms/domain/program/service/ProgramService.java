@@ -33,6 +33,7 @@ import com.gnagnoohc.scms.global.common.repository.CommonCodeRepository;
 import com.gnagnoohc.scms.global.common.repository.FileGroupRepository;
 import com.gnagnoohc.scms.global.common.service.FileGroupService;
 import com.gnagnoohc.scms.global.common.service.FileStorageService;
+import com.gnagnoohc.scms.global.common.util.DateTimeUtils;
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.DbConstraintViolationMatcher;
 import com.gnagnoohc.scms.global.error.ErrorCode;
@@ -742,8 +743,8 @@ public class ProgramService {
         if (programTypeCodeId == null) {
             return Optional.empty();
         }
-        LocalDate today = LocalDate.now();
-        String semesterCode = mileageAcademicPeriodService.resolveCurrentPeriod().semesterCode();
+        LocalDate today = LocalDate.now(DateTimeUtils.KST_ZONE);
+        String semesterCode = mileageAcademicPeriodService.resolvePeriod(today).semesterCode();
         return commonCodeRepository.findById(programTypeCodeId)
                 .filter(programTypeCode -> PROGRAM_TYPE_GROUP.equals(programTypeCode.getCodeGroup()))
                 .flatMap(programTypeCode -> mileagePolicyRepository

@@ -28,7 +28,7 @@ public class MileageDashboardController {
     private final MileageGradeService mileageGradeService;
     private final MileageAcademicPeriodService mileageAcademicPeriodService;
 
-    /** 오늘 날짜 기준 현재 학년도/학기를 판별한다. FE가 날짜로 직접 계산하던 것을 대체한다. */
+    /** 오늘 날짜 기준 현재 학사 주기/학기를 판별한다. FE가 날짜로 직접 계산하던 것을 대체한다. */
     @GetMapping("/current-period")
     public ApiResponse<MileageAcademicPeriodResponse> getCurrentPeriod() {
         return ApiResponse.ok(mileageAcademicPeriodService.resolveCurrentPeriod());
@@ -39,22 +39,20 @@ public class MileageDashboardController {
     @GetMapping("/grade")
     public ApiResponse<MileageGradeResponse> getGrade(
             @AuthenticationPrincipal AuthUser authUser,
-            @RequestParam Integer academicYear,
             @RequestParam String semesterCode
     ) {
         return ApiResponse.ok(mileageGradeService.getGrade(
-                authUser.getId(), academicYear, semesterCode));
+                authUser.getId(), semesterCode));
     }
 
     /** 선택 학기의 점수·정책 진행도·분포·최근 내역을 한 번에 조회한다. */
     @GetMapping("/dashboard")
     public ApiResponse<MileageDashboardResponse> getDashboard(
             @AuthenticationPrincipal AuthUser authUser,
-            @RequestParam Integer academicYear,
             @RequestParam String semesterCode
     ) {
         return ApiResponse.ok(mileageDashboardService.getDashboard(
-                authUser.getId(), academicYear, semesterCode));
+                authUser.getId(), semesterCode));
     }
 
     /** 적립 원장 탭의 미리보기로 최근 거래 5건을 조회한다. */

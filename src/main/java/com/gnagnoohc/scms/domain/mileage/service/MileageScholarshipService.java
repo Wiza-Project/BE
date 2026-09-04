@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -48,10 +49,9 @@ public class MileageScholarshipService {
     /** 선택 학기에 적용되는 활성 장학금 정책과 학생별 신청 가능 상태를 조회한다. */
     public List<MileageScholarshipResponse.ScholarshipItem> getScholarships(
             Integer studentId,
-            Integer academicYear,
             String semesterCode
     ) {
-        String selectedSemesterCode = validatePeriod(academicYear, semesterCode);
+        String selectedSemesterCode = validateSemester(semesterCode);
         List<MileageBenefitPolicy> policies = benefitPolicyRepository
                 .findByActiveTrueAndBenefitTypeAndSemesterCodeInOrderByMinimumPointsAsc(
                         SCHOLARSHIP, List.of(selectedSemesterCode, ALL_SEMESTER_CODE));
@@ -63,17 +63,17 @@ public class MileageScholarshipService {
         Map<Integer, String> applicationStatuses = getApplicationStatuses(studentId, policies);
         Set<String> claimedGroupCodes = new HashSet<>(
                 benefitApplicationRepository.findClaimedBenefitGroupCodes(studentId));
-        MileageAcademicPeriodService.AcademicYearBounds academicYearBounds =
-                mileageAcademicPeriodService.resolveAcademicYearBounds(academicYear);
+        MileageAcademicPeriodService.PeriodBounds periodBounds =
+                mileageAcademicPeriodService.resolveCurrentPeriodBounds();
         BigDecimal semesterPoints = valueOrZero(
                 mileageTransactionRepository.sumPostedPointsByStudentAndPeriod(
                         studentId,
-                        academicYearBounds.startAt(),
-                        academicYearBounds.endAt(),
+                        periodBounds.startAt(),
+                        periodBounds.endAt(),
                         selectedSemesterCode));
-        BigDecimal academicYearPoints = valueOrZero(
+        BigDecimal annualPoints = valueOrZero(
                 mileageTransactionRepository.sumPostedPointsByStudentBetween(
-                        studentId, academicYearBounds.startAt(), academicYearBounds.endAt()));
+                        studentId, periodBounds.startAt(), periodBounds.endAt()));
         Instant now = Instant.now();
 
         return policies.stream()
@@ -82,9 +82,9 @@ public class MileageScholarshipService {
                         resolvePoints(
                                 studentId,
                                 policy,
-                                academicYear,
+                                periodBounds,
                                 semesterPoints,
-                                academicYearPoints),
+                                annualPoints),
                         applicationStatuses.get(policy.getBenefitPolicyId()),
                         isGroupAlreadyClaimedByOther(policy, claimedGroupCodes),
                         now))
@@ -101,10 +101,9 @@ public class MileageScholarshipService {
                 .findByBenefitPolicy_BenefitPolicyIdAndStudent_UserId(benefitPolicyId, studentId)
                 .map(MileageBenefitApplication::getApplicationStatus)
                 .orElse(null);
-        int currentAcademicYear = mileageAcademicPeriodService
-                .resolveCurrentPeriod()
-                .academicYear();
-        BigDecimal currentPoints = calculatePoints(studentId, policy, currentAcademicYear);
+        MileageAcademicPeriodService.PeriodBounds currentPeriodBounds =
+                mileageAcademicPeriodService.resolveCurrentPeriodBounds();
+        BigDecimal currentPoints = calculatePoints(studentId, policy, currentPeriodBounds);
         boolean groupAlreadyClaimedByOther = policy.getBenefitGroupCode() != null
                 && benefitApplicationRepository.existsByStudent_UserIdAndBenefitPolicy_BenefitGroupCode(
                         studentId, policy.getBenefitGroupCode());
@@ -142,10 +141,9 @@ public class MileageScholarshipService {
         Instant now = Instant.now();
         validateApplicationPeriod(policy, now);
 
-        int currentAcademicYear = mileageAcademicPeriodService
-                .resolveCurrentPeriod()
-                .academicYear();
-        BigDecimal currentPoints = calculatePoints(studentId, policy, currentAcademicYear);
+        MileageAcademicPeriodService.PeriodBounds currentPeriodBounds =
+                mileageAcademicPeriodService.resolveCurrentPeriodBounds();
+        BigDecimal currentPoints = calculatePoints(studentId, policy, currentPeriodBounds);
         if (!meetsPointRequirement(policy, currentPoints)) {
             throw new BusinessException(ErrorCode.INSUFFICIENT_MILEAGE);
         }
@@ -293,31 +291,27 @@ public class MileageScholarshipService {
     private BigDecimal calculatePoints(
             Integer studentId,
             MileageBenefitPolicy policy,
-            int academicYear
+            MileageAcademicPeriodService.PeriodBounds currentPeriodBounds
     ) {
         if (policy.getCumulativeYears() != null && policy.getCumulativeYears() > 1) {
-            int entryYear = resolveEntryYear(studentId);
-            int lastAcademicYear = entryYear + policy.getCumulativeYears() - 1;
-            MileageAcademicPeriodService.AcademicYearBounds startBounds =
-                    mileageAcademicPeriodService.resolveAcademicYearBounds(entryYear);
-            MileageAcademicPeriodService.AcademicYearBounds endBounds =
-                    mileageAcademicPeriodService.resolveAcademicYearBounds(lastAcademicYear);
+            LocalDate entryCycleStart = resolveEntryCycleStart(studentId);
+            MileageAcademicPeriodService.PeriodBounds cumulativeBounds =
+                    mileageAcademicPeriodService.resolveCycleBounds(
+                            entryCycleStart, policy.getCumulativeYears());
             return valueOrZero(mileageTransactionRepository
                     .sumPostedPointsByStudentBetween(
-                            studentId, startBounds.startAt(), endBounds.endAt()));
+                            studentId, cumulativeBounds.startAt(), cumulativeBounds.endAt()));
         }
-        MileageAcademicPeriodService.AcademicYearBounds academicYearBounds =
-                mileageAcademicPeriodService.resolveAcademicYearBounds(academicYear);
         if (ALL_SEMESTER_CODE.equalsIgnoreCase(policy.getSemesterCode())) {
             return valueOrZero(mileageTransactionRepository
                     .sumPostedPointsByStudentBetween(
-                            studentId, academicYearBounds.startAt(), academicYearBounds.endAt()));
+                            studentId, currentPeriodBounds.startAt(), currentPeriodBounds.endAt()));
         }
         return valueOrZero(mileageTransactionRepository
                 .sumPostedPointsByStudentAndPeriod(
                         studentId,
-                        academicYearBounds.startAt(),
-                        academicYearBounds.endAt(),
+                        currentPeriodBounds.startAt(),
+                        currentPeriodBounds.endAt(),
                         policy.getSemesterCode()));
     }
 
@@ -325,7 +319,7 @@ public class MileageScholarshipService {
      * 학생의 학번(university_no) 앞 4자리를 실제 입학년도로 파싱한다. 편입·휴학 등으로 학생마다
      * 입학년도가 다를 수 있어, 다년 누적 정책(cumulativeYears &gt; 1)은 학생 본인의 학번을 기준으로 삼는다.
      */
-    private int resolveEntryYear(Integer studentId) {
+    private LocalDate resolveEntryCycleStart(Integer studentId) {
         AppUser student = appUserRepository.findById(studentId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
         String universityNo = student.getUniversityNo();
@@ -333,7 +327,8 @@ public class MileageScholarshipService {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "학번에서 입학년도를 확인할 수 없습니다.");
         }
         try {
-            return Integer.parseInt(universityNo.substring(0, 4));
+            int entryYear = Integer.parseInt(universityNo.substring(0, 4));
+            return LocalDate.of(entryYear, 3, 2);
         } catch (NumberFormatException exception) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "학번에서 입학년도를 확인할 수 없습니다.");
         }
@@ -342,10 +337,10 @@ public class MileageScholarshipService {
     private BigDecimal pointsFor(
             MileageBenefitPolicy policy,
             BigDecimal semesterPoints,
-            BigDecimal academicYearPoints
+            BigDecimal annualPoints
     ) {
         return ALL_SEMESTER_CODE.equalsIgnoreCase(policy.getSemesterCode())
-                ? academicYearPoints
+                ? annualPoints
                 : semesterPoints;
     }
 
@@ -353,13 +348,13 @@ public class MileageScholarshipService {
     private BigDecimal resolvePoints(
             Integer studentId,
             MileageBenefitPolicy policy,
-            int academicYear,
+            MileageAcademicPeriodService.PeriodBounds currentPeriodBounds,
             BigDecimal semesterPoints,
-            BigDecimal academicYearPoints
+            BigDecimal annualPoints
     ) {
         if (policy.getCumulativeYears() != null && policy.getCumulativeYears() > 1) {
             try {
-                return calculatePoints(studentId, policy, academicYear);
+                return calculatePoints(studentId, policy, currentPeriodBounds);
             } catch (BusinessException exception) {
                 if (ErrorCode.INVALID_INPUT.equals(exception.getErrorCode())) {
                     return BigDecimal.ZERO;
@@ -367,7 +362,7 @@ public class MileageScholarshipService {
                 throw exception;
             }
         }
-        return pointsFor(policy, semesterPoints, academicYearPoints);
+        return pointsFor(policy, semesterPoints, annualPoints);
     }
 
     private MileageScholarshipResponse.ApplicationItem toApplicationItem(
@@ -387,9 +382,8 @@ public class MileageScholarshipService {
                 application.getDecisionReason());
     }
 
-    private String validatePeriod(Integer academicYear, String semesterCode) {
-        if (academicYear == null || academicYear < 2000 || academicYear > 9999
-                || semesterCode == null || semesterCode.isBlank()) {
+    private String validateSemester(String semesterCode) {
+        if (semesterCode == null || semesterCode.isBlank()) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "조회 학기 정보가 올바르지 않습니다.");
         }
 
