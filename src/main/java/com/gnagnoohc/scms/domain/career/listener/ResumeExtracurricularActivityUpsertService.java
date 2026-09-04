@@ -28,6 +28,9 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ResumeExtracurricularActivityUpsertService {
 
+    /** 신청 건당 1행을 보장하는 유니크 제약. 호출부가 중복 적재 예외를 판별할 때 쓴다. */
+    public static final String DUPLICATE_APPLICATION_CONSTRAINT = "uq_resume_extracurricular_activity_application";
+
     private final ResumeExtracurricularActivityRepository resumeExtracurricularActivityRepository;
     private final AppUserRepository appUserRepository;
 
