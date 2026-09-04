@@ -223,7 +223,9 @@ public class MileageScholarshipService {
                 eligibilityStatus,
                 applicationStatus,
                 applicationStatus == null && enoughPoints && applicationOpen
-                        && !groupAlreadyClaimedByOther);
+                        && !groupAlreadyClaimedByOther,
+                policy.getCumulativeYears(),
+                policy.getBenefitGroupCode());
     }
 
     private String resolveEligibilityStatus(

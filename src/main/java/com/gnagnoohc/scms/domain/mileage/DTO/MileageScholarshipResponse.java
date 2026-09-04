@@ -26,7 +26,9 @@ public final class MileageScholarshipResponse {
             Instant applicationEndsAt,
             String eligibilityStatus,
             String applicationStatus,
-            boolean canApply
+            boolean canApply,
+            Integer cumulativeYears,
+            String benefitGroupCode
     ) {
     }
 
