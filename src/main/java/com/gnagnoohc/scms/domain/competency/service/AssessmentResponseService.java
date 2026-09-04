@@ -56,6 +56,7 @@ public class AssessmentResponseService {
         AssessmentAttempt attempt = assessmentAttemptAccessGuard.getOwnAttempt(attemptId, studentId);
         assessmentAttemptAccessGuard.assertNotSubmitted(attempt);
         assessmentAttemptAccessGuard.assertPeriodOpen(attempt);
+        assessmentAttemptAccessGuard.assertStillEnrolled(attempt);
 
         Integer roundId = attempt.getAssessmentRound().getAssessmentRoundId();
         if (!assessmentRoundQuestionRepository.existsByAssessmentRound_AssessmentRoundIdAndQuestion_QuestionId(roundId, questionId)) {
