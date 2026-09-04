@@ -3,23 +3,19 @@ package com.gnagnoohc.scms.domain.mileage.service;
 import com.gnagnoohc.scms.domain.competency.entity.AssessmentAttempt;
 import com.gnagnoohc.scms.domain.mileage.entity.MileageActivityType;
 import com.gnagnoohc.scms.domain.mileage.entity.MileagePolicy;
-import com.gnagnoohc.scms.domain.mileage.entity.MileageTransaction;
 import com.gnagnoohc.scms.domain.mileage.repository.AssessmentAttemptMileageRepository;
 import com.gnagnoohc.scms.domain.mileage.repository.MileageActivityTypeRepository;
 import com.gnagnoohc.scms.domain.mileage.repository.MileagePolicyRepository;
 import com.gnagnoohc.scms.domain.mileage.repository.MileageTransactionRepository;
 import com.gnagnoohc.scms.domain.user.repository.AppUserRepository;
 import com.gnagnoohc.scms.global.error.BusinessException;
-import com.gnagnoohc.scms.global.error.DbConstraintViolationMatcher;
 import com.gnagnoohc.scms.global.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 
@@ -30,8 +26,6 @@ import java.time.ZoneId;
 public class CompetencyDiagnosisMileageAccrualService {
 
     private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Seoul");
-    private static final String DUPLICATE_ATTEMPT_ACCRUAL_CONSTRAINT =
-            "uq_mileage_transaction_source_assessment_attempt";
 
     private final AssessmentAttemptMileageRepository assessmentAttemptMileageRepository;
     private final MileageTransactionRepository mileageTransactionRepository;
@@ -40,6 +34,7 @@ public class CompetencyDiagnosisMileageAccrualService {
     private final MileageAccrualCapService mileageAccrualCapService;
     private final MileageAcademicPeriodService mileageAcademicPeriodService;
     private final AppUserRepository appUserRepository;
+    private final AssessmentCompletionMileageAccrualWriter assessmentCompletionMileageAccrualWriter;
 
     /** 특정 응시 회차가 제출 완료된 경우 고정 정책 점수로 한 번만 적립한다. */
     @Transactional
@@ -94,17 +89,7 @@ public class CompetencyDiagnosisMileageAccrualService {
             return false;
         }
 
-        try {
-            mileageTransactionRepository.saveAndFlush(
-                    MileageTransaction.earnFromAssessmentCompletion(attempt, policy, grantablePoints, Instant.now()));
-            return true;
-        } catch (DataIntegrityViolationException exception) {
-            if (!DbConstraintViolationMatcher.contains(exception, DUPLICATE_ATTEMPT_ACCRUAL_CONSTRAINT)) {
-                throw exception;
-            }
-            log.info("동시 요청으로 이미 적립된 역량진단 완료 건입니다. attemptId={}", attemptId);
-            return false;
-        }
+        return assessmentCompletionMileageAccrualWriter.insert(attempt, policy, grantablePoints, attemptId);
     }
 
     private MileagePolicy resolvePolicy(LocalDate submittedDate) {
