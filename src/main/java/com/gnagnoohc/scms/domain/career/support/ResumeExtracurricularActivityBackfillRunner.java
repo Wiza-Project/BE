@@ -4,10 +4,12 @@ import com.gnagnoohc.scms.domain.career.listener.ResumeExtracurricularActivityUp
 import com.gnagnoohc.scms.domain.program.entity.ProgramApplication;
 import com.gnagnoohc.scms.domain.program.event.ExtracurricularActivityCompletedEvent;
 import com.gnagnoohc.scms.domain.program.repository.ProgramApplicationRepository;
+import com.gnagnoohc.scms.global.error.DbConstraintViolationMatcher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Profile;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Slice;
 import org.springframework.stereotype.Component;
@@ -43,6 +45,16 @@ public class ResumeExtracurricularActivityBackfillRunner implements CommandLineR
 
     @Override
     public void run(String... args) {
+        BackfillResult result = backfill();
+        log.info("이력서 비교과 이력 백필 완료 — 저장 {}건, 스킵(이미 반영됨) {}건, 실패 {}건",
+                result.saved(), result.skipped(), result.failed());
+    }
+
+    /** 백필 집계. 실패는 신청 건 단위로 삼키므로 전체 실행은 끝까지 진행된다. */
+    record BackfillResult(long saved, long skipped, long failed) {
+    }
+
+    BackfillResult backfill() {
         int page = 0;
         long saved = 0;
         long skipped = 0;
@@ -64,6 +76,16 @@ public class ResumeExtracurricularActivityBackfillRunner implements CommandLineR
                         } else {
                             skipped++;
                         }
+                    } catch (DataIntegrityViolationException e) {
+                        // 백필 중 실시간 이수 확정과 경합해 유니크 제약에 걸린 건은 실패가 아니라 이미 반영된 건이다.
+                        if (DbConstraintViolationMatcher.contains(
+                                e, ResumeExtracurricularActivityUpsertService.DUPLICATE_APPLICATION_CONSTRAINT)) {
+                            skipped++;
+                        } else {
+                            failed++;
+                            log.warn("이력서 비교과 이력 백필 저장 실패 — applicationId={}, 건너뜀",
+                                    application.getApplicationId(), e);
+                        }
                     } catch (Exception e) {
                         failed++;
                         log.warn("이력서 비교과 이력 백필 저장 실패 — applicationId={}, 건너뜀",
@@ -74,6 +96,6 @@ public class ResumeExtracurricularActivityBackfillRunner implements CommandLineR
             page++;
         } while (slice.hasNext());
 
-        log.info("이력서 비교과 이력 백필 완료 — 저장 {}건, 스킵(이미 반영됨) {}건, 실패 {}건", saved, skipped, failed);
+        return new BackfillResult(saved, skipped, failed);
     }
 }
