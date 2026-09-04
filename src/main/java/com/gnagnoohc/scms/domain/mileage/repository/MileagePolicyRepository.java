@@ -15,6 +15,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -77,7 +78,7 @@ public interface MileagePolicyRepository extends JpaRepository<MileagePolicy, In
             join fetch p.activityType activityType
             where activityType.programTypeCode is null
               and activityType.competency is not null
-              and upper(activityType.earningRoute) <> 'PROGRAM_COMPLETION'
+              and upper(activityType.earningRoute) not in :excludedEarningRoutes
               and activityType.active = true
               and p.policyStatus = 'ACTIVE'
               and p.points > 0
@@ -85,7 +86,10 @@ public interface MileagePolicyRepository extends JpaRepository<MileagePolicy, In
               and (p.validTo is null or p.validTo >= :asOfDate)
             order by activityType.activityName asc, p.versionNo desc
             """)
-    List<MileagePolicy> findActiveExternalPoliciesOn(@Param("asOfDate") LocalDate asOfDate);
+    List<MileagePolicy> findActiveExternalPoliciesOn(
+            @Param("asOfDate") LocalDate asOfDate,
+            @Param("excludedEarningRoutes") Collection<String> excludedEarningRoutes
+    );
 
     /**
      * 정책 row에 비관적 락을 걸어 조회한다(ExtracurricularProgramRepository.findByIdForUpdate와 동일 패턴).

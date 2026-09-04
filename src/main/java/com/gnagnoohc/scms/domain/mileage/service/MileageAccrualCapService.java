@@ -2,7 +2,10 @@ package com.gnagnoohc.scms.domain.mileage.service;
 
 import com.gnagnoohc.scms.domain.mileage.entity.MileagePolicy;
 import com.gnagnoohc.scms.domain.mileage.repository.MileageTransactionRepository;
+import com.gnagnoohc.scms.domain.user.repository.AppUserRepository;
 import com.gnagnoohc.scms.global.common.util.DateTimeUtils;
+import com.gnagnoohc.scms.global.error.BusinessException;
+import com.gnagnoohc.scms.global.error.ErrorCode;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -20,19 +23,17 @@ public class MileageAccrualCapService {
 
     private final MileageTransactionRepository mileageTransactionRepository;
     private final MileageAcademicPeriodService mileageAcademicPeriodService;
+    private final AppUserRepository appUserRepository;
 
     @Autowired
     public MileageAccrualCapService(
             MileageTransactionRepository mileageTransactionRepository,
-            MileageAcademicPeriodService mileageAcademicPeriodService
+            MileageAcademicPeriodService mileageAcademicPeriodService,
+            AppUserRepository appUserRepository
     ) {
         this.mileageTransactionRepository = mileageTransactionRepository;
         this.mileageAcademicPeriodService = mileageAcademicPeriodService;
-    }
-
-    /** 기존 호출부와 테스트의 생성 호환을 유지한다. 운영 빈은 학사기간 서비스를 함께 주입한다. */
-    public MileageAccrualCapService(MileageTransactionRepository mileageTransactionRepository) {
-        this(mileageTransactionRepository, new MileageAcademicPeriodService());
+        this.appUserRepository = appUserRepository;
     }
 
     /**
@@ -62,13 +63,16 @@ public class MileageAccrualCapService {
             return BigDecimal.ZERO;
         }
 
+        appUserRepository.findByIdForUpdate(studentId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
         BigDecimal remaining = requestedPoints;
         MileageAcademicPeriodService.AcademicYearBounds academicYearBounds =
                 mileageAcademicPeriodService.resolveAcademicYearBounds(
                         mileageAcademicPeriodService.resolveAcademicYear(accrualDate));
 
         if (!ALL_SEMESTER_CODE.equalsIgnoreCase(policy.getSemesterCode())) {
-            BigDecimal semesterUsed = mileageTransactionRepository.sumPostedPointsByStudentAndPeriod(
+            BigDecimal semesterUsed = mileageTransactionRepository.sumPostedPointsByStudentAndExactSemester(
                     studentId,
                     academicYearBounds.startAt(),
                     academicYearBounds.endAt(),

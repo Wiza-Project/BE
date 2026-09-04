@@ -348,7 +348,14 @@ public class MileageScholarshipService {
             BigDecimal academicYearPoints
     ) {
         if (policy.getCumulativeYears() != null && policy.getCumulativeYears() > 1) {
-            return calculatePoints(studentId, policy, academicYear);
+            try {
+                return calculatePoints(studentId, policy, academicYear);
+            } catch (BusinessException exception) {
+                if (ErrorCode.INVALID_INPUT.equals(exception.getErrorCode())) {
+                    return BigDecimal.ZERO;
+                }
+                throw exception;
+            }
         }
         return pointsFor(policy, semesterPoints, academicYearPoints);
     }

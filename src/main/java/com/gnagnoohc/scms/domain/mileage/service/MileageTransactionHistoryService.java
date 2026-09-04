@@ -26,6 +26,7 @@ public class MileageTransactionHistoryService {
     private static final int PAGE_SIZE = 10;
     private static final String EARN = "EARN";
     private static final String POSTED = "POSTED";
+    private static final String ALL_SEMESTER_CODE = "ALL";
 
     private final MileageTransactionRepository mileageTransactionRepository;
     private final MileageAcademicPeriodService mileageAcademicPeriodService;
@@ -40,6 +41,7 @@ public class MileageTransactionHistoryService {
             String semesterCode,
             Pageable pageable
     ) {
+        validatePeriodOrAbsent(academicYear, semesterCode);
         PageRequest pageRequest = PageRequest.of(pageable.getPageNumber(), PAGE_SIZE);
         MileageAcademicPeriodService.AcademicYearBounds academicYearBounds = academicYear == null
                 ? null
@@ -91,6 +93,24 @@ public class MileageTransactionHistoryService {
                 toPolicyDetail(policy),
                 toProgramDetail(programApplication),
                 toExternalActivityDetail(externalActivityClaim));
+    }
+
+    /**
+     * academicYear/semesterCode는 둘 다 없으면 전체 이력 조회를 허용하고,
+     * 하나만 주어지거나 semesterCode가 공백/ALL이면 잘못된 조합으로 거부한다.
+     */
+    private void validatePeriodOrAbsent(Integer academicYear, String semesterCode) {
+        boolean hasAcademicYear = academicYear != null;
+        boolean hasSemesterCode = semesterCode != null && !semesterCode.isBlank();
+
+        if (!hasAcademicYear && !hasSemesterCode) {
+            return;
+        }
+        if (hasAcademicYear != hasSemesterCode
+                || academicYear < 2000 || academicYear > 9999
+                || ALL_SEMESTER_CODE.equalsIgnoreCase(semesterCode.trim())) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "조회 학기 정보가 올바르지 않습니다.");
+        }
     }
 
     private MileagePolicy resolveMileagePolicy(MileageTransaction transaction) {

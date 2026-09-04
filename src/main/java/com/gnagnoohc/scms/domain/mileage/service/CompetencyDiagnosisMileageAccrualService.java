@@ -12,6 +12,7 @@ import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -57,7 +58,17 @@ public class CompetencyDiagnosisMileageAccrualService {
                 : attempt.getSubmittedAt().atZone(BUSINESS_ZONE).toLocalDate();
 
         MileagePolicy policy = resolvePolicy(submittedDate);
+        if (policy == null) {
+            log.warn("제출일에 적용 가능한 역량진단 마일리지 정책이 없어 적립을 건너뜁니다. attemptId={}, submittedDate={}",
+                    attemptId, submittedDate);
+            return false;
+        }
         validatePolicy(policy, submittedDate);
+        if (policy.getActivityType().getCompetency() == null) {
+            log.warn("정책에 연결된 핵심역량이 없어 역량진단 적립을 건너뜁니다. attemptId={}, policyId={}",
+                    attemptId, policy.getMileagePolicyId());
+            return false;
+        }
 
         Integer studentId = attempt.getStudent().getUserId();
         BigDecimal grantablePoints = mileageAccrualCapService.computeGrantablePoints(
@@ -68,9 +79,14 @@ public class CompetencyDiagnosisMileageAccrualService {
             return false;
         }
 
-        mileageTransactionRepository.save(
-                MileageTransaction.earnFromAssessmentCompletion(attempt, policy, grantablePoints, Instant.now()));
-        return true;
+        try {
+            mileageTransactionRepository.saveAndFlush(
+                    MileageTransaction.earnFromAssessmentCompletion(attempt, policy, grantablePoints, Instant.now()));
+            return true;
+        } catch (DataIntegrityViolationException exception) {
+            log.info("동시 요청으로 이미 적립된 역량진단 완료 건입니다. attemptId={}", attemptId);
+            return false;
+        }
     }
 
     private MileagePolicy resolvePolicy(LocalDate submittedDate) {

@@ -35,6 +35,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /** 학생의 외부활동 증빙 파일 업로드와 마일리지 신청 제출을 담당한다. */
 @Service
@@ -43,7 +44,10 @@ import java.util.Set;
 public class MileageExternalActivityClaimService {
 
     private static final Set<String> EVIDENCE_FILE_EXTENSIONS = Set.of("pdf");
-    private static final String PROGRAM_COMPLETION_ROUTE = "PROGRAM_COMPLETION";
+    /** 외부활동 신청 화면·검증에서 제외할 route. 프로그램 이수/역량진단 완료는 각자의 전용 흐름으로만 적립된다. */
+    private static final Set<String> EXCLUDED_EARNING_ROUTES = Set.of(
+            ExtracurricularMileagePolicyDefinition.EARNING_ROUTE,
+            CompetencyDiagnosisMileagePolicyDefinition.EARNING_ROUTE);
     private static final String EXTERNAL_CLAIM_FILE_GROUP_CONSTRAINT =
             "uq_external_activity_claim_file_group_id";
 
@@ -61,7 +65,8 @@ public class MileageExternalActivityClaimService {
         LocalDate asOfDate = activityDate == null ? LocalDate.now() : activityDate;
 
         Map<Integer, MileagePolicy> latestPoliciesByActivityType = new LinkedHashMap<>();
-        for (MileagePolicy policy : policyRepository.findActiveExternalPoliciesOn(asOfDate)) {
+        for (MileagePolicy policy : policyRepository.findActiveExternalPoliciesOn(
+                asOfDate, uppercaseExcludedEarningRoutes())) {
             latestPoliciesByActivityType.putIfAbsent(
                     policy.getActivityType().getActivityTypeId(), policy);
         }
@@ -147,16 +152,23 @@ public class MileageExternalActivityClaimService {
         return policy;
     }
 
-    /** 프로그램 이수용 활동 유형을 학생의 외부활동 신청에 재사용하지 못하게 한다. */
+    /** 프로그램 이수/역량진단 완료 전용 활동 유형을 학생의 외부활동 신청에 재사용하지 못하게 한다. */
     private void validateExternalActivityType(MileageActivityType activityType) {
         if (activityType.getProgramTypeCode() != null
                 || ExtracurricularMileagePolicyDefinition.isProgramTypePolicy(activityType)
-                || PROGRAM_COMPLETION_ROUTE.equalsIgnoreCase(activityType.getEarningRoute())
+                || EXCLUDED_EARNING_ROUTES.stream()
+                        .anyMatch(route -> route.equalsIgnoreCase(activityType.getEarningRoute()))
                 || activityType.getCompetency() == null) {
             throw new BusinessException(
                     ErrorCode.INVALID_INPUT,
                     "외부활동 신청에 사용할 수 없는 마일리지 활동 유형입니다.");
         }
+    }
+
+    private Set<String> uppercaseExcludedEarningRoutes() {
+        return EXCLUDED_EARNING_ROUTES.stream()
+                .map(route -> route.toUpperCase(Locale.ROOT))
+                .collect(Collectors.toUnmodifiableSet());
     }
 
     /** 비교과 프로그램 첨부 연결 검증과 같은 기준으로 파일 그룹의 소유권·형식을 확인한다. */

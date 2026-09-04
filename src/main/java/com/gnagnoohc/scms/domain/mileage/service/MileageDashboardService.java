@@ -64,7 +64,7 @@ public class MileageDashboardService {
                         academicYearBounds.endAt(),
                         selectedSemesterCode));
         BigDecimal annualPoints = valueOrZero(
-                mileageTransactionRepository.sumPostedPointsByStudentAndAllSemester(
+                mileageTransactionRepository.sumPostedPointsByStudentBetween(
                         studentId, academicYearBounds.startAt(), academicYearBounds.endAt()));
         BigDecimal cumulativePoints = valueOrZero(
                 mileageTransactionRepository.sumPostedPointsByStudent(studentId));

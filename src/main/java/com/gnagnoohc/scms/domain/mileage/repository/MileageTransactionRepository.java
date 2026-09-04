@@ -69,6 +69,24 @@ public interface MileageTransactionRepository extends JpaRepository<MileageTrans
             @Param("semesterCode") String semesterCode
     );
 
+    /** 지정한 학사기간 안에서 정확히 일치하는 학기 코드의 확정 거래만 합산한다(ALL 정책 제외). */
+    @Query("""
+            select coalesce(sum(t.points), 0)
+            from MileageTransaction t
+            join t.mileagePolicy p
+            where t.student.userId = :studentId
+              and t.transactionStatus = 'POSTED'
+              and coalesce(t.postedAt, t.createdAt) >= :periodStart
+              and coalesce(t.postedAt, t.createdAt) < :periodEnd
+              and p.semesterCode = :semesterCode
+            """)
+    BigDecimal sumPostedPointsByStudentAndExactSemester(
+            @Param("studentId") Integer studentId,
+            @Param("periodStart") Instant periodStart,
+            @Param("periodEnd") Instant periodEnd,
+            @Param("semesterCode") String semesterCode
+    );
+
     /** 지정한 학사기간의 ALL 정책에 귀속된 확정 거래만 합산한다. */
     @Query("""
             select coalesce(sum(t.points), 0)
