@@ -118,6 +118,10 @@ public class MileageScholarshipService {
     ) {
         MileageBenefitPolicy policy = findActiveScholarshipPolicy(benefitPolicyId);
 
+        // 같은 학생의 동시 신청 요청을 학생 행 락으로 직렬화한 뒤, 그 안에서 중복 신청 여부를 확인한다.
+        AppUser student = appUserRepository.findByIdForUpdate(studentId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
         if (benefitApplicationRepository
                 .findByBenefitPolicy_BenefitPolicyIdAndStudent_UserId(benefitPolicyId, studentId)
                 .isPresent()) {
@@ -143,13 +147,11 @@ public class MileageScholarshipService {
             throw new BusinessException(ErrorCode.INSUFFICIENT_MILEAGE);
         }
 
-        AppUser student = appUserRepository.findById(studentId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
         MileageBenefitApplication application = MileageBenefitApplication.apply(
                 policy, student, currentPoints, now);
 
         try {
-            return toApplicationItem(benefitApplicationRepository.save(application));
+            return toApplicationItem(benefitApplicationRepository.saveAndFlush(application));
         } catch (DataIntegrityViolationException exception) {
             // 선행 조회 이후 동시에 신청된 경우에도 유니크 제약을 학생용 충돌 응답으로 변환한다.
             throw new BusinessException(

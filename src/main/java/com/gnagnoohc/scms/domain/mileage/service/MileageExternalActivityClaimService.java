@@ -18,6 +18,7 @@ import com.gnagnoohc.scms.global.common.helper.FileUploadValidator;
 import com.gnagnoohc.scms.global.common.repository.FileGroupRepository;
 import com.gnagnoohc.scms.global.common.service.FileGroupService;
 import com.gnagnoohc.scms.global.common.service.FileStorageService;
+import com.gnagnoohc.scms.global.common.util.DateTimeUtils;
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.DbConstraintViolationMatcher;
 import com.gnagnoohc.scms.global.error.ErrorCode;
@@ -55,6 +56,7 @@ public class MileageExternalActivityClaimService {
     private final MileageActivityTypeRepository activityTypeRepository;
     private final MileagePolicyRepository policyRepository;
     private final AppUserRepository appUserRepository;
+    private final MileageAcademicPeriodService mileageAcademicPeriodService;
     private final FileGroupRepository fileGroupRepository;
     private final FileGroupService fileGroupService;
     private final FileStorageService fileStorageService;
@@ -62,11 +64,12 @@ public class MileageExternalActivityClaimService {
 
     /** 학생 외부활동 등록 화면에 표시할 활성 정책을 활동 유형별 최신 버전으로 반환한다. */
     public List<MileageExternalActivityPolicyResponse> listAvailablePolicies(LocalDate activityDate) {
-        LocalDate asOfDate = activityDate == null ? LocalDate.now() : activityDate;
+        LocalDate asOfDate = activityDate == null ? LocalDate.now(DateTimeUtils.KST_ZONE) : activityDate;
+        String semesterCode = mileageAcademicPeriodService.resolvePeriod(asOfDate).semesterCode();
 
         Map<Integer, MileagePolicy> latestPoliciesByActivityType = new LinkedHashMap<>();
         for (MileagePolicy policy : policyRepository.findActiveExternalPoliciesOn(
-                asOfDate, uppercaseExcludedEarningRoutes())) {
+                asOfDate, uppercaseExcludedEarningRoutes(), semesterCode)) {
             latestPoliciesByActivityType.putIfAbsent(
                     policy.getActivityType().getActivityTypeId(), policy);
         }
@@ -136,8 +139,9 @@ public class MileageExternalActivityClaimService {
             MileageActivityType activityType,
             LocalDate activityDate
     ) {
+        String semesterCode = mileageAcademicPeriodService.resolvePeriod(activityDate).semesterCode();
         List<MileagePolicy> policies = policyRepository.findActivePoliciesByActivityTypeOn(
-                activityType.getActivityTypeId(), activityDate);
+                activityType.getActivityTypeId(), activityDate, semesterCode);
         MileagePolicy policy = policies.stream()
                 .findFirst()
                 .orElseThrow(() -> new BusinessException(
@@ -219,7 +223,10 @@ public class MileageExternalActivityClaimService {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "활동 일자를 입력해주세요.");
         }
         BigDecimal requestedPoints = request.requestedPoints();
-        if (requestedPoints != null && requestedPoints.signum() <= 0) {
+        if (requestedPoints == null) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "신청 마일리지를 입력해주세요.");
+        }
+        if (requestedPoints.signum() <= 0) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "신청 마일리지는 0보다 커야 합니다.");
         }
     }

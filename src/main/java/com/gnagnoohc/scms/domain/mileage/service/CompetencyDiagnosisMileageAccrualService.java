@@ -8,6 +8,7 @@ import com.gnagnoohc.scms.domain.mileage.repository.AssessmentAttemptMileageRepo
 import com.gnagnoohc.scms.domain.mileage.repository.MileageActivityTypeRepository;
 import com.gnagnoohc.scms.domain.mileage.repository.MileagePolicyRepository;
 import com.gnagnoohc.scms.domain.mileage.repository.MileageTransactionRepository;
+import com.gnagnoohc.scms.domain.user.repository.AppUserRepository;
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +35,8 @@ public class CompetencyDiagnosisMileageAccrualService {
     private final MileageActivityTypeRepository mileageActivityTypeRepository;
     private final MileagePolicyRepository mileagePolicyRepository;
     private final MileageAccrualCapService mileageAccrualCapService;
+    private final MileageAcademicPeriodService mileageAcademicPeriodService;
+    private final AppUserRepository appUserRepository;
 
     /** 특정 응시 회차가 제출 완료된 경우 고정 정책 점수로 한 번만 적립한다. */
     @Transactional
@@ -53,6 +56,16 @@ public class CompetencyDiagnosisMileageAccrualService {
                 .orElseThrow(() -> new BusinessException(
                         ErrorCode.INVALID_INPUT, "역량진단 응시 정보를 찾을 수 없습니다."));
 
+        // 동시 제출 요청이 같은 학생에 대해 동시에 적립되지 않도록 학생 행을 잠근 뒤 중복 여부를 다시 확인한다.
+        Integer studentId = attempt.getStudent().getUserId();
+        appUserRepository.findByIdForUpdate(studentId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+        if (mileageTransactionRepository
+                .findBySourceAssessmentAttempt_AttemptId(attemptId)
+                .isPresent()) {
+            return false;
+        }
+
         LocalDate submittedDate = attempt.getSubmittedAt() == null
                 ? LocalDate.now(BUSINESS_ZONE)
                 : attempt.getSubmittedAt().atZone(BUSINESS_ZONE).toLocalDate();
@@ -70,7 +83,6 @@ public class CompetencyDiagnosisMileageAccrualService {
             return false;
         }
 
-        Integer studentId = attempt.getStudent().getUserId();
         BigDecimal grantablePoints = mileageAccrualCapService.computeGrantablePoints(
                 studentId, policy, policy.getPoints(), submittedDate);
         if (grantablePoints.signum() <= 0) {
@@ -97,8 +109,9 @@ public class CompetencyDiagnosisMileageAccrualService {
             return null;
         }
 
+        String semesterCode = mileageAcademicPeriodService.resolvePeriod(submittedDate).semesterCode();
         return mileagePolicyRepository
-                .findActivePoliciesByActivityTypeOn(activityType.getActivityTypeId(), submittedDate)
+                .findActivePoliciesByActivityTypeOn(activityType.getActivityTypeId(), submittedDate, semesterCode)
                 .stream()
                 .findFirst()
                 .orElse(null);

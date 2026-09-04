@@ -54,7 +54,10 @@ public interface MileagePolicyRepository extends JpaRepository<MileagePolicy, In
             @Param("asOfDate") LocalDate asOfDate
     );
 
-    /** 외부활동 신청일에 적용되는 활성 정책을 최신 버전부터 조회한다. */
+    /**
+     * 외부활동 신청일에 적용되는 활성 정책을 조회한다. 신청일이 속한 학기(semesterCode) 전용 정책을
+     * 학기 무관(ALL) 정책보다 우선하고, 그 안에서는 최신 버전을 우선한다.
+     */
     @Query("""
             select p
             from MileagePolicy p
@@ -64,14 +67,19 @@ public interface MileagePolicyRepository extends JpaRepository<MileagePolicy, In
               and p.policyStatus = 'ACTIVE'
               and p.validFrom <= :activityDate
               and (p.validTo is null or p.validTo >= :activityDate)
-            order by p.versionNo desc
+              and (p.semesterCode = :semesterCode or p.semesterCode = 'ALL')
+            order by case when p.semesterCode = :semesterCode then 0 else 1 end, p.versionNo desc
             """)
     List<MileagePolicy> findActivePoliciesByActivityTypeOn(
             @Param("activityTypeId") Integer activityTypeId,
-            @Param("activityDate") LocalDate activityDate
+            @Param("activityDate") LocalDate activityDate,
+            @Param("semesterCode") String semesterCode
     );
 
-    /** 학생 외부활동 등록 화면에 표시할 현재 적용 가능한 외부활동 정책을 조회한다. */
+    /**
+     * 학생 외부활동 등록 화면에 표시할 현재 적용 가능한 외부활동 정책을 조회한다. 기준일이 속한
+     * 학기(semesterCode) 전용 정책을 학기 무관(ALL) 정책보다 우선하고, 그 안에서는 최신 버전을 우선한다.
+     */
     @Query("""
             select p
             from MileagePolicy p
@@ -84,11 +92,15 @@ public interface MileagePolicyRepository extends JpaRepository<MileagePolicy, In
               and p.points > 0
               and p.validFrom <= :asOfDate
               and (p.validTo is null or p.validTo >= :asOfDate)
-            order by activityType.activityName asc, p.versionNo desc
+              and (p.semesterCode = :semesterCode or p.semesterCode = 'ALL')
+            order by activityType.activityName asc,
+                     case when p.semesterCode = :semesterCode then 0 else 1 end,
+                     p.versionNo desc
             """)
     List<MileagePolicy> findActiveExternalPoliciesOn(
             @Param("asOfDate") LocalDate asOfDate,
-            @Param("excludedEarningRoutes") Collection<String> excludedEarningRoutes
+            @Param("excludedEarningRoutes") Collection<String> excludedEarningRoutes,
+            @Param("semesterCode") String semesterCode
     );
 
     /**

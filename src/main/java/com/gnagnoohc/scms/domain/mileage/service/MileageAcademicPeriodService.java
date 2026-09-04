@@ -19,15 +19,17 @@ public class MileageAcademicPeriodService {
 
     /** 1학기: 3/2~8/31, 2학기: 9/1~(익년)3/1. 1/1~3/1은 전년도 2학기로 취급한다. */
     public MileageAcademicPeriodResponse resolveCurrentPeriod() {
-        LocalDate today = LocalDate.now(DateTimeUtils.KST_ZONE);
-        int year = resolveAcademicYear(today);
-        int monthDay = today.getMonthValue() * 100 + today.getDayOfMonth();
+        return resolvePeriod(LocalDate.now(DateTimeUtils.KST_ZONE));
+    }
+
+    /** 임의 날짜가 속한 학년도/학기를 판별한다. 학기 경계는 resolveCurrentPeriod()와 동일하다. */
+    public MileageAcademicPeriodResponse resolvePeriod(LocalDate date) {
+        LocalDate targetDate = date == null ? LocalDate.now(DateTimeUtils.KST_ZONE) : date;
+        int year = resolveAcademicYear(targetDate);
+        int monthDay = targetDate.getMonthValue() * 100 + targetDate.getDayOfMonth();
 
         if (monthDay >= 302 && monthDay <= 831) {
             return new MileageAcademicPeriodResponse(year, SPRING);
-        }
-        if (monthDay >= 901) {
-            return new MileageAcademicPeriodResponse(year, FALL);
         }
         return new MileageAcademicPeriodResponse(year, FALL);
     }

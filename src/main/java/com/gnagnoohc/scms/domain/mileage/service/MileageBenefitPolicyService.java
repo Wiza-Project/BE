@@ -75,7 +75,7 @@ public class MileageBenefitPolicyService {
             Integer benefitPolicyId,
             MileageBenefitPolicyUpdateRequestDTO request
     ) {
-        MileageBenefitPolicy policy = benefitPolicyRepository.findById(benefitPolicyId)
+        MileageBenefitPolicy policy = benefitPolicyRepository.findByIdForUpdate(benefitPolicyId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MILEAGE_BENEFIT_POLICY_NOT_FOUND));
 
         Instant applicationStartsAt = request.applicationStartsAt() != null

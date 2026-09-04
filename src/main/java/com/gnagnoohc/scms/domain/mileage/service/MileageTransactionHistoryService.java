@@ -96,12 +96,17 @@ public class MileageTransactionHistoryService {
     }
 
     /**
-     * academicYear/semesterCode는 둘 다 없으면 전체 이력 조회를 허용하고,
-     * 하나만 주어지거나 semesterCode가 공백/ALL이면 잘못된 조합으로 거부한다.
+     * academicYear/semesterCode는 둘 다 미제공(null)이면 전체 이력 조회를 허용한다.
+     * semesterCode를 명시적으로 공백으로 보낸 경우는 academicYear 유무와 무관하게 거부하고,
+     * 그 외에는 하나만 주어지거나 semesterCode가 ALL이면 잘못된 조합으로 거부한다.
      */
     private void validatePeriodOrAbsent(Integer academicYear, String semesterCode) {
+        if (semesterCode != null && semesterCode.isBlank()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "조회 학기 정보가 올바르지 않습니다.");
+        }
+
         boolean hasAcademicYear = academicYear != null;
-        boolean hasSemesterCode = semesterCode != null && !semesterCode.isBlank();
+        boolean hasSemesterCode = semesterCode != null;
 
         if (!hasAcademicYear && !hasSemesterCode) {
             return;

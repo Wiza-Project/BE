@@ -16,7 +16,7 @@ public record MileageExternalActivityClaimRequest(
         @NotNull @Positive Integer activityTypeId,
         @NotBlank @Size(max = 200) String activityName,
         @NotNull LocalDate activityDate,
-        @DecimalMin("0.01") @Digits(integer = 8, fraction = 2) BigDecimal requestedPoints,
+        @NotNull @DecimalMin("0.01") @Digits(integer = 8, fraction = 2) BigDecimal requestedPoints,
         JsonNode detailData,
         @NotNull @Positive Integer fileGroupId
 ) {
