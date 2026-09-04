@@ -55,14 +55,15 @@ public class CounselingScheduleService {
 
         return counselingScheduleRepository.findAvailableSchedules(
                 counselingTypeId,
-                Instant.now()
+                Instant.now(),
+                studentId
         );
     }
 
     /**
      * 상담사는 과거와 마감된 일정을 포함해 본인 소유 일정만 최신 시작 시각 순으로 조회한다.
      * 목록의 예약 이력 표시는 화면 안내용이며, 수정 시에는 별도 트랜잭션에서 다시 검증한다.
-     * ST200+ST300 사용자는 CS200 일정만 봐야 하므로, 조회 조건 자체에 careerOnly를 넘겨
+     * ST300 단독(CAREER_ONLY) 상담사는 CS200 일정만 봐야 하므로, 조회 조건 자체에 careerOnly를 넘겨
      * 다른 유형의 일정 행을 애초에 읽지 않는다(조회 후 메모리에서 걸러내지 않는다).
      */
     @Transactional(readOnly = true)
@@ -236,16 +237,20 @@ public class CounselingScheduleService {
                 || schedule.getBookingDeadline().isAfter(now);
         boolean capacityAvailable = counselingReservationRepository
                 .countOccupiedReservations(scheduleId) < schedule.getCapacity();
-        // 활성·ST200 여부에 더해, 담당 상담사의 현재 역할 범위가 이 유형을 허용하는지 확인한다.
-        // ST200+ST300 상담사의 일정은 CS200일 때만 예약을 받는다(학생 노출 목록과 같은 기준).
+        // 활성 여부에 더해, 담당 상담사의 현재 역할 범위가 이 유형을 허용하는지 확인한다.
+        // ST200 소유 일정은 지도교수 관계와 무관하게 허용되고, ST300 소유 CS200 일정은 이
+        // 학생이 그 상담사의 지도학생일 때만 허용된다(학생 노출 목록과 같은 기준, 설계 5.2장).
+        // 겸임(ST200+ST300)·무역할은 isEligibleForType 내부에서 이미 배제된다. 이전에는
+        // hasCounselorRole(ST200 전용)을 별도로 강제해 ST300 소유 일정을 항상 막았지만,
+        // 이제 activeCounselor·범위·지도교수 판정을 전부 isEligibleForType 하나로 통일한다.
         // 권한 예외를 그대로 노출하지 않도록 isEligibleForType는 boolean만 돌려주고,
         // 실패하면 아래에서 다른 조건들과 함께 동일한 SCHEDULE_NOT_AVAILABLE(S002)로 처리한다.
         boolean activeCounselor = "ACTIVE".equals(schedule.getCounselor().getAccountStatus())
-                && counselUserRepository.hasCounselorRole(schedule.getCounselor().getUserId())
                 && counselManagementAccessPolicy.isEligibleForType(
                         schedule.getCounselor().getUserId(),
                         counselingType.getTypeCode(),
-                        counselingType.getApplicationRoute()
+                        counselingType.getApplicationRoute(),
+                        studentId
                 );
         // 예약 일정 변경에서는 아직 옛 일정을 참조 중인 이 예약 자기 자신을 겹침 비교에서 빼야 한다.
         // 그렇지 않으면 옛 일정과 항상 겹쳐 새 일정으로 절대 바꿀 수 없다.

@@ -107,7 +107,7 @@ public class CounselingSessionRepositoryImpl implements CounselingSessionReposit
         return to != null ? session.startsAt.lt(to) : null;
     }
 
-    // ST200+ST300 사용자는 CS200(진로상담)만 봐야 하므로, careerOnly가 false면 조건 자체를 붙이지 않는다.
+    // ST300 단독(CAREER_ONLY) 사용자는 CS200(진로상담)만 봐야 하므로, careerOnly가 false면 조건 자체를 붙이지 않는다.
     private BooleanExpression careerOnlyEq(boolean careerOnly) {
         return careerOnly ? counselingType.typeCode.eq("CS200") : null;
     }

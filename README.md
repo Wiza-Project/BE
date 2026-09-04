@@ -177,7 +177,7 @@ com.gnagnoohc.scms
 
 ```
 /api/students/**    → ROLE_STUDENT
-/api/counselors/**  → ROLE_ST200
+/api/counselors/**  → ROLE_ST200 또는 ROLE_ST300 (서비스에서 배타 역할·업무 범위 최종 판정)
 /api/companies/**   → denyAll (현재 사용자 유형·포털 범위에서 제외)
 /api/admin/**       → denyAll (관리자 전용 포털·API 미제공)
 /api/staff/**       → ROLE_STAFF (교직원 포털 운영 API)
