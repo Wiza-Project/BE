@@ -44,6 +44,9 @@ public class MileageClaimReviewService {
     private final ExternalActivityClaimRepository externalActivityClaimRepository;
     private final MileageTransactionRepository mileageTransactionRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final MileageAccrualCapService mileageAccrualCapService;
+    private final MileageAcademicPeriodService mileageAcademicPeriodService;
+    private final MileagePolicyValidator mileagePolicyValidator;
 
     /** 기본적으로 심사 대기 신청을 조회하고, 상태·학생명·학번·활동명으로 필터링한다. */
     public PageResponse<MileageClaimReviewListResponse> listClaims(
@@ -85,10 +88,20 @@ public class MileageClaimReviewService {
             throw new BusinessException(ErrorCode.APPLICATION_ALREADY_PROCESSED);
         }
 
+        Integer studentId = claim.getStudent().getUserId();
+        BigDecimal grantablePoints = mileageAccrualCapService.computeGrantablePoints(
+                studentId,
+                claim.getMileagePolicy(),
+                claim.getMileagePolicy().getPoints(),
+                claim.getActivityDate());
+        if (grantablePoints.signum() <= 0) {
+            throw new BusinessException(ErrorCode.MILEAGE_CAP_EXCEEDED, "마일리지 적립 한도를 초과하여 승인할 수 없습니다.");
+        }
+
         Instant now = Instant.now();
         claim.approve(validReviewerId, now);
         MileageTransaction transaction = mileageTransactionRepository.save(
-                MileageTransaction.earnFromExternalClaim(claim, now, validReviewerId));
+                MileageTransaction.earnFromExternalClaim(claim, now, validReviewerId, grantablePoints));
         eventPublisher.publishEvent(new ExternalActivityClaimDecisionEvent(
                 validClaimId,
                 claim.getStudent().getUserId(),
@@ -183,15 +196,10 @@ public class MileageClaimReviewService {
                 || !activityType.getActivityTypeId().equals(policy.getActivityType().getActivityTypeId())) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "신청 활동과 마일리지 정책이 일치하지 않습니다.");
         }
-        if (!"ACTIVE".equalsIgnoreCase(policy.getPolicyStatus())
-                || policy.getPoints() == null
-                || policy.getPoints().signum() <= 0) {
-            throw new BusinessException(ErrorCode.MILEAGE_POLICY_NOT_FOUND, "승인에 사용할 활성 마일리지 정책이 없습니다.");
-        }
-
         LocalDate activityDate = claim.getActivityDate();
-        if (!policy.isApplicableOn(activityDate)) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT, "활동 일자가 마일리지 정책 적용 기간에 포함되지 않습니다.");
+        String semesterCode = mileageAcademicPeriodService.resolvePeriod(activityDate).semesterCode();
+        if (!mileagePolicyValidator.isApplicable(policy, activityDate, semesterCode)) {
+            throw new BusinessException(ErrorCode.MILEAGE_POLICY_NOT_FOUND, "승인에 사용할 활성 마일리지 정책이 없습니다.");
         }
     }
 

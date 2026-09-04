@@ -21,6 +21,9 @@ public interface MileageTransactionRepository extends JpaRepository<MileageTrans
     /** 동일 외부활동 신청의 승인 적립 원장을 찾아 중복 적립을 막는다. */
     Optional<MileageTransaction> findBySourceExternalClaim_ExternalClaimId(Integer externalClaimId);
 
+    /** 동일 역량진단 응시 회차로 이미 생성된 적립 원장을 찾아 중복 적립을 막는다. */
+    Optional<MileageTransaction> findBySourceAssessmentAttempt_AttemptId(Integer attemptId);
+
     /** 동일 승인 원장에 이미 역분개가 생성됐는지 확인해 중복 취소를 막는다. */
     Optional<MileageTransaction> findByReversalOfTransaction_MileageTransactionId(Integer transactionId);
 
@@ -33,34 +36,72 @@ public interface MileageTransactionRepository extends JpaRepository<MileageTrans
             """)
     BigDecimal sumPostedPointsByStudent(@Param("studentId") Integer studentId);
 
-    /** 연간 장학금 정책에 사용할 해당 학년도 확정 점수를 합산한다. */
+    /** 지정한 학사기간 안의 확정 거래를 합산한다. */
     @Query("""
             select coalesce(sum(t.points), 0)
             from MileageTransaction t
-            join t.mileagePolicy p
             where t.student.userId = :studentId
               and t.transactionStatus = 'POSTED'
-              and p.academicYear = :academicYear
+              and coalesce(t.postedAt, t.createdAt) >= :periodStart
+              and coalesce(t.postedAt, t.createdAt) < :periodEnd
             """)
-    BigDecimal sumPostedPointsByStudentAndAcademicYear(
+    BigDecimal sumPostedPointsByStudentBetween(
             @Param("studentId") Integer studentId,
-            @Param("academicYear") Integer academicYear
+            @Param("periodStart") Instant periodStart,
+            @Param("periodEnd") Instant periodEnd
     );
 
-    /** 선택 학기 또는 연간 정책에 귀속된 확정 거래를 합산한다. */
+    /** 지정한 학사기간 안에서 선택 학기 또는 ALL 정책에 귀속된 확정 거래를 합산한다. */
     @Query("""
             select coalesce(sum(t.points), 0)
             from MileageTransaction t
             join t.mileagePolicy p
             where t.student.userId = :studentId
               and t.transactionStatus = 'POSTED'
-              and p.academicYear = :academicYear
+              and coalesce(t.postedAt, t.createdAt) >= :periodStart
+              and coalesce(t.postedAt, t.createdAt) < :periodEnd
               and (p.semesterCode = :semesterCode or p.semesterCode = 'ALL')
             """)
     BigDecimal sumPostedPointsByStudentAndPeriod(
             @Param("studentId") Integer studentId,
-            @Param("academicYear") Integer academicYear,
+            @Param("periodStart") Instant periodStart,
+            @Param("periodEnd") Instant periodEnd,
             @Param("semesterCode") String semesterCode
+    );
+
+    /** 지정한 학사기간 안에서 정확히 일치하는 학기 코드의 확정 거래만 합산한다(ALL 정책 제외). */
+    @Query("""
+            select coalesce(sum(t.points), 0)
+            from MileageTransaction t
+            join t.mileagePolicy p
+            where t.student.userId = :studentId
+              and t.transactionStatus = 'POSTED'
+              and coalesce(t.postedAt, t.createdAt) >= :periodStart
+              and coalesce(t.postedAt, t.createdAt) < :periodEnd
+              and p.semesterCode = :semesterCode
+            """)
+    BigDecimal sumPostedPointsByStudentAndExactSemester(
+            @Param("studentId") Integer studentId,
+            @Param("periodStart") Instant periodStart,
+            @Param("periodEnd") Instant periodEnd,
+            @Param("semesterCode") String semesterCode
+    );
+
+    /** 지정한 학사기간의 ALL 정책에 귀속된 확정 거래만 합산한다. */
+    @Query("""
+            select coalesce(sum(t.points), 0)
+            from MileageTransaction t
+            join t.mileagePolicy p
+            where t.student.userId = :studentId
+              and t.transactionStatus = 'POSTED'
+              and coalesce(t.postedAt, t.createdAt) >= :periodStart
+              and coalesce(t.postedAt, t.createdAt) < :periodEnd
+              and p.semesterCode = 'ALL'
+            """)
+    BigDecimal sumPostedPointsByStudentAndAllSemester(
+            @Param("studentId") Integer studentId,
+            @Param("periodStart") Instant periodStart,
+            @Param("periodEnd") Instant periodEnd
     );
 
     /** 확정일이 없는 기존 거래도 생성일을 사용해 마지막 적립 시점을 반환한다. */
@@ -72,42 +113,45 @@ public interface MileageTransactionRepository extends JpaRepository<MileageTrans
             """)
     Instant findLastPostedAt(@Param("studentId") Integer studentId);
 
-    /**
-     * 정책에 명시적으로 귀속된 학기의 확정 거래만 학기 추이로 사용한다.
-     * ALL 정책 거래는 어느 한 학기에 임의로 중복 배정하지 않는다.
-     */
-    /** 선택 학기의 확정 적립 점수를 활동 카테고리별로 합산한다. */
+    /** 선택 학사기간 안의 확정 거래를 정책의 학기 코드별로 DB에서 합산한다. */
     @Query("""
-            select p.academicYear as academicYear,
-                   p.semesterCode as semesterCode,
+            select p.semesterCode as semesterCode,
                    coalesce(sum(t.points), 0) as points
             from MileageTransaction t
             join t.mileagePolicy p
             where t.student.userId = :studentId
               and t.transactionStatus = 'POSTED'
+              and coalesce(t.postedAt, t.createdAt) >= :periodStart
+              and coalesce(t.postedAt, t.createdAt) < :periodEnd
               and p.semesterCode <> 'ALL'
-            group by p.academicYear, p.semesterCode
+            group by p.semesterCode
             """)
     List<SemesterTrendProjection> findSemesterTrendByStudent(
-            @Param("studentId") Integer studentId
+            @Param("studentId") Integer studentId,
+            @Param("periodStart") Instant periodStart,
+            @Param("periodEnd") Instant periodEnd
     );
 
-    /** 선택 학기의 확정 적립 점수를 핵심역량별로 합산한다. */
+    /** 지정한 학사기간의 확정 적립 점수를 비교과 프로그램 유형별로 합산한다. */
     @Query("""
-            select p.activityType.categoryCode as categoryCode,
+            select pt.codeName as programTypeName,
                    coalesce(sum(t.points), 0) as points
             from MileageTransaction t
             join t.mileagePolicy p
+            join p.activityType activityType
+            join activityType.programTypeCode pt
             where t.student.userId = :studentId
               and t.transactionStatus = 'POSTED'
-              and p.academicYear = :academicYear
+              and coalesce(t.postedAt, t.createdAt) >= :periodStart
+              and coalesce(t.postedAt, t.createdAt) < :periodEnd
               and (p.semesterCode = :semesterCode or p.semesterCode = 'ALL')
-            group by p.activityType.categoryCode
+            group by pt.codeName
             order by sum(t.points) desc
             """)
-    List<CategorySummaryProjection> findCategoryBreakdown(
+    List<ProgramTypeSummaryProjection> findProgramTypeBreakdown(
             @Param("studentId") Integer studentId,
-            @Param("academicYear") Integer academicYear,
+            @Param("periodStart") Instant periodStart,
+            @Param("periodEnd") Instant periodEnd,
             @Param("semesterCode") String semesterCode
     );
 
@@ -119,14 +163,16 @@ public interface MileageTransactionRepository extends JpaRepository<MileageTrans
             join t.mileagePolicy p
             where t.student.userId = :studentId
               and t.transactionStatus = 'POSTED'
-              and p.academicYear = :academicYear
+              and coalesce(t.postedAt, t.createdAt) >= :periodStart
+              and coalesce(t.postedAt, t.createdAt) < :periodEnd
               and (p.semesterCode = :semesterCode or p.semesterCode = 'ALL')
             group by t.competency.competencyId, t.competency.competencyName
             order by sum(t.points) desc
             """)
     List<CompetencySummaryProjection> findCompetencyBreakdown(
             @Param("studentId") Integer studentId,
-            @Param("academicYear") Integer academicYear,
+            @Param("periodStart") Instant periodStart,
+            @Param("periodEnd") Instant periodEnd,
             @Param("semesterCode") String semesterCode
     );
 
@@ -172,7 +218,11 @@ public interface MileageTransactionRepository extends JpaRepository<MileageTrans
             Pageable pageable
     );
 
-    /** 학생 본인의 확정 적립 거래 전체를 최신순 페이지로 조회한다. */
+    /**
+     * 학생 본인의 확정 적립 거래를 최신순 페이지로 조회한다.
+     * periodStart가 null이면 학기 필터 없이 전체 이력을 반환하고,
+     * 지정되면 sumPostedPointsByStudentAndPeriod와 동일하게 해당 기간의 선택 학기 또는 ALL 정책 거래만 반환한다.
+     */
     @Query(value = """
             select t.mileageTransactionId as transactionId,
                    t.transactionType as transactionType,
@@ -209,18 +259,30 @@ public interface MileageTransactionRepository extends JpaRepository<MileageTrans
             where t.student.userId = :studentId
               and t.transactionType = 'EARN'
               and t.transactionStatus = 'POSTED'
+              and (:periodStart is null
+                   or (coalesce(t.postedAt, t.createdAt) >= :periodStart
+                       and coalesce(t.postedAt, t.createdAt) < :periodEnd
+                       and (p.semesterCode = :semesterCode or p.semesterCode = 'ALL')))
             order by coalesce(t.postedAt, t.createdAt) desc,
                      t.mileageTransactionId desc
             """,
             countQuery = """
                     select count(t)
                     from MileageTransaction t
+                    left join t.mileagePolicy p
                     where t.student.userId = :studentId
                       and t.transactionType = 'EARN'
                       and t.transactionStatus = 'POSTED'
+                      and (:periodStart is null
+                           or (coalesce(t.postedAt, t.createdAt) >= :periodStart
+                               and coalesce(t.postedAt, t.createdAt) < :periodEnd
+                               and (p.semesterCode = :semesterCode or p.semesterCode = 'ALL')))
                     """)
     Page<TransactionHistoryProjection> findEarnedTransactions(
             @Param("studentId") Integer studentId,
+            @Param("periodStart") Instant periodStart,
+            @Param("periodEnd") Instant periodEnd,
+            @Param("semesterCode") String semesterCode,
             Pageable pageable
     );
 
@@ -232,9 +294,9 @@ public interface MileageTransactionRepository extends JpaRepository<MileageTrans
             String transactionStatus
     );
 
-    /** 카테고리별 점수 집계 쿼리의 조회 전용 결과다. */
-    interface CategorySummaryProjection {
-        String getCategoryCode();
+    /** 프로그램 유형별 점수 집계 쿼리의 조회 전용 결과다. */
+    interface ProgramTypeSummaryProjection {
+        String getProgramTypeName();
 
         BigDecimal getPoints();
     }
@@ -280,10 +342,8 @@ public interface MileageTransactionRepository extends JpaRepository<MileageTrans
         Instant getOccurredAt();
     }
 
-    /** 학기별 적립 추이 쿼리의 조회 전용 결과다. */
+    /** 학기별 적립 추이 계산에 사용하는 학기별 집계 결과다. */
     interface SemesterTrendProjection {
-        Integer getAcademicYear();
-
         String getSemesterCode();
 
         BigDecimal getPoints();

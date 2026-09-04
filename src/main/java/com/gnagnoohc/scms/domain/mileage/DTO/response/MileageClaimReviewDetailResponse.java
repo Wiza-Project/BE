@@ -80,7 +80,6 @@ public record MileageClaimReviewDetailResponse(
 
     public record PolicySummary(
             Integer mileagePolicyId,
-            Integer academicYear,
             String semesterCode,
             Integer versionNo,
             BigDecimal points,
@@ -92,7 +91,6 @@ public record MileageClaimReviewDetailResponse(
         private static PolicySummary from(MileagePolicy policy) {
             return new PolicySummary(
                     policy.getMileagePolicyId(),
-                    policy.getAcademicYear(),
                     policy.getSemesterCode(),
                     policy.getVersionNo(),
                     policy.getPoints(),

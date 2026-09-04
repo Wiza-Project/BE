@@ -21,6 +21,21 @@ public interface MileageBenefitApplicationRepository extends JpaRepository<Milea
             Integer studentId
     );
 
+    /** 같은 배타 그룹(benefitGroupCode)의 다른 단계에 이미 신청했는지 확인한다. */
+    boolean existsByStudent_UserIdAndBenefitPolicy_BenefitGroupCode(
+            Integer studentId,
+            String benefitGroupCode
+    );
+
+    /** 학생이 이미 신청한 배타 그룹 코드 목록을 목록 화면 배치 조회용으로 반환한다. */
+    @Query("""
+            select distinct a.benefitPolicy.benefitGroupCode
+            from MileageBenefitApplication a
+            where a.student.userId = :studentId
+              and a.benefitPolicy.benefitGroupCode is not null
+            """)
+    List<String> findClaimedBenefitGroupCodes(@Param("studentId") Integer studentId);
+
     /** 학생 본인의 장학금 신청 이력을 최신 신청순으로 조회한다. */
     @EntityGraph(attributePaths = "benefitPolicy")
     Page<MileageBenefitApplication> findAllByStudent_UserIdAndBenefitPolicy_BenefitTypeOrderByAppliedAtDesc(

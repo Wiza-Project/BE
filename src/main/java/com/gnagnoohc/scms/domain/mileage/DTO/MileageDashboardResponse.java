@@ -12,7 +12,7 @@ public record MileageDashboardResponse(
         Period period,
         Summary summary,
         List<BenefitProgress> benefitProgress,
-        List<CategorySummary> categoryBreakdown,
+        List<ProgramTypeSummary> programTypeBreakdown,
         List<CompetencySummary> competencyBreakdown,
         List<SemesterTrendSummary> semesterTrend,
         List<TransactionSummary> recentTransactions,
@@ -20,13 +20,18 @@ public record MileageDashboardResponse(
 ) {
 
     public record Period(
-            Integer academicYear,
             String semesterCode
     ) {
     }
 
+    /**
+     * annualPoints는 currentSemesterPoints 중 연간(semesterCode='ALL') 정책 거래분이다.
+     * semesterTrend는 ALL 정책 거래를 특정 학기에 임의 배정하지 않고 제외하므로,
+     * semesterTrend의 선택 학기 항목 + annualPoints = currentSemesterPoints 관계가 성립한다.
+     */
     public record Summary(
             BigDecimal currentSemesterPoints,
+            BigDecimal annualPoints,
             BigDecimal cumulativePoints,
             Instant lastPostedAt
     ) {
@@ -50,8 +55,8 @@ public record MileageDashboardResponse(
     ) {
     }
 
-    public record CategorySummary(
-            String categoryCode,
+    public record ProgramTypeSummary(
+            String programTypeName,
             BigDecimal points
     ) {
     }
@@ -65,7 +70,6 @@ public record MileageDashboardResponse(
 
     /** 선택 학기를 포함한 최근 적립 학기 추이. */
     public record SemesterTrendSummary(
-            Integer academicYear,
             String semesterCode,
             BigDecimal points
     ) {
@@ -85,6 +89,8 @@ public record MileageDashboardResponse(
             Integer externalClaimId,
             String activityName,
             BigDecimal requestedPoints,
+            BigDecimal policyPoints,
+            BigDecimal grantedPoints,
             Instant applicationDate,
             String claimStatus,
             String rejectionReason

@@ -4,14 +4,16 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.gnagnoohc.scms.domain.mileage.entity.MileagePolicy;
 
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.time.LocalDate;
 
-// 마일리지 정책 응답 DTO. 등록/목록/상세/수정 응답에 공통으로 사용한다.
-public record MileagePolicyResponseDTO(
+/** 학생 외부활동 등록 화면에서 사용할 활성 마일리지 정책 응답이다. */
+public record MileageExternalActivityPolicyResponse(
         Integer mileagePolicyId,
         Integer activityTypeId,
+        String activityCode,
         String activityName,
+        String categoryCode,
+        String earningRoute,
         String semesterCode,
         Integer versionNo,
         BigDecimal points,
@@ -19,15 +21,17 @@ public record MileagePolicyResponseDTO(
         LocalDate validFrom,
         LocalDate validTo,
         JsonNode duplicateRule,
-        String policyStatus,
-        Instant createdAt,
-        Integer createdBy
+        String policyStatus
 ) {
-    public static MileagePolicyResponseDTO from(MileagePolicy policy) {
-        return new MileagePolicyResponseDTO(
+
+    public static MileageExternalActivityPolicyResponse from(MileagePolicy policy) {
+        return new MileageExternalActivityPolicyResponse(
                 policy.getMileagePolicyId(),
                 policy.getActivityType().getActivityTypeId(),
+                policy.getActivityType().getActivityCode(),
                 policy.getActivityType().getActivityName(),
+                policy.getActivityType().getCategoryCode(),
+                policy.getActivityType().getEarningRoute(),
                 policy.getSemesterCode(),
                 policy.getVersionNo(),
                 policy.getPoints(),
@@ -35,9 +39,7 @@ public record MileagePolicyResponseDTO(
                 policy.getValidFrom(),
                 policy.getValidTo(),
                 policy.getDuplicateRule(),
-                policy.getPolicyStatus(),
-                policy.getCreatedAt(),
-                policy.getCreatedBy()
+                policy.getPolicyStatus()
         );
     }
 }

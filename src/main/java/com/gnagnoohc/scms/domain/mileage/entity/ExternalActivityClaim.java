@@ -18,7 +18,9 @@ import java.time.Instant;
 import java.time.LocalDate;
 
 /** 학생이 증빙 파일과 함께 제출한 외부활동 마일리지 신청을 관리한다. */
-@Entity @Getter @Table(name = "external_activity_claim")
+@Entity @Getter @Table(name = "external_activity_claim", uniqueConstraints = @UniqueConstraint(
+        name = "uq_external_activity_claim_file_group_id",
+        columnNames = "file_group_id"))
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ExternalActivityClaim extends BaseTimeEntity {
     public static final String REQUESTED_STATUS = "REQUESTED";
@@ -39,6 +41,30 @@ public class ExternalActivityClaim extends BaseTimeEntity {
     @Column(name = "reviewed_by") private Integer reviewedBy;
     @Column(name = "reviewed_at") private Instant reviewedAt;
     @Column(name = "review_reason", columnDefinition = "text") private String reviewReason;
+
+    /** 학생이 증빙 파일을 연결해 외부활동 마일리지 신청을 제출한다. */
+    public static ExternalActivityClaim create(
+            AppUser student,
+            MileageActivityType activityType,
+            MileagePolicy mileagePolicy,
+            String activityName,
+            LocalDate activityDate,
+            BigDecimal requestedPoints,
+            JsonNode detailData,
+            FileGroup fileGroup
+    ) {
+        ExternalActivityClaim claim = new ExternalActivityClaim();
+        claim.student = student;
+        claim.activityType = activityType;
+        claim.mileagePolicy = mileagePolicy;
+        claim.activityName = activityName.trim();
+        claim.activityDate = activityDate;
+        claim.requestedPoints = requestedPoints;
+        claim.detailData = detailData;
+        claim.fileGroup = fileGroup;
+        claim.claimStatus = REQUESTED_STATUS;
+        return claim;
+    }
 
     /** 아직 심사하지 않은 신청만 승인한다. 승인 점수는 서비스가 정책에서 확정한다. */
     public void approve(Integer reviewerId, Instant reviewedAt) {

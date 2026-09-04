@@ -35,22 +35,47 @@ public class ProgramMileageAccrualService {
     private final ProgramApplicationMileageRepository programApplicationRepository;
     private final MileageTransactionRepository mileageTransactionRepository;
     private final MileagePolicyRepository mileagePolicyRepository;
+    private final MileageAccrualCapService mileageAccrualCapService;
+    private final MileageAcademicPeriodService mileageAcademicPeriodService;
+    private final MileagePolicyValidator mileagePolicyValidator;
 
     @Autowired
     public ProgramMileageAccrualService(
             ProgramApplicationMileageRepository programApplicationRepository,
             MileageTransactionRepository mileageTransactionRepository,
-            MileagePolicyRepository mileagePolicyRepository) {
+            MileagePolicyRepository mileagePolicyRepository,
+            MileageAccrualCapService mileageAccrualCapService,
+            MileageAcademicPeriodService mileageAcademicPeriodService,
+            MileagePolicyValidator mileagePolicyValidator) {
         this.programApplicationRepository = programApplicationRepository;
         this.mileageTransactionRepository = mileageTransactionRepository;
         this.mileagePolicyRepository = mileagePolicyRepository;
+        this.mileageAccrualCapService = mileageAccrualCapService;
+        this.mileageAcademicPeriodService = mileageAcademicPeriodService;
+        this.mileagePolicyValidator = mileagePolicyValidator;
     }
 
-    /** 기존 마일리지 단위 테스트와의 생성 호환을 유지한다. 운영 빈은 3개 의존성을 주입한다. */
+    /** 기존 운영·단위 테스트 호출부와의 생성 호환을 유지한다. */
+    public ProgramMileageAccrualService(
+            ProgramApplicationMileageRepository programApplicationRepository,
+            MileageTransactionRepository mileageTransactionRepository,
+            MileagePolicyRepository mileagePolicyRepository,
+            MileageAccrualCapService mileageAccrualCapService,
+            MileageAcademicPeriodService mileageAcademicPeriodService) {
+        this(
+                programApplicationRepository,
+                mileageTransactionRepository,
+                mileagePolicyRepository,
+                mileageAccrualCapService,
+                mileageAcademicPeriodService,
+                new MileagePolicyValidator());
+    }
+
+    /** 기존 마일리지 단위 테스트와의 생성 호환을 유지한다. 운영 빈은 6개 의존성을 주입한다. */
     public ProgramMileageAccrualService(
             ProgramApplicationMileageRepository programApplicationRepository,
             MileageTransactionRepository mileageTransactionRepository) {
-        this(programApplicationRepository, mileageTransactionRepository, null);
+        this(programApplicationRepository, mileageTransactionRepository, null, null, null);
     }
 
     /** 특정 비교과 신청이 이수 완료된 경우 고정 정책 점수로 한 번만 적립한다. */
@@ -87,12 +112,27 @@ public class ProgramMileageAccrualService {
         LocalDate completionDate = application.getCompletedAt() == null
                 ? LocalDate.now(BUSINESS_ZONE)
                 : application.getCompletedAt().atZone(BUSINESS_ZONE).toLocalDate();
+        String semesterCode = mileageAcademicPeriodService == null
+                ? null
+                : mileageAcademicPeriodService.resolvePeriod(completionDate).semesterCode();
         String programTypeCode = resolveProgramTypeCode(application);
-        MileagePolicy policy = resolvePolicy(application, programTypeCode, completionDate, policyCache);
-        validatePolicy(policy, programTypeCode, completionDate);
+        MileagePolicy policy = resolvePolicy(
+                application, programTypeCode, completionDate, semesterCode, policyCache);
+        validatePolicy(policy, programTypeCode, completionDate, semesterCode);
+
+        Integer studentId = application.getStudent().getUserId();
+        BigDecimal grantablePoints = mileageAccrualCapService == null
+                ? policy.getPoints()
+                : mileageAccrualCapService.computeGrantablePoints(
+                        studentId, policy, policy.getPoints(), completionDate);
+        if (grantablePoints.signum() <= 0) {
+            log.info("마일리지 적립 한도 초과로 비교과 이수 적립을 건너뜁니다. applicationId={}, studentId={}",
+                    applicationId, studentId);
+            return false;
+        }
 
         mileageTransactionRepository.save(
-                MileageTransaction.earnFromProgramCompletion(application, policy, Instant.now()));
+                MileageTransaction.earnFromProgramCompletion(application, policy, grantablePoints, Instant.now()));
         return true;
     }
 
@@ -120,11 +160,12 @@ public class ProgramMileageAccrualService {
     private MileagePolicy resolvePolicy(ProgramApplication application,
                                         String programTypeCode,
                                         LocalDate completionDate,
+                                        String semesterCode,
                                         Map<PolicyLookupKey, MileagePolicy> policyCache) {
         MileagePolicy linkedPolicy = application.getProgram().getMileagePolicy();
         // 프로그램 이수 적립은 비교과 프로그램 유형별 정책만 사용한다.
-        // 비교과가 아닌 연결 정책은 그대로 사용하지 않고, 아래의 유효한 정책 조회로 넘긴다.
-        if (isUsablePolicy(linkedPolicy, programTypeCode, completionDate)) {
+        // 연결 정책과 조회 정책 모두 공통 정책 validator를 통해 학기와 적용 기간을 확인한다.
+        if (isUsablePolicy(linkedPolicy, programTypeCode, completionDate, semesterCode)) {
             return linkedPolicy;
         }
 
@@ -145,9 +186,10 @@ public class ProgramMileageAccrualService {
                         programTypeCode,
                         ExtracurricularMileagePolicyDefinition.CATEGORY_CODE,
                         ExtracurricularMileagePolicyDefinition.EARNING_ROUTE,
-                        completionDate)
+                        completionDate,
+                        semesterCode)
                 .stream()
-                .filter(policy -> isUsablePolicy(policy, programTypeCode, completionDate))
+                .filter(policy -> isUsablePolicy(policy, programTypeCode, completionDate, semesterCode))
                 .findFirst()
                 .orElse(null);
 
@@ -162,15 +204,11 @@ public class ProgramMileageAccrualService {
 
     private boolean isUsablePolicy(MileagePolicy policy,
                                    String programTypeCode,
-                                   LocalDate completionDate) {
-        return policy != null
-                && "ACTIVE".equalsIgnoreCase(policy.getPolicyStatus())
+                                   LocalDate completionDate,
+                                   String semesterCode) {
+        return mileagePolicyValidator.isApplicable(policy, completionDate, semesterCode)
                 && ExtracurricularMileagePolicyDefinition.isExtracurricular(policy.getActivityType())
-                && policy.getActivityType().isActive()
-                && sameProgramType(policy.getActivityType(), programTypeCode)
-                && policy.getPoints() != null
-                && policy.getPoints().compareTo(BigDecimal.ZERO) > 0
-                && policy.isApplicableOn(completionDate);
+                && sameProgramType(policy.getActivityType(), programTypeCode);
     }
 
     private boolean sameProgramType(MileageActivityType activityType, String programTypeCode) {
@@ -183,14 +221,9 @@ public class ProgramMileageAccrualService {
 
     private void validatePolicy(MileagePolicy policy,
                                 String programTypeCode,
-                                LocalDate completionDate) {
-        if (policy == null
-                || !"ACTIVE".equalsIgnoreCase(policy.getPolicyStatus())
-                || policy.getActivityType() == null
-                || !policy.getActivityType().isActive()
-                || policy.getPoints() == null
-                || policy.getPoints().compareTo(BigDecimal.ZERO) <= 0
-                || !policy.isApplicableOn(completionDate)) {
+                                LocalDate completionDate,
+                                String semesterCode) {
+        if (!mileagePolicyValidator.isApplicable(policy, completionDate, semesterCode)) {
             throw new BusinessException(
                     ErrorCode.MILEAGE_POLICY_NOT_FOUND,
                     "이수일에 적용할 수 있는 마일리지 정책이 없습니다.");

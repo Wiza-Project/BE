@@ -16,7 +16,6 @@ public final class MileageScholarshipResponse {
             Integer benefitPolicyId,
             String benefitType,
             String benefitName,
-            Integer academicYear,
             String semesterCode,
             BigDecimal minimumPoints,
             BigDecimal currentPoints,
@@ -27,7 +26,9 @@ public final class MileageScholarshipResponse {
             Instant applicationEndsAt,
             String eligibilityStatus,
             String applicationStatus,
-            boolean canApply
+            boolean canApply,
+            Integer cumulativeYears,
+            String benefitGroupCode
     ) {
     }
 
@@ -36,7 +37,6 @@ public final class MileageScholarshipResponse {
             Integer benefitApplicationId,
             Integer benefitPolicyId,
             String benefitName,
-            Integer academicYear,
             String semesterCode,
             BigDecimal benefitAmount,
             BigDecimal pointsSnapshot,

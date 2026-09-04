@@ -26,17 +26,34 @@ public class MileageTransactionHistoryService {
     private static final int PAGE_SIZE = 10;
     private static final String EARN = "EARN";
     private static final String POSTED = "POSTED";
+    private static final String ALL_SEMESTER_CODE = "ALL";
 
     private final MileageTransactionRepository mileageTransactionRepository;
+    private final MileageAcademicPeriodService mileageAcademicPeriodService;
 
-    /** 학생 본인의 확정 적립 내역을 10건 단위로 조회한다. */
+    /**
+     * 학생 본인의 확정 적립 내역을 10건 단위로 조회한다.
+     * semesterCode가 null이면 학기 필터 없이 전체 이력을, 지정되면 현재 주기의 해당 학기 거래만 반환한다.
+     */
     public PageResponse<MileageTransactionHistoryResponse.ListItem> getEarnedTransactions(
             Integer studentId,
+            String semesterCode,
             Pageable pageable
     ) {
+        validateSemesterOrAbsent(semesterCode);
+        String normalizedSemesterCode = semesterCode == null ? null : semesterCode.trim();
         PageRequest pageRequest = PageRequest.of(pageable.getPageNumber(), PAGE_SIZE);
+        MileageAcademicPeriodService.PeriodBounds periodBounds = normalizedSemesterCode == null
+                ? null
+                : mileageAcademicPeriodService.resolveCurrentPeriodBounds();
         return PageResponse.from(
-                mileageTransactionRepository.findEarnedTransactions(studentId, pageRequest)
+                mileageTransactionRepository
+                        .findEarnedTransactions(
+                                studentId,
+                                periodBounds == null ? null : periodBounds.startAt(),
+                                periodBounds == null ? null : periodBounds.endAt(),
+                                normalizedSemesterCode,
+                                pageRequest)
                         .map(item -> new MileageTransactionHistoryResponse.ListItem(
                                 item.getTransactionId(),
                                 item.getActivityName(),
@@ -76,6 +93,20 @@ public class MileageTransactionHistoryService {
                 toPolicyDetail(policy),
                 toProgramDetail(programApplication),
                 toExternalActivityDetail(externalActivityClaim));
+    }
+
+    /**
+     * semesterCode를 미제공(null)하면 전체 이력 조회를 허용한다.
+     * 공백으로 보낸 경우나 ALL을 지정한 경우는 잘못된 조회 조건으로 거부한다.
+     */
+    private void validateSemesterOrAbsent(String semesterCode) {
+        if (semesterCode == null) {
+            return;
+        }
+        if (semesterCode.isBlank()
+                || ALL_SEMESTER_CODE.equalsIgnoreCase(semesterCode.trim())) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "조회 학기 정보가 올바르지 않습니다.");
+        }
     }
 
     private MileagePolicy resolveMileagePolicy(MileageTransaction transaction) {
@@ -130,7 +161,6 @@ public class MileageTransactionHistoryService {
                 activityType == null ? null : activityType.getActivityName(),
                 activityType == null ? null : activityType.getCategoryCode(),
                 activityType == null ? null : activityType.getEarningRoute(),
-                policy.getAcademicYear(),
                 policy.getSemesterCode(),
                 policy.getPoints());
     }

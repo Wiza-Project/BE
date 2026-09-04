@@ -45,7 +45,6 @@ public final class MileageTransactionHistoryResponse {
             String activityName,
             String categoryCode,
             String earningRoute,
-            Integer academicYear,
             String semesterCode,
             BigDecimal policyPoints
     ) {

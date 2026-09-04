@@ -22,24 +22,19 @@ import java.util.Optional;
 public interface MileagePolicyRepository extends JpaRepository<MileagePolicy, Integer>,
         JpaSpecificationExecutor<MileagePolicy>, MileagePolicyRepositoryCustom {
 
-    /**
-     * 활동유형+학년도+학기 조합 내 다음 버전 번호(MAX+1)를 계산한다. 교직원이 직접 입력하지 않고
-     * 서버가 자동 채번해서 중복 버전 등록 실수를 막는다.
-     */
+    /** 활동유형+학기 조합 내 다음 버전 번호(MAX+1)를 계산한다. */
     @Query("""
         SELECT COALESCE(MAX(p.versionNo), 0) + 1 FROM MileagePolicy p
         WHERE p.activityType.activityTypeId = :activityTypeId
-          AND p.academicYear = :academicYear
           AND p.semesterCode = :semesterCode
         """)
     Integer findNextVersionNo(@Param("activityTypeId") Integer activityTypeId,
-                               @Param("academicYear") Integer academicYear,
                                @Param("semesterCode") String semesterCode);
 
-    Optional<MileagePolicy> findTopByActivityType_ActivityTypeIdAndAcademicYearAndSemesterCodeOrderByVersionNoDesc(
-            Integer activityTypeId, Integer academicYear, String semesterCode);
-
-    /** 프로그램 유형에 연결된 비교과 전용 정책을 최신 버전부터 조회한다. */
+    /**
+     * 프로그램 유형에 연결된 비교과 전용 정책을 조회한다. 이수일이 속한 학기(semesterCode) 전용 정책을
+     * 학기 무관(ALL) 정책보다 우선하고, 그 안에서는 최신 버전을 우선한다.
+     */
     @Query("""
             select p
             from MileagePolicy p
@@ -53,13 +48,64 @@ public interface MileagePolicyRepository extends JpaRepository<MileagePolicy, In
               and activityType.active = true
               and p.validFrom <= :asOfDate
               and (p.validTo is null or p.validTo >= :asOfDate)
-            order by p.versionNo desc
+              and (p.semesterCode = :semesterCode or p.semesterCode = 'ALL')
+            order by case when p.semesterCode = :semesterCode then 0 else 1 end, p.versionNo desc
             """)
     List<MileagePolicy> findActiveExtracurricularPoliciesByProgramTypeOn(
             @Param("programTypeCode") String programTypeCode,
             @Param("categoryCode") String categoryCode,
             @Param("earningRoute") String earningRoute,
-            @Param("asOfDate") LocalDate asOfDate
+            @Param("asOfDate") LocalDate asOfDate,
+            @Param("semesterCode") String semesterCode
+    );
+
+    /**
+     * 외부활동 신청일에 적용되는 활성 정책을 조회한다. 신청일이 속한 학기(semesterCode) 전용 정책을
+     * 학기 무관(ALL) 정책보다 우선하고, 그 안에서는 최신 버전을 우선한다.
+     */
+    @Query("""
+            select p
+            from MileagePolicy p
+            join fetch p.activityType activityType
+            where activityType.activityTypeId = :activityTypeId
+              and activityType.active = true
+              and p.policyStatus = 'ACTIVE'
+              and p.validFrom <= :activityDate
+              and (p.validTo is null or p.validTo >= :activityDate)
+              and (p.semesterCode = :semesterCode or p.semesterCode = 'ALL')
+            order by case when p.semesterCode = :semesterCode then 0 else 1 end, p.versionNo desc
+            """)
+    List<MileagePolicy> findActivePoliciesByActivityTypeOn(
+            @Param("activityTypeId") Integer activityTypeId,
+            @Param("activityDate") LocalDate activityDate,
+            @Param("semesterCode") String semesterCode
+    );
+
+    /**
+     * 학생 외부활동 등록 화면에 표시할 현재 적용 가능한 외부활동 정책을 조회한다. 기준일이 속한
+     * 학기(semesterCode) 전용 정책을 학기 무관(ALL) 정책보다 우선하고, 그 안에서는 최신 버전을 우선한다.
+     */
+    @Query("""
+            select p
+            from MileagePolicy p
+            join fetch p.activityType activityType
+            where activityType.programTypeCode is null
+              and activityType.competency is not null
+              and upper(activityType.earningRoute) not in :excludedEarningRoutes
+              and activityType.active = true
+              and p.policyStatus = 'ACTIVE'
+              and p.points > 0
+              and p.validFrom <= :asOfDate
+              and (p.validTo is null or p.validTo >= :asOfDate)
+              and (p.semesterCode = :semesterCode or p.semesterCode = 'ALL')
+            order by activityType.activityName asc,
+                     case when p.semesterCode = :semesterCode then 0 else 1 end,
+                     p.versionNo desc
+            """)
+    List<MileagePolicy> findActiveExternalPoliciesOn(
+            @Param("asOfDate") LocalDate asOfDate,
+            @Param("excludedEarningRoutes") Collection<String> excludedEarningRoutes,
+            @Param("semesterCode") String semesterCode
     );
 
     /**
@@ -72,7 +118,7 @@ public interface MileagePolicyRepository extends JpaRepository<MileagePolicy, In
     Optional<MileagePolicy> findByIdForUpdate(@Param("mileagePolicyId") Integer mileagePolicyId);
 
     /**
-     * 식별 필드(activity_type_id/academic_year/semester_code/version_no)를 제외한 가변 필드만
+     * 식별 필드(activity_type_id/semester_code/version_no)를 제외한 가변 필드만
      * 부분 수정한다. 테이블에 updated_at/updated_by 컬럼이 없어 그 값은 갱신하지 않는다.
      */
     @Modifying(clearAutomatically = true)
@@ -98,22 +144,4 @@ public interface MileagePolicyRepository extends JpaRepository<MileagePolicy, In
     @EntityGraph(attributePaths = "activityType")
     Page<MileagePolicy> findAll(Specification<MileagePolicy> spec, Pageable pageable);
 
-    /** 학생 시뮬레이션에서 선택할 수 있는 현재 활성 마일리지 활동 정책을 조회한다. */
-    @Query("""
-            select p
-            from MileagePolicy p
-            join fetch p.activityType activityType
-            where p.academicYear = :academicYear
-              and p.semesterCode in :semesterCodes
-              and p.policyStatus = 'ACTIVE'
-              and activityType.active = true
-              and p.validFrom <= :asOfDate
-              and (p.validTo is null or p.validTo >= :asOfDate)
-            order by activityType.activityName asc, p.versionNo desc
-            """)
-    List<MileagePolicy> findSimulationPolicies(
-            @Param("academicYear") Integer academicYear,
-            @Param("semesterCodes") Collection<String> semesterCodes,
-            @Param("asOfDate") LocalDate asOfDate
-    );
 }

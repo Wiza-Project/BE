@@ -16,6 +16,9 @@ import java.util.List;
 /** 학생이 신청한 외부활동 실적의 최근 처리 상태를 조회한다. */
 public interface ExternalActivityClaimRepository extends JpaRepository<ExternalActivityClaim, Integer> {
 
+    /** 하나의 증빙 파일 그룹을 여러 외부활동 신청에서 재사용하지 못하게 확인한다. */
+    boolean existsByFileGroup_FileGroupId(Integer fileGroupId);
+
     /** 교직원 심사 목록에 필요한 연관 데이터를 함께 조회한다. */
     @Query(value = """
             select c
@@ -68,10 +71,14 @@ public interface ExternalActivityClaimRepository extends JpaRepository<ExternalA
             select c.externalClaimId as externalClaimId,
                    c.activityName as activityName,
                    c.requestedPoints as requestedPoints,
+                   p.points as policyPoints,
+                   t.points as grantedPoints,
                    c.claimStatus as claimStatus,
                    c.createdAt as applicationDate,
                    c.reviewReason as rejectionReason
             from ExternalActivityClaim c
+            left join c.mileagePolicy p
+            left join MileageTransaction t on t.sourceExternalClaim = c
             where c.student.userId = :studentId
             order by c.createdAt desc
             """)
@@ -87,6 +94,10 @@ public interface ExternalActivityClaimRepository extends JpaRepository<ExternalA
         String getActivityName();
 
         BigDecimal getRequestedPoints();
+
+        BigDecimal getPolicyPoints();
+
+        BigDecimal getGrantedPoints();
 
         String getClaimStatus();
 
