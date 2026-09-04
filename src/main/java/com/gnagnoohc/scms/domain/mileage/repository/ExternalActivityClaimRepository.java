@@ -71,10 +71,14 @@ public interface ExternalActivityClaimRepository extends JpaRepository<ExternalA
             select c.externalClaimId as externalClaimId,
                    c.activityName as activityName,
                    c.requestedPoints as requestedPoints,
+                   p.points as policyPoints,
+                   t.points as grantedPoints,
                    c.claimStatus as claimStatus,
                    c.createdAt as applicationDate,
                    c.reviewReason as rejectionReason
             from ExternalActivityClaim c
+            left join c.mileagePolicy p
+            left join MileageTransaction t on t.sourceExternalClaim = c
             where c.student.userId = :studentId
             order by c.createdAt desc
             """)
@@ -90,6 +94,10 @@ public interface ExternalActivityClaimRepository extends JpaRepository<ExternalA
         String getActivityName();
 
         BigDecimal getRequestedPoints();
+
+        BigDecimal getPolicyPoints();
+
+        BigDecimal getGrantedPoints();
 
         String getClaimStatus();
 

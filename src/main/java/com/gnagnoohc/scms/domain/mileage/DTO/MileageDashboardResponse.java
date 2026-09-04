@@ -91,6 +91,8 @@ public record MileageDashboardResponse(
             Integer externalClaimId,
             String activityName,
             BigDecimal requestedPoints,
+            BigDecimal policyPoints,
+            BigDecimal grantedPoints,
             Instant applicationDate,
             String claimStatus,
             String rejectionReason

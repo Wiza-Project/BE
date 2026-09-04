@@ -143,6 +143,8 @@ public class MileageDashboardService {
                         item.getExternalClaimId(),
                         item.getActivityName(),
                         item.getRequestedPoints(),
+                        item.getPolicyPoints(),
+                        item.getGrantedPoints(),
                         item.getApplicationDate(),
                         item.getClaimStatus(),
                         item.getRejectionReason()))
