@@ -74,8 +74,10 @@ public class SecurityConfig {
                 // 학생 전용 (진단검사 응시, 상담예약, 마일리지 신청, 포트폴리오)
                 .requestMatchers("/api/students/**").hasRole("STUDENT")
 
-                // 상담사 전용 (상담일정 등록/확정/결과등록). role_code는 ST200(카운셀러) — user_role 명명 규칙 확정본.
-                .requestMatchers("/api/counselors/**").hasRole("ST200")
+                // 상담사 전용 (상담일정 등록/확정/결과등록). ST200(일반 상담사)과 ST300(지도교수)이
+                // 서로 배타적으로 접근한다 — 겸임(ST200+ST300)은 URL 1차 인가가 아니라
+                // CounselManagementAccessPolicy(서비스 2차 인가)에서 403(A004)으로 거부한다.
+                .requestMatchers("/api/counselors/**").hasAnyRole("ST200", "ST300")
 
                 // 기업체는 현재 사용자 유형·포털 범위에서 제외한다. 향후 같은 경로의 API가
                 // 실수로 추가돼도 일반 인증 사용자에게 노출되지 않게 명시적으로 차단한다.
