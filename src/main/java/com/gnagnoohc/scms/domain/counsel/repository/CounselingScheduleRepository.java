@@ -21,7 +21,7 @@ public interface CounselingScheduleRepository extends JpaRepository<CounselingSc
     /**
      * 상담사 본인 일정과 예약 이력 존재 여부를 한 번에 조회한다.
      * 예약 상태와 관계없이 참조 행이 하나라도 있으면 수정이 막히므로 hasReservation도 같은 기준을 사용한다.
-     * careerOnly가 true면 ST200+ST300 사용자용으로 CS200(진로상담) 일정만 조회 조건에서 걸러낸다.
+     * careerOnly가 true면 ST300 단독(CAREER_ONLY) 사용자용으로 CS200(진로상담) 일정만 조회 조건에서 걸러낸다.
      * 조회 후 메모리에서 다른 유형을 제거하지 않고 where 절에서 바로 제한한다.
      * 신청 경로가 DIRECT인 일정만 조회한다. 단건 조작 판정(CounselManagementAccessPolicy.allows)이
      * route≠DIRECT를 거부하는 것과 목록 술어를 일치시켜, "목록엔 보이는데 다룰 수 없는 일정"이
@@ -76,9 +76,15 @@ public interface CounselingScheduleRepository extends JpaRepository<CounselingSc
     /**
      * 일정과 점유 예약 수를 한 번에 집계해 목록 조회 중 추가 쿼리가 발생하지 않게 한다.
      * 반려·취소만 정원에서 제외하고 알 수 없는 상태는 보수적으로 정원을 점유한다.
-     * 담당 상담사가 ST300도 함께 보유하면(ST200+ST300) 그 상담사의 일정 중 CS200(진로상담)만
-     * 학생에게 노출한다. 합집합이 아니라 축소이므로 ST300을 아예 갖지 않은 상담사는 이 조건의
-     * 영향을 받지 않고 기존처럼 활성 DIRECT 전체가 노출된다.
+     *
+     * <p>ST300 지도교수 진로상담 관리 리팩터링 설계(5.1장)에 따라 담당 상담사의 역할 범위를
+     * 배타 조건으로 걸러낸다(ST200/ST300 동시 보유·무역할은 둘 다 배제되어 결과적으로 숨겨진다).</p>
+     * <ul>
+     *   <li>ST200만 보유: 지도교수 관계와 무관하게 기존처럼 활성 DIRECT 전체를 노출한다.</li>
+     *   <li>ST300만 보유: CS200 유형이면서, 조회하는 학생의 학적 상세(student_academic_detail)의
+     *       지도교수가 그 상담사 본인일 때만 노출한다. 학적 상세 행 자체가 없으면(지도교수 미입력)
+     *       ST300 소유 일정은 하나도 보이지 않는다.</li>
+     * </ul>
      */
     @Query("""
             select new com.gnagnoohc.scms.domain.counsel.dto.response.CounselingScheduleAvailabilityResponse(
@@ -106,20 +112,42 @@ public interface CounselingScheduleRepository extends JpaRepository<CounselingSc
               and (schedule.bookingDeadline is null or schedule.bookingDeadline > :now)
               and counselor.accountStatus = 'ACTIVE'
               and counselor.userType = 'STAFF'
-              and exists (
-                  select role.id.userId
-                  from UserRole role
-                  where role.id.userId = counselor.userId
-                    and role.id.roleCode = 'ST200'
-              )
               and (
-                  not exists (
-                      select careerRole.id.userId
-                      from UserRole careerRole
-                      where careerRole.id.userId = counselor.userId
-                        and careerRole.id.roleCode = 'ST300'
+                  (
+                      exists (
+                          select generalRole.id.userId
+                          from UserRole generalRole
+                          where generalRole.id.userId = counselor.userId
+                            and generalRole.id.roleCode = 'ST200'
+                      )
+                      and not exists (
+                          select careerRole.id.userId
+                          from UserRole careerRole
+                          where careerRole.id.userId = counselor.userId
+                            and careerRole.id.roleCode = 'ST300'
+                      )
                   )
-                  or counselingType.typeCode = 'CS200'
+                  or (
+                      not exists (
+                          select generalRole.id.userId
+                          from UserRole generalRole
+                          where generalRole.id.userId = counselor.userId
+                            and generalRole.id.roleCode = 'ST200'
+                      )
+                      and exists (
+                          select careerRole.id.userId
+                          from UserRole careerRole
+                          where careerRole.id.userId = counselor.userId
+                            and careerRole.id.roleCode = 'ST300'
+                      )
+                      and counselingType.typeCode = 'CS200'
+                      and exists (
+                          select detail.userId
+                          from StudentAcademicDetail detail
+                          where detail.userId = :studentId
+                            and detail.advisorUser.userId = counselor.userId
+                      )
+                  )
               )
             group by
                 schedule.counselingScheduleId,
@@ -135,7 +163,8 @@ public interface CounselingScheduleRepository extends JpaRepository<CounselingSc
             """)
     List<CounselingScheduleAvailabilityResponse> findAvailableSchedules(
             @Param("counselingTypeId") Integer counselingTypeId,
-            @Param("now") Instant now
+            @Param("now") Instant now,
+            @Param("studentId") Integer studentId
     );
 
     /**
