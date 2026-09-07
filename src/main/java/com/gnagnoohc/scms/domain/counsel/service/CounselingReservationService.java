@@ -97,7 +97,7 @@ public class CounselingReservationService {
     }
 
     /**
-     * 스트레스 결과 기반 상담 제안 수락(체크리스트 14) 전용 진입점이다. 패키지 범위로 제한해
+     * 스트레스 결과 기반 상담 제안 수락 전용 진입점이다. 패키지 범위로 제한해
      * 같은 패키지의 CounselingProposalService만 호출할 수 있게 하고, 별도 공개 API로 만들지 않는다.
      * 학생 행 잠금은 호출부가 이미 잡아 넘겨주므로 여기서는 다시 잠그지 않고 활성 상태만 재검증한다.
      * 동의·일정 검증은 기존 학생 직접 예약(create)과 완전히 같은 경계(ConsentVerifier,
