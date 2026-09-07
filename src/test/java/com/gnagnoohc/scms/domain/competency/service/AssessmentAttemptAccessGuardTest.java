@@ -8,6 +8,8 @@ import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -19,6 +21,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
@@ -42,8 +45,15 @@ class AssessmentAttemptAccessGuardTest {
     }
 
     private static AppUser buildStudent(Integer userId) throws ReflectiveOperationException {
+        return buildStudent(userId, "STUDENT", "재학");
+    }
+
+    private static AppUser buildStudent(Integer userId, String userType, String academicStatus)
+            throws ReflectiveOperationException {
         AppUser student = newInstance(AppUser.class);
         ReflectionTestUtils.setField(student, "userId", userId);
+        ReflectionTestUtils.setField(student, "userType", userType);
+        ReflectionTestUtils.setField(student, "academicStatus", academicStatus);
         return student;
     }
 
@@ -129,5 +139,40 @@ class AssessmentAttemptAccessGuardTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.DIAGNOSIS_PERIOD_CLOSED);
+    }
+
+    // ── assertStillEnrolled: 응시 시작 후 학적이 바뀐 경우의 저장·제출 차단 ──────────────
+    // 시작 시점 검증(AssessmentIntroService)만으로는 진행 중에 바뀐 학적이 안 걸린다.
+
+    @Test
+    void assertStillEnrolled_whenEnrolledStudent_passes() throws Exception {
+        AssessmentRound round = buildRound(Instant.now().minus(1, ChronoUnit.DAYS), Instant.now().plus(1, ChronoUnit.DAYS));
+        AssessmentAttempt attempt = buildAttempt(round, buildStudent(STUDENT_ID));
+
+        assertThatCode(() -> guard.assertStillEnrolled(attempt)).doesNotThrowAnyException();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"휴학", "졸업", "제적", "자퇴"})
+    void assertStillEnrolled_whenAcademicStatusChangedDuringAttempt_throwsNotEnrolledStudent(String academicStatus)
+            throws Exception {
+        AssessmentRound round = buildRound(Instant.now().minus(1, ChronoUnit.DAYS), Instant.now().plus(1, ChronoUnit.DAYS));
+        AssessmentAttempt attempt = buildAttempt(round, buildStudent(STUDENT_ID, "STUDENT", academicStatus));
+
+        assertThatThrownBy(() -> guard.assertStillEnrolled(attempt))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.ASSESSMENT_NOT_ENROLLED_STUDENT);
+    }
+
+    @Test
+    void assertStillEnrolled_whenAcademicStatusNull_throwsNotEnrolledStudent() throws Exception {
+        AssessmentRound round = buildRound(Instant.now().minus(1, ChronoUnit.DAYS), Instant.now().plus(1, ChronoUnit.DAYS));
+        AssessmentAttempt attempt = buildAttempt(round, buildStudent(STUDENT_ID, "STUDENT", null));
+
+        assertThatThrownBy(() -> guard.assertStillEnrolled(attempt))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.ASSESSMENT_NOT_ENROLLED_STUDENT);
     }
 }

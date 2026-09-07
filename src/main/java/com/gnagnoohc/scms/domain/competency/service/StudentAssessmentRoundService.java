@@ -45,31 +45,60 @@ public class StudentAssessmentRoundService {
             return List.of();
         }
 
-        // 대상 조건 판정에 필요한 학적(학년·전공)을 1회만 조회하고, 회차별 판정은 메모리에서 한다.
+        // 대상 조건 판정에 필요한 학적(재학 여부·학년·전공)을 1회만 조회하고, 회차별 판정은 메모리에서 한다.
         StudentTargetSnapshot snapshot = studentAssessmentRoundQueryRepository.loadTargetSnapshot(studentId);
-        List<AssessmentRound> targetedRounds = openRounds.stream()
-                .filter(round -> targetConditionInterpreter.matches(round.getTargetCondition(), snapshot))
+
+        // attempt batch는 비재학생 분기에서 "진행 중 회차"를 가려내는 데도 쓰이므로 회차 필터보다 먼저 조회한다.
+        List<Integer> openRoundIds = openRounds.stream()
+                .map(AssessmentRound::getAssessmentRoundId)
                 .toList();
-        if (targetedRounds.isEmpty()) {
+        Map<Integer, AssessmentAttempt> attemptByRound = assessmentAttemptRepository
+                .findByAssessmentRound_AssessmentRoundIdInAndStudent_UserId(openRoundIds, studentId)
+                .stream()
+                .collect(Collectors.toMap(
+                        attempt -> attempt.getAssessmentRound().getAssessmentRoundId(),
+                        Function.identity()));
+
+        List<AssessmentRound> visibleRounds = selectVisibleRounds(openRounds, snapshot, attemptByRound);
+        if (visibleRounds.isEmpty()) {
             return List.of();
         }
 
-        List<Integer> roundIds = targetedRounds.stream()
+        List<Integer> roundIds = visibleRounds.stream()
                 .map(AssessmentRound::getAssessmentRoundId)
                 .toList();
         Map<Integer, Long> questionCountByRound = new HashMap<>();
         for (Object[] row : assessmentRoundQuestionRepository.countGroupedByAssessmentRoundIds(roundIds)) {
             questionCountByRound.put((Integer) row[0], (Long) row[1]);
         }
-        Map<Integer, AssessmentAttempt> attemptByRound = assessmentAttemptRepository
-                .findByAssessmentRound_AssessmentRoundIdInAndStudent_UserId(roundIds, studentId)
-                .stream()
-                .collect(Collectors.toMap(
-                        attempt -> attempt.getAssessmentRound().getAssessmentRoundId(),
-                        Function.identity()));
 
-        return targetedRounds.stream()
+        return visibleRounds.stream()
                 .map(round -> toResponse(round, questionCountByRound, attemptByRound))
+                .toList();
+    }
+
+    /**
+     * 재학생은 대상 조건(target_condition)에 맞는 열린 회차 전부를 본다.
+     *
+     * <p>비재학생은 새 응시를 못 하므로 목록이 원칙적으로 비지만, 재학 중 시작해 아직 제출하지 않은
+     * attempt가 있는 회차는 남긴다 — 이 목록이 유일한 이어하기 진입점이라 지우면 진행 중이던 응답을
+     * 확인할 길이 막힌다(저장·제출은 AssessmentAttemptAccessGuard가 따로 막아 새 응시로 이어지지 않는다).
+     * target_condition이 없는 회차는 matches()가 항상 true라 비재학생 분기를 여기서 명시적으로 끊는다.
+     */
+    private List<AssessmentRound> selectVisibleRounds(
+            List<AssessmentRound> openRounds,
+            StudentTargetSnapshot snapshot,
+            Map<Integer, AssessmentAttempt> attemptByRound) {
+        if (snapshot.enrolled()) {
+            return openRounds.stream()
+                    .filter(round -> targetConditionInterpreter.matches(round.getTargetCondition(), snapshot))
+                    .toList();
+        }
+        return openRounds.stream()
+                .filter(round -> {
+                    AssessmentAttempt attempt = attemptByRound.get(round.getAssessmentRoundId());
+                    return attempt != null && attempt.getSubmittedAt() == null;
+                })
                 .toList();
     }
 
