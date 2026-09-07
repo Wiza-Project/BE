@@ -21,13 +21,16 @@ import com.gnagnoohc.scms.global.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -100,6 +103,17 @@ public class JobPostingService {
     public Page<JobPostingSummaryResponseDTO> getStudentJobPostings(JobPostingSearchConditionDTO cond, Pageable pageable) {
         Page<JobPosting> postingPage = jobPostingRepository.searchStudentPostings(cond, pageable);
         return postingPage.map(this::convertToSummaryDTO);
+    }
+
+    /**
+     *0907 [학생 메인 슬라이더용] 게시 완료 및 접수 진행 중인 최신 공고 상위 10건 조회
+     */
+    public List<JobPostingSummaryResponseDTO> getLatestJobPostingsForSlider() {
+        Pageable topTen = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "jobPostingId"));
+        Page<JobPosting> postingPage = jobPostingRepository.searchStudentPostings(null, topTen);
+        return postingPage.getContent().stream()
+                .map(this::convertToSummaryDTO)
+                .toList();
     }
 
     /**

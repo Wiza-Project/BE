@@ -46,8 +46,8 @@ public class JobMatchingService {
     public List<JobPostingSummaryResponseDTO> getRecommendedPostingsForStudent(Integer studentUserId) {
         Instant now = Instant.now();
 
-        // 공통 가이드 6.2절: AI 맞춤 추천은 CAREER 모듈의 PROFILING 선택 동의 검사
-// (과도기 화면에서 수집된 THIRD_PARTY_SHARE도 함께 허용)
+        // AI 맞춤 추천은 CAREER 모듈의 PROFILING 선택 동의 검사
+        // (과도기 화면에서 수집된 THIRD_PARTY_SHARE도 함께 허용)
         boolean hasConsent = consentVerifier.hasValidConsent(
                 studentUserId, ConsentModuleCode.CAREER, ConsentType.PROFILING, now)
                 || consentVerifier.hasValidConsent(
