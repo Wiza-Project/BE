@@ -135,7 +135,7 @@ public class CounselorReservationService {
         try {
             recorder.run();
         } catch (RuntimeException e) {
-            log.warn("학생 조회 감사 로그 기록에 실패했습니다.", e);
+            log.warn("학생 조회 감사 로그 기록에 실패했습니다.");
         }
     }
 
