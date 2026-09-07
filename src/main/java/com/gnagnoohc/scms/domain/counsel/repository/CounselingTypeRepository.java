@@ -22,4 +22,13 @@ public interface CounselingTypeRepository extends JpaRepository<CounselingType, 
      * 학생이 신청할 수 있는 대상도 아니므로 이 조회에서 제외된다.
      */
     List<CounselingType> findAllByActiveTrueAndApplicationRouteOrderByTypeCodeAsc(String applicationRoute);
+
+    /**
+     * 스트레스 결과 기반 상담 제안 수락 전용 조회다. 제안한 상담사의 일정으로 제한하지 않고
+     * 활성 CS300 + DIRECT 유형 자체를 코드로 바로 찾는다(설계 2장 확정 정책).
+     */
+    Optional<CounselingType> findByTypeCodeAndApplicationRouteAndActiveTrue(
+            String typeCode,
+            String applicationRoute
+    );
 }
