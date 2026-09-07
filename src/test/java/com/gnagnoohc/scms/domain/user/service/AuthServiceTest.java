@@ -4,6 +4,9 @@ import com.gnagnoohc.scms.domain.user.dto.LoginFailureResponse;
 import com.gnagnoohc.scms.domain.user.entity.AppUser;
 import com.gnagnoohc.scms.domain.user.repository.AppUserRepository;
 import com.gnagnoohc.scms.domain.user.repository.UserRoleRepository;
+import com.gnagnoohc.scms.domain.user.service.consent.ConsentModuleCode;
+import com.gnagnoohc.scms.domain.user.service.consent.ConsentVerifier;
+import com.gnagnoohc.scms.global.common.service.AuditLogService;
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
 import com.gnagnoohc.scms.global.security.JwtTokenProvider;
@@ -56,6 +59,12 @@ class AuthServiceTest {
 
     @Mock
     LoginFailureTracker loginFailureTracker;
+
+    @Mock
+    AuditLogService auditLogService;
+
+    @Mock
+    ConsentVerifier consentVerifier;
 
     @InjectMocks
     AuthService authService;
@@ -191,10 +200,13 @@ class AuthServiceTest {
         when(appUserRepository.findByUniversityNo("2021000008")).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("correct-password", "hash")).thenReturn(true);
         when(userRoleRepository.findByUser_UserId(8)).thenReturn(List.of());
+        when(consentVerifier.hasAgreedAllRequired(eq(8), eq(ConsentModuleCode.COMMON), any(Instant.class)))
+                .thenReturn(true);
 
         AuthResult result = authService.login("2021000008", "correct-password");
 
         assertThat(result).isNotNull();
+        assertThat(result.body().user().commonConsentCompleted()).isTrue();
         verify(appUserRepository).recordSuccessfulLogin(eq(8), any());
         verify(dormantAccountLocker, never()).lock(any());
     }

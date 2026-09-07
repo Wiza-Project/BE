@@ -17,6 +17,8 @@ import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -68,6 +70,16 @@ class AssessmentIntroServiceTest {
                 "2026학년도 1학기 사전진단", 2026, "SPRING", "PRE", startsAt, endsAt, null, 1);
         setField(round, "assessmentRoundId", ROUND_ID);
         return round;
+    }
+
+    // 응시 대상자(STUDENT + 학적상태 '재학'). 학적 검증이 기간·동의 검증보다 먼저 돌아서,
+    // 그 뒤 단계를 검증하는 테스트도 전부 이 스텁을 깔아야 원하는 지점까지 도달한다.
+    private AppUser givenEnrolledStudent() {
+        AppUser student = mock(AppUser.class);
+        when(student.getUserType()).thenReturn("STUDENT");
+        when(student.getAcademicStatus()).thenReturn("재학");
+        when(appUserRepository.findById(STUDENT_ID)).thenReturn(Optional.of(student));
+        return student;
     }
 
     @Test
@@ -125,8 +137,8 @@ class AssessmentIntroServiceTest {
         Instant startsAt = Instant.now().minus(1, ChronoUnit.DAYS);
         Instant endsAt = Instant.now().plus(7, ChronoUnit.DAYS);
         AssessmentRound round = buildRound(startsAt, endsAt);
-        AppUser student = mock(AppUser.class);
         UserConsent sensitiveConsent = mock(UserConsent.class);
+        givenEnrolledStudent();
 
         when(assessmentRoundRepository.findById(ROUND_ID)).thenReturn(Optional.of(round));
         when(assessmentAttemptRepository.findByAssessmentRound_AssessmentRoundIdAndStudent_UserId(ROUND_ID, STUDENT_ID))
@@ -136,7 +148,6 @@ class AssessmentIntroServiceTest {
         when(consentVerifier.findCurrentValidConsent(
                 eq(STUDENT_ID), eq(ConsentModuleCode.ASSESSMENT), eq(ConsentType.SENSITIVE_INFO), any(Instant.class)))
                 .thenReturn(Optional.of(sensitiveConsent));
-        when(appUserRepository.getReferenceById(STUDENT_ID)).thenReturn(student);
         when(assessmentAttemptRepository.save(any(AssessmentAttempt.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         AssessmentAttemptResponse response = assessmentIntroService.startAttempt(ROUND_ID, STUDENT_ID);
@@ -153,8 +164,8 @@ class AssessmentIntroServiceTest {
         Instant startsAt = Instant.now().minus(1, ChronoUnit.DAYS);
         Instant endsAt = Instant.now().plus(7, ChronoUnit.DAYS);
         AssessmentRound round = buildRound(startsAt, endsAt);
-        AppUser student = mock(AppUser.class);
         UserConsent personalInfoConsent = mock(UserConsent.class);
+        givenEnrolledStudent();
 
         when(assessmentRoundRepository.findById(ROUND_ID)).thenReturn(Optional.of(round));
         when(assessmentAttemptRepository.findByAssessmentRound_AssessmentRoundIdAndStudent_UserId(ROUND_ID, STUDENT_ID))
@@ -167,7 +178,6 @@ class AssessmentIntroServiceTest {
         when(consentVerifier.findCurrentValidConsent(
                 eq(STUDENT_ID), eq(ConsentModuleCode.ASSESSMENT), eq(ConsentType.PERSONAL_INFO), any(Instant.class)))
                 .thenReturn(Optional.of(personalInfoConsent));
-        when(appUserRepository.getReferenceById(STUDENT_ID)).thenReturn(student);
         when(assessmentAttemptRepository.save(any(AssessmentAttempt.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         AssessmentAttemptResponse response = assessmentIntroService.startAttempt(ROUND_ID, STUDENT_ID);
@@ -184,7 +194,7 @@ class AssessmentIntroServiceTest {
         Instant startsAt = Instant.now().minus(1, ChronoUnit.DAYS);
         Instant endsAt = Instant.now().plus(7, ChronoUnit.DAYS);
         AssessmentRound round = buildRound(startsAt, endsAt);
-        AppUser student = mock(AppUser.class);
+        AppUser student = givenEnrolledStudent();
         AssessmentAttempt winnerAttempt = AssessmentAttempt.create(round, student, null);
         setField(winnerAttempt, "attemptId", 777);
 
@@ -195,7 +205,6 @@ class AssessmentIntroServiceTest {
                 .thenReturn(true);
         when(consentVerifier.findCurrentValidConsent(any(), any(), any(), any()))
                 .thenReturn(Optional.empty());
-        when(appUserRepository.getReferenceById(STUDENT_ID)).thenReturn(student);
         when(assessmentAttemptRepository.save(any(AssessmentAttempt.class)))
                 .thenThrow(new DataIntegrityViolationException("uq_assessment_attempt_round_student"));
         when(assessmentAttemptStartRecovery.findExisting(ROUND_ID, STUDENT_ID))
@@ -213,7 +222,7 @@ class AssessmentIntroServiceTest {
         Instant startsAt = Instant.now().minus(1, ChronoUnit.DAYS);
         Instant endsAt = Instant.now().plus(7, ChronoUnit.DAYS);
         AssessmentRound round = buildRound(startsAt, endsAt);
-        AppUser student = mock(AppUser.class);
+        givenEnrolledStudent();
         DataIntegrityViolationException notNullViolation = new DataIntegrityViolationException(
                 "null value in column \"student_id\" violates not-null constraint");
 
@@ -224,7 +233,6 @@ class AssessmentIntroServiceTest {
                 .thenReturn(true);
         when(consentVerifier.findCurrentValidConsent(any(), any(), any(), any()))
                 .thenReturn(Optional.empty());
-        when(appUserRepository.getReferenceById(STUDENT_ID)).thenReturn(student);
         when(assessmentAttemptRepository.save(any(AssessmentAttempt.class))).thenThrow(notNullViolation);
 
         assertThatThrownBy(() -> assessmentIntroService.startAttempt(ROUND_ID, STUDENT_ID))
@@ -258,6 +266,7 @@ class AssessmentIntroServiceTest {
         Instant startsAt = Instant.now().plus(1, ChronoUnit.DAYS);
         Instant endsAt = Instant.now().plus(7, ChronoUnit.DAYS);
         AssessmentRound round = buildRound(startsAt, endsAt);
+        givenEnrolledStudent();
 
         when(assessmentRoundRepository.findById(ROUND_ID)).thenReturn(Optional.of(round));
         when(assessmentAttemptRepository.findByAssessmentRound_AssessmentRoundIdAndStudent_UserId(ROUND_ID, STUDENT_ID))
@@ -276,6 +285,7 @@ class AssessmentIntroServiceTest {
         Instant startsAt = Instant.now().minus(10, ChronoUnit.DAYS);
         Instant endsAt = Instant.now().minus(1, ChronoUnit.DAYS);
         AssessmentRound round = buildRound(startsAt, endsAt);
+        givenEnrolledStudent();
 
         when(assessmentRoundRepository.findById(ROUND_ID)).thenReturn(Optional.of(round));
         when(assessmentAttemptRepository.findByAssessmentRound_AssessmentRoundIdAndStudent_UserId(ROUND_ID, STUDENT_ID))
@@ -292,6 +302,7 @@ class AssessmentIntroServiceTest {
         Instant startsAt = Instant.now().minus(1, ChronoUnit.DAYS);
         Instant endsAt = Instant.now().plus(7, ChronoUnit.DAYS);
         AssessmentRound round = buildRound(startsAt, endsAt);
+        givenEnrolledStudent();
 
         when(assessmentRoundRepository.findById(ROUND_ID)).thenReturn(Optional.of(round));
         when(assessmentAttemptRepository.findByAssessmentRound_AssessmentRoundIdAndStudent_UserId(ROUND_ID, STUDENT_ID))
@@ -315,5 +326,115 @@ class AssessmentIntroServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.ASSESSMENT_ROUND_NOT_FOUND);
+    }
+
+    // ── 재학생 한정 ───────────────────────────────────────────────────────────
+    // 집계(응시율·미응시자·결과 통계)와 같은 기준으로 응시 자체를 막지 않으면 어디에도 안 잡히는 기록이 쌓인다.
+
+    @ParameterizedTest
+    @ValueSource(strings = {"휴학", "졸업", "제적", "자퇴"})
+    void startAttempt_whenNotEnrolled_throwsNotEnrolledStudent(String academicStatus) {
+        Instant startsAt = Instant.now().minus(1, ChronoUnit.DAYS);
+        Instant endsAt = Instant.now().plus(7, ChronoUnit.DAYS);
+        AssessmentRound round = buildRound(startsAt, endsAt);
+        AppUser student = mock(AppUser.class);
+        when(student.getUserType()).thenReturn("STUDENT");
+        when(student.getAcademicStatus()).thenReturn(academicStatus);
+
+        when(assessmentRoundRepository.findById(ROUND_ID)).thenReturn(Optional.of(round));
+        when(assessmentAttemptRepository.findByAssessmentRound_AssessmentRoundIdAndStudent_UserId(ROUND_ID, STUDENT_ID))
+                .thenReturn(Optional.empty());
+        when(appUserRepository.findById(STUDENT_ID)).thenReturn(Optional.of(student));
+
+        assertThatThrownBy(() -> assessmentIntroService.startAttempt(ROUND_ID, STUDENT_ID))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.ASSESSMENT_NOT_ENROLLED_STUDENT);
+
+        verify(assessmentAttemptRepository, never()).save(any());
+        // 대상자가 아니면 동의 여부는 볼 것도 없다 — 학적 검증이 동의 검증보다 먼저다.
+        verify(consentVerifier, never()).hasAgreedAllRequired(any(), any(), any());
+    }
+
+    // academic_status는 nullable이라 값이 비어 있을 수 있다. 집계 쿼리의 eq('재학')가 NULL 행을
+    // 제외하는 것과 같게, 여기서도 대상자가 아닌 것으로 본다.
+    @Test
+    void startAttempt_whenAcademicStatusNull_throwsNotEnrolledStudent() {
+        Instant startsAt = Instant.now().minus(1, ChronoUnit.DAYS);
+        Instant endsAt = Instant.now().plus(7, ChronoUnit.DAYS);
+        AssessmentRound round = buildRound(startsAt, endsAt);
+        AppUser student = mock(AppUser.class);
+        when(student.getUserType()).thenReturn("STUDENT");
+        when(student.getAcademicStatus()).thenReturn(null);
+
+        when(assessmentRoundRepository.findById(ROUND_ID)).thenReturn(Optional.of(round));
+        when(assessmentAttemptRepository.findByAssessmentRound_AssessmentRoundIdAndStudent_UserId(ROUND_ID, STUDENT_ID))
+                .thenReturn(Optional.empty());
+        when(appUserRepository.findById(STUDENT_ID)).thenReturn(Optional.of(student));
+
+        assertThatThrownBy(() -> assessmentIntroService.startAttempt(ROUND_ID, STUDENT_ID))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.ASSESSMENT_NOT_ENROLLED_STUDENT);
+    }
+
+    // assessment_attempt.student_id FK에는 타입 제약이 없어 학생이 아닌 계정도 attempt를 만들 수 있다.
+    @Test
+    void startAttempt_whenNotStudentUserType_throwsNotEnrolledStudent() {
+        Instant startsAt = Instant.now().minus(1, ChronoUnit.DAYS);
+        Instant endsAt = Instant.now().plus(7, ChronoUnit.DAYS);
+        AssessmentRound round = buildRound(startsAt, endsAt);
+        AppUser staff = mock(AppUser.class);
+        when(staff.getUserType()).thenReturn("STAFF");
+
+        when(assessmentRoundRepository.findById(ROUND_ID)).thenReturn(Optional.of(round));
+        when(assessmentAttemptRepository.findByAssessmentRound_AssessmentRoundIdAndStudent_UserId(ROUND_ID, STUDENT_ID))
+                .thenReturn(Optional.empty());
+        when(appUserRepository.findById(STUDENT_ID)).thenReturn(Optional.of(staff));
+
+        assertThatThrownBy(() -> assessmentIntroService.startAttempt(ROUND_ID, STUDENT_ID))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.ASSESSMENT_NOT_ENROLLED_STUDENT);
+
+        verify(assessmentAttemptRepository, never()).save(any());
+    }
+
+    @Test
+    void startAttempt_whenUserNotFound_throwsUserNotFound() {
+        Instant startsAt = Instant.now().minus(1, ChronoUnit.DAYS);
+        Instant endsAt = Instant.now().plus(7, ChronoUnit.DAYS);
+        AssessmentRound round = buildRound(startsAt, endsAt);
+
+        when(assessmentRoundRepository.findById(ROUND_ID)).thenReturn(Optional.of(round));
+        when(assessmentAttemptRepository.findByAssessmentRound_AssessmentRoundIdAndStudent_UserId(ROUND_ID, STUDENT_ID))
+                .thenReturn(Optional.empty());
+        when(appUserRepository.findById(STUDENT_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> assessmentIntroService.startAttempt(ROUND_ID, STUDENT_ID))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.USER_NOT_FOUND);
+    }
+
+    // 학적 검증은 멱등 반환보다 뒤에 둔다 — 앞에 두면 재학 중 시작해둔 학생이 휴학하는 순간
+    // 기존 attempt 조회까지 막혀 이어하기 화면이 깨진다. 저장·제출은 AssessmentAttemptAccessGuard가 막는다.
+    @Test
+    void startAttempt_whenAlreadyStartedButNoLongerEnrolled_stillReturnsExistingAttempt() {
+        Instant startsAt = Instant.now().minus(1, ChronoUnit.DAYS);
+        Instant endsAt = Instant.now().plus(7, ChronoUnit.DAYS);
+        AssessmentRound round = buildRound(startsAt, endsAt);
+        AppUser student = mock(AppUser.class);
+        AssessmentAttempt existing = AssessmentAttempt.create(round, student, null);
+        setField(existing, "attemptId", 500);
+
+        when(assessmentRoundRepository.findById(ROUND_ID)).thenReturn(Optional.of(round));
+        when(assessmentAttemptRepository.findByAssessmentRound_AssessmentRoundIdAndStudent_UserId(ROUND_ID, STUDENT_ID))
+                .thenReturn(Optional.of(existing));
+
+        AssessmentAttemptResponse response = assessmentIntroService.startAttempt(ROUND_ID, STUDENT_ID);
+
+        assertThat(response.attemptId()).isEqualTo(500);
+        verify(appUserRepository, never()).findById(any());
     }
 }

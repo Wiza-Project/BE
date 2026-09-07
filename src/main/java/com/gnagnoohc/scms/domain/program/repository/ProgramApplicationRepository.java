@@ -295,6 +295,21 @@ public interface ProgramApplicationRepository extends JpaRepository<ProgramAppli
     List<Integer> findApplicationIdsJudgedCompletedAt(@Param("now") Instant now);
 
     /**
+     * ExtracurricularActivityCompletedEvent 발행에 필요한 연관 엔티티(program과 그 competency/
+     * programTypeCode/operatingUnitCode, student)를 fetch join으로 한 번에 조회해 N+1을 피한다.
+     */
+    @Query("""
+            select a from ProgramApplication a
+            join fetch a.program p
+            join fetch p.competency
+            join fetch p.programTypeCode
+            join fetch p.operatingUnitCode
+            join fetch a.student
+            where a.applicationId in :applicationIds
+            """)
+    List<ProgramApplication> findWithProgramDetailsByApplicationIdIn(@Param("applicationIds") List<Integer> applicationIds);
+
+    /**
      * ── 여기부터 "스태프용 신청자 목록 조회(Read)" 기능 ──────────────────────────────
      *
      * 스태프가 신청관리/이수판정 화면에서 프로그램 하나의 전체 신청자를 조회한다. student는 지연 로딩(LAZY)이고

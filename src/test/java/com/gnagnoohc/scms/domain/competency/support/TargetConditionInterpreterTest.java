@@ -209,8 +209,10 @@ class TargetConditionInterpreterTest {
 
     // ── matches(): toPredicate와 같은 판정을 학생 스냅샷에 대해 메모리에서 수행 ──────────────
 
-    private static final StudentTargetSnapshot GRADE_3_MAJOR_4000 = new StudentTargetSnapshot(true, 3, 4000);
-    private static final StudentTargetSnapshot NO_ACADEMIC_DETAIL = StudentTargetSnapshot.missing();
+    // matches()는 enrolled를 보지 않는다(재학 여부는 StudentAssessmentRoundService가 먼저 거른다).
+    // 두 픽스처 모두 재학생으로 두고, target_condition 판정만 검증한다.
+    private static final StudentTargetSnapshot GRADE_3_MAJOR_4000 = new StudentTargetSnapshot(true, true, 3, 4000);
+    private static final StudentTargetSnapshot NO_ACADEMIC_DETAIL = StudentTargetSnapshot.enrolledWithoutAcademicDetail();
 
     @Test
     void matches_whenTargetConditionNull_returnsTrueForEveryone() {
