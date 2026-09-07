@@ -27,7 +27,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 
 /**
- * 체크리스트 14 "스트레스 결과 기반 상담 제안"의 유스케이스와 트랜잭션 경계를 담당한다.
+ * "스트레스 결과 기반 상담 제안"의 유스케이스와 트랜잭션 경계를 담당한다.
  * 일정 정원·시간 중복·동의 검증은 여기서 다시 구현하지 않고 CounselingReservationService의
  * 패키지 범위 진입점(createFromStressProposal)을 그대로 재사용한다.
  */
