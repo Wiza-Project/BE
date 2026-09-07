@@ -58,7 +58,7 @@ public class CounselorReservationService {
     private final ApplicationEventPublisher eventPublisher;
 
     /**
-     * ST200+ST300 상담사는 자신의 CS200 예약만 대기 목록에서 봐야 하므로, 조회 조건 자체에
+     * ST300 단독(CAREER_ONLY) 상담사는 자신의 CS200 예약만 대기 목록에서 봐야 하므로, 조회 조건 자체에
      * careerOnly를 넘겨 다른 유형의 예약 행을 애초에 읽지 않는다.
      */
     public PageResponse<CounselorPendingReservationResponse> getPending(
@@ -90,15 +90,21 @@ public class CounselorReservationService {
     /**
      * 학번 완전 일치로 활성 학생 한 명만 조회한다. 존재하지 않음·비활성·비학생을 구분하지 않고
      * 모두 U001로 응답해, 실패 원인으로 다른 계정의 존재 여부를 추측할 수 없게 한다.
+     *
+     * <p>ST300(지도교수 전용, scope=CAREER_ONLY)은 조회 범위 자체가 자기 지도학생으로 제한된다
+     * (설계 5.2). 다른 교수 지도학생·지도교수 미지정·학적 상세 없음도 결과 없음으로 수렴시켜
+     * 같은 U001로 응답하고, "지도학생이 아니다"라는 사실을 별도 코드로 노출하지 않는다.</p>
      */
     public CounselorStudentLookupResponse lookupStudent(Integer counselorId, String universityNo) {
-        counselManagementAccessPolicy.requireScope(counselorId);
+        CounselManagementAccessPolicy.Scope scope = counselManagementAccessPolicy.requireScope(counselorId);
         String trimmed = universityNo == null ? "" : universityNo.trim();
         if (trimmed.isEmpty() || trimmed.length() > MAX_UNIVERSITY_NO_LENGTH) {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
         }
-        return counselUserRepository.findActiveStudentByUniversityNo(trimmed)
-                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+        var result = scope == CounselManagementAccessPolicy.Scope.CAREER_ONLY
+                ? counselUserRepository.findActiveAdviseeByUniversityNo(trimmed, counselorId)
+                : counselUserRepository.findActiveStudentByUniversityNo(trimmed);
+        return result.orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
     }
 
     /**
@@ -185,6 +191,15 @@ public class CounselorReservationService {
         AppUser student = counselUserRepository.findByIdForUpdate(request.studentId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
         if (!"STUDENT".equals(student.getUserType()) || !"ACTIVE".equals(student.getAccountStatus())) {
+            throw new BusinessException(ErrorCode.USER_NOT_FOUND);
+        }
+        // 학생 행을 잠근 직후 지도학생 관계를 요청 시점 DB 현재값으로 다시 확인한다. 학번 조회
+        // 시점엔 지도학생이었어도 예약 제출 전에 지도교수가 바뀌었거나, 목록 조회를 우회해
+        // studentId를 직접 제출한 비지도학생이면 여기서 걸러 U001로 응답한다(설계 5.2). 이 검사가
+        // 아래 일정 소유권·유형 검사보다 먼저 실행돼야, "비지도학생"과 "일정 소유권 불일치(S002)"가
+        // 서로 다른 응답 코드로 구분된다.
+        if (scope == CounselManagementAccessPolicy.Scope.CAREER_ONLY
+                && !counselUserRepository.isAdviseeOf(request.studentId(), counselorId)) {
             throw new BusinessException(ErrorCode.USER_NOT_FOUND);
         }
 
