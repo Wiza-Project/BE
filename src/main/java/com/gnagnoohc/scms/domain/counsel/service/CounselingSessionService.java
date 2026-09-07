@@ -41,7 +41,7 @@ public class CounselingSessionService {
     private final CounselManagementAccessPolicy counselManagementAccessPolicy;
 
     /**
-     * ST200+ST300 상담사는 본인의 CS200 회기만 봐야 하므로, 조회 조건 자체에 careerOnly를 넘겨
+     * ST300 단독(CAREER_ONLY) 상담사는 본인의 CS200 회기만 봐야 하므로, 조회 조건 자체에 careerOnly를 넘겨
      * 다른 유형의 회기 행을 애초에 읽지 않는다.
      */
     public PageResponse<CounselingSessionResponse> getSessions(
