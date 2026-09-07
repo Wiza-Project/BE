@@ -111,7 +111,9 @@ public class MileageExternalActivityClaimService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.MILEAGE_ACTIVITY_TYPE_NOT_FOUND));
 
         validateExternalActivityType(activityType);
-        MileagePolicy policy = findApplicablePolicy(activityType, request.activityDate());
+        String semesterCode = mileageAcademicPeriodService.resolvePeriod(request.activityDate()).semesterCode();
+        MileagePolicy policy = resolvePolicy(
+                activityType, request.activityDate(), semesterCode, request.mileagePolicyId());
         FileGroup fileGroup = validateFileGroup(request.fileGroupId(), validStudentId);
 
         ExternalActivityClaim claim = ExternalActivityClaim.create(
@@ -139,19 +141,54 @@ public class MileageExternalActivityClaimService {
         }
     }
 
+    private MileagePolicy resolvePolicy(
+            MileageActivityType activityType,
+            LocalDate activityDate,
+            String semesterCode,
+            Integer mileagePolicyId
+    ) {
+        if (mileagePolicyId == null) {
+            return findApplicablePolicy(activityType, activityDate, semesterCode);
+        }
+        return findRequestedPolicy(activityType, activityDate, semesterCode, mileagePolicyId);
+    }
+
     private MileagePolicy findApplicablePolicy(
             MileageActivityType activityType,
-            LocalDate activityDate
+            LocalDate activityDate,
+            String semesterCode
     ) {
-        String semesterCode = mileageAcademicPeriodService.resolvePeriod(activityDate).semesterCode();
         List<MileagePolicy> policies = policyRepository.findActivePoliciesByActivityTypeOn(
                 activityType.getActivityTypeId(), activityDate, semesterCode);
-        MileagePolicy policy = policies.stream()
+        return policies.stream()
                 .filter(candidate -> mileagePolicyValidator.isApplicable(candidate, activityDate, semesterCode))
                 .findFirst()
                 .orElseThrow(() -> new BusinessException(
                         ErrorCode.MILEAGE_POLICY_NOT_FOUND,
                         "활동 일자에 적용되는 마일리지 정책이 없습니다."));
+    }
+
+    /** 화면에서 선택한 정책을 그대로 적용한다. activityType 불일치나 부적용 정책 선택은 조작·경합 상태로 간주해 거부한다. */
+    private MileagePolicy findRequestedPolicy(
+            MileageActivityType activityType,
+            LocalDate activityDate,
+            String semesterCode,
+            Integer mileagePolicyId
+    ) {
+        MileagePolicy policy = policyRepository.findById(mileagePolicyId)
+                .orElseThrow(() -> new BusinessException(
+                        ErrorCode.MILEAGE_POLICY_NOT_FOUND,
+                        "선택한 마일리지 정책을 찾을 수 없습니다."));
+        if (!Objects.equals(policy.getActivityType().getActivityTypeId(), activityType.getActivityTypeId())) {
+            throw new BusinessException(
+                    ErrorCode.INVALID_INPUT,
+                    "선택한 마일리지 정책이 활동 유형과 일치하지 않습니다.");
+        }
+        if (!mileagePolicyValidator.isApplicable(policy, activityDate, semesterCode)) {
+            throw new BusinessException(
+                    ErrorCode.MILEAGE_POLICY_NOT_FOUND,
+                    "선택한 마일리지 정책은 해당 활동 일자에 적용할 수 없습니다.");
+        }
         return policy;
     }
 
@@ -212,7 +249,8 @@ public class MileageExternalActivityClaimService {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "외부활동 마일리지 신청 정보가 없습니다.");
         }
         if (request.activityTypeId() == null || request.activityTypeId() <= 0
-                || request.fileGroupId() == null || request.fileGroupId() <= 0) {
+                || request.fileGroupId() == null || request.fileGroupId() <= 0
+                || (request.mileagePolicyId() != null && request.mileagePolicyId() <= 0)) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "외부활동 신청 식별자가 올바르지 않습니다.");
         }
         if (request.activityName() == null || request.activityName().isBlank()) {
