@@ -166,6 +166,15 @@ public enum ErrorCode {
     // 활성 버전(STRESS/1) 문항이 11개가 아니거나 번호·선택지 구성이 확정값과 다를 때 사용하는 에러코드.
     // 불완전한 문항을 학생에게 그대로 내려주지 않기 위해 문항 조회·제출 양쪽에서 이 코드로 통일해 막는다.
     STRESS_TEST_NOT_AVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "S014", "현재 스트레스 검사를 이용할 수 없습니다."),
+    // 상담 제안 대상 결과를 사용할 수 없을 때 사용하는 에러코드. 결과 없음·비최신·비STRESS·17점 미만·
+    // 이미 제안됨을 모두 이 코드 하나로 합쳐, 어떤 조건에서 걸렸는지로 결과 ID 존재나 학생 상태를
+    // 추측하지 못하게 한다.
+    COUNSELING_PROPOSAL_TARGET_NOT_AVAILABLE(HttpStatus.CONFLICT, "S015", "상담 제안 대상 결과를 사용할 수 없습니다."),
+    // 학생이 응답(수락·거절)하려는 상담 제안이 없거나 로그인 학생 소유가 아닐 때 사용한다.
+    // 두 경우를 구분해 알려주지 않아 다른 학생의 제안 존재 여부를 추측하지 못하게 한다.
+    COUNSELING_PROPOSAL_NOT_FOUND(HttpStatus.NOT_FOUND, "S016", "상담 제안을 찾을 수 없습니다."),
+    // 제안이 이미 종결 상태(ACCEPTED/REJECTED/EXPIRED)이거나 응답 기한이 지나 더 이상 응답할 수 없을 때 사용한다.
+    COUNSELING_PROPOSAL_STATE_NOT_ALLOWED(HttpStatus.CONFLICT, "S017", "응답할 수 없는 상담 제안입니다."),
 
     // ── 마일리지 ──────────────────────────────────────────────────
     MILEAGE_ITEM_NOT_FOUND(HttpStatus.NOT_FOUND, "M001", "마일리지 항목을 찾을 수 없습니다."),
