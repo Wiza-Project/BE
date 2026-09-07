@@ -5,7 +5,7 @@ import com.gnagnoohc.scms.domain.competency.entity.AssessmentRound;
 import com.gnagnoohc.scms.domain.competency.entity.AssessmentScore;
 import com.gnagnoohc.scms.domain.competency.entity.Competency;
 import com.gnagnoohc.scms.domain.competency.repository.AssessmentRoundRepository;
-import com.gnagnoohc.scms.domain.competency.repository.AssessmentScoreRepository;
+import com.gnagnoohc.scms.domain.competency.repository.AssessmentScoreQueryRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -37,7 +37,7 @@ class AssessmentPercentileBatchServiceTest {
     AssessmentRoundRepository assessmentRoundRepository;
 
     @Mock
-    AssessmentScoreRepository assessmentScoreRepository;
+    AssessmentScoreQueryRepository assessmentScoreQueryRepository;
 
     // AssessmentPercentileCalculator는 리포지토리 의존성 없는 순수 계산 컴포넌트라 목 대신 실제 인스턴스를 사용한다
     // (AssessmentSubmissionServiceTest와 같은 패턴).
@@ -46,7 +46,7 @@ class AssessmentPercentileBatchServiceTest {
     @BeforeEach
     void setUp() {
         assessmentPercentileBatchService = new AssessmentPercentileBatchService(
-                assessmentRoundRepository, assessmentScoreRepository, new AssessmentPercentileCalculator());
+                assessmentRoundRepository, assessmentScoreQueryRepository, new AssessmentPercentileCalculator());
     }
 
     private static AssessmentRound buildRound(Instant endsAt) {
@@ -80,7 +80,7 @@ class AssessmentPercentileBatchServiceTest {
         when(assessmentRoundRepository.findByEndsAtBeforeAndRoundStatusNot(any(), anyString()))
                 .thenReturn(List.of(round));
         when(assessmentRoundRepository.findByIdForUpdate(ROUND_ID)).thenReturn(Optional.of(round));
-        when(assessmentScoreRepository.findByRoundIdFetchCompetency(ROUND_ID))
+        when(assessmentScoreQueryRepository.findEnrolledScoresByRoundIdFetchCompetency(ROUND_ID))
                 .thenReturn(List.of(low, high));
 
         int processedCount = assessmentPercentileBatchService.calculatePercentilesForEndedRounds();
@@ -91,16 +91,18 @@ class AssessmentPercentileBatchServiceTest {
         assertThat(round.getRoundStatus()).isEqualTo("COMPLETED");
     }
 
-    // 응시자가 0명인 회차(제출자가 아무도 없는 채로 기간만 끝난 경우)도 완료 처리해야 다음 배치 사이클에서
-    // 계속 대상으로 잡혀 헛도는 걸 막을 수 있다.
+    /**
+     * 재학생 점수가 0인 회차(제출자가 아무도 없거나, 비재학생만 제출해 필터로 다 걸러진 경우)도
+     * 완료 처리해야 다음 배치 사이클에서 계속 대상으로 잡혀 헛도는 걸 막을 수 있다.
+     */
     @Test
-    void calculatePercentilesForEndedRounds_roundWithNoScores_stillMarksCompleted() {
+    void calculatePercentilesForEndedRounds_roundWithNoEnrolledScores_stillMarksCompleted() {
         AssessmentRound round = buildRound(Instant.now().minus(1, ChronoUnit.DAYS));
 
         when(assessmentRoundRepository.findByEndsAtBeforeAndRoundStatusNot(any(), anyString()))
                 .thenReturn(List.of(round));
         when(assessmentRoundRepository.findByIdForUpdate(ROUND_ID)).thenReturn(Optional.of(round));
-        when(assessmentScoreRepository.findByRoundIdFetchCompetency(ROUND_ID))
+        when(assessmentScoreQueryRepository.findEnrolledScoresByRoundIdFetchCompetency(ROUND_ID))
                 .thenReturn(List.of());
 
         int processedCount = assessmentPercentileBatchService.calculatePercentilesForEndedRounds();
@@ -117,7 +119,7 @@ class AssessmentPercentileBatchServiceTest {
         int processedCount = assessmentPercentileBatchService.calculatePercentilesForEndedRounds();
 
         assertThat(processedCount).isEqualTo(0);
-        verify(assessmentScoreRepository, never()).findByRoundIdFetchCompetency(any());
+        verify(assessmentScoreQueryRepository, never()).findEnrolledScoresByRoundIdFetchCompetency(any());
     }
 
     // AssessmentSubmissionService.submit()이 먼저 이 회차의 잠금을 잡고 있다가 풀리는 사이, 이미 다른
@@ -134,7 +136,7 @@ class AssessmentPercentileBatchServiceTest {
         int processedCount = assessmentPercentileBatchService.calculatePercentilesForEndedRounds();
 
         assertThat(processedCount).isEqualTo(0);
-        verify(assessmentScoreRepository, never()).findByRoundIdFetchCompetency(any());
+        verify(assessmentScoreQueryRepository, never()).findEnrolledScoresByRoundIdFetchCompetency(any());
     }
 
     // endsAt 직전에 시작된 제출이 endsAt을 넘겨서야 커밋되는 경합(회차가 먼저 COMPLETED로 확정되면

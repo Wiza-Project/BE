@@ -115,6 +115,12 @@ public enum ErrorCode {
     INVALID_ASSESSMENT_PERIOD(HttpStatus.BAD_REQUEST, "Q011", "응시 시작일은 종료일보다 빨라야 합니다."),
     // 이미 응시(문항 응답)가 시작된 회차를 수정하려고 할 때 사용하는 에러코드.
     ASSESSMENT_ROUND_NOT_EDITABLE(HttpStatus.BAD_REQUEST, "Q012", "이미 응시가 시작된 회차는 수정할 수 없습니다."),
+    /**
+     * 학적상태가 '재학'이 아닌 학생(휴학·졸업·제적·자퇴)이 응시를 시작하거나 응답 저장·제출을 시도할 때 사용하는 에러코드.
+     * 응시율·미응시자 명단·결과 통계가 모두 재학생만 모수로 잡으므로(AssessmentTargetPolicy) 응시도 같은 기준으로 막는다.
+     * 이미 제출한 응시의 결과 조회는 막지 않는다 — 재학 중 확정된 본인 데이터라 졸업 후에도 볼 수 있어야 한다.
+     */
+    ASSESSMENT_NOT_ENROLLED_STUDENT(HttpStatus.FORBIDDEN, "Q013", "재학생만 진단검사에 응시할 수 있습니다."),
     // 존재하지 않거나 본인(로그인한 학생) 소유가 아닌 attempt에 접근하려고 할 때 사용하는 에러코드(소유권 비노출을 위해 둘을 구분하지 않음).
     ASSESSMENT_ATTEMPT_NOT_FOUND(HttpStatus.NOT_FOUND, "Q014", "응시 정보를 찾을 수 없습니다."),
     // 해당 회차의 문항 구성에 포함되지 않은 questionId로 응답을 저장하려고 할 때 사용하는 에러코드.

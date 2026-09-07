@@ -3,7 +3,7 @@ package com.gnagnoohc.scms.domain.competency.service;
 import com.gnagnoohc.scms.domain.competency.entity.AssessmentRound;
 import com.gnagnoohc.scms.domain.competency.entity.AssessmentScore;
 import com.gnagnoohc.scms.domain.competency.repository.AssessmentRoundRepository;
-import com.gnagnoohc.scms.domain.competency.repository.AssessmentScoreRepository;
+import com.gnagnoohc.scms.domain.competency.repository.AssessmentScoreQueryRepository;
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -39,7 +39,7 @@ public class AssessmentPercentileBatchService {
     private static final Duration COMPLETION_GRACE_PERIOD = Duration.ofMinutes(5);
 
     private final AssessmentRoundRepository assessmentRoundRepository;
-    private final AssessmentScoreRepository assessmentScoreRepository;
+    private final AssessmentScoreQueryRepository assessmentScoreQueryRepository;
     private final AssessmentPercentileCalculator assessmentPercentileCalculator;
 
     // 응시자가 0명인 회차도 완료 처리한다 — 그러지 않으면 매 사이클 대상으로 계속 잡혀 배치가 헛돈다.
@@ -59,8 +59,10 @@ public class AssessmentPercentileBatchService {
                 continue; // 잠금 대기 중 이미 다른 실행에서 완료 처리했다면 다시 계산하지 않는다.
             }
 
+            // 재학생 점수만 모수로 삼는다 — 응시율·집단 평균과 같은 기준(AssessmentTargetPolicy). 필터 후
+            // 점수가 하나도 없으면(비재학생만 제출했던 회차 등) 백분위 없이 완료 처리만 한다.
             List<AssessmentScore> scores =
-                    assessmentScoreRepository.findByRoundIdFetchCompetency(round.getAssessmentRoundId());
+                    assessmentScoreQueryRepository.findEnrolledScoresByRoundIdFetchCompetency(round.getAssessmentRoundId());
 
             if (!scores.isEmpty()) {
                 Map<Integer, BigDecimal> percentileByScoreId = assessmentPercentileCalculator.calculate(scores);

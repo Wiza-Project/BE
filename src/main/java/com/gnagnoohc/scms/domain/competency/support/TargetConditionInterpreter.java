@@ -112,11 +112,22 @@ public class TargetConditionInterpreter {
         return false;
     }
 
-    // matches()가 회차별 쿼리 없이 판정할 수 있도록 필요한 학생 학적만 담은 스냅샷.
-    // hasAcademicDetail=false면 학적 상세가 없어, 조건이 걸린 회차에서는 항상 제외된다.
-    public record StudentTargetSnapshot(boolean hasAcademicDetail, Integer grade, Integer majorCodeId) {
-        public static StudentTargetSnapshot missing() {
-            return new StudentTargetSnapshot(false, null, null);
+    /**
+     * matches()가 회차별 쿼리 없이 판정할 수 있도록 필요한 학생 학적만 담은 스냅샷.
+     * hasAcademicDetail=false면 학적 상세가 없어, 조건이 걸린 회차에서는 항상 제외된다.
+     *
+     * <p>enrolled는 matches()가 보지 않는다 — 재학 여부는 target_condition 판정과 별개 기준이라,
+     * 이 필드를 읽는 StudentAssessmentRoundService가 matches() 전에 먼저 거른다.
+     */
+    public record StudentTargetSnapshot(boolean enrolled, boolean hasAcademicDetail, Integer grade, Integer majorCodeId) {
+        /** 학적상태가 '재학'이 아니거나 STUDENT 계정이 아니어서 어떤 회차의 대상자도 될 수 없는 경우. */
+        public static StudentTargetSnapshot notEnrolled() {
+            return new StudentTargetSnapshot(false, false, null, null);
+        }
+
+        /** 재학생이지만 학적 상세(학년·전공)가 없는 경우. 대상 조건이 걸린 회차에서는 제외된다. */
+        public static StudentTargetSnapshot enrolledWithoutAcademicDetail() {
+            return new StudentTargetSnapshot(true, false, null, null);
         }
     }
 

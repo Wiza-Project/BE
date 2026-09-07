@@ -17,6 +17,10 @@ import java.util.List;
  * 가짐) 응답 바디로만 내려줍니다. 테이블 설계가 N:M이라 필드도 그대로 배열로 유지합니다
  * (현재 운영상 겸임을 안 하더라도, 그건 데이터가 그렇다는 것뿐 스키마/API 계약과는 별개).
  * 겸임 역할이 없으면 빈 배열([])이며 null은 없습니다.
+ *
+ * commonConsentCompleted 는 현재 유효한 COMMON 필수 약관 전부에 대한 미철회 동의 보유 여부입니다
+ * — FE가 로그인 직후 동의 화면 진입을 별도 API 호출 없이 분기하는 용도입니다. 판정 입력이
+ * DB(consent_policy·user_consent)뿐이라 브라우저·기기가 바뀌어도 값이 같습니다.
  */
 public record UserSummaryResponse(
         Integer id,
@@ -27,9 +31,10 @@ public record UserSummaryResponse(
         String email,
         String phone,
         String department,
-        String departmentName
+        String departmentName,
+        boolean commonConsentCompleted
 ) {
-    public static UserSummaryResponse from(AppUser user, List<String> roleCodes) {
+    public static UserSummaryResponse from(AppUser user, List<String> roleCodes, boolean commonConsentCompleted) {
         var departmentCode = user.getDepartmentCode();
         return new UserSummaryResponse(
                 user.getUserId(),
@@ -40,7 +45,8 @@ public record UserSummaryResponse(
                 user.getEmail(),
                 user.getPhone(),
                 departmentCode == null ? null : departmentCode.getCode(),
-                departmentCode == null ? null : departmentCode.getCodeName()
+                departmentCode == null ? null : departmentCode.getCodeName(),
+                commonConsentCompleted
         );
     }
 }

@@ -6,6 +6,8 @@ import com.gnagnoohc.scms.domain.user.dto.UserSummaryResponse;
 import com.gnagnoohc.scms.domain.user.entity.AppUser;
 import com.gnagnoohc.scms.domain.user.repository.AppUserRepository;
 import com.gnagnoohc.scms.domain.user.repository.UserRoleRepository;
+import com.gnagnoohc.scms.domain.user.service.consent.ConsentModuleCode;
+import com.gnagnoohc.scms.domain.user.service.consent.ConsentVerifier;
 import com.gnagnoohc.scms.global.common.service.AuditAction;
 import com.gnagnoohc.scms.global.common.service.AuditLogService;
 import com.gnagnoohc.scms.global.error.BusinessException;
@@ -82,6 +84,12 @@ import java.util.List;
  *    HTTP 요청 경로에서는 이 메서드까지 공백이 섞인 값이 들어오지 않습니다. 아래 trim() 은
  *    DTO 검증을 거치지 않고 이 메서드를 직접 호출하는 경우(테스트 등)에 대한 방어용으로만
  *    남겨둡니다. (비밀번호는 trim하지 않습니다 — 공백이 비밀번호의 일부일 수 있어서입니다.)
+ *
+ * ── 최초 로그인 공통 약관 동의 상태 ───────────────────────────────
+ * 로그인/재발급 응답의 user 에 commonConsentCompleted 를 실어 내려줍니다.
+ * 판정 기준은 "현재 유효한 COMMON 필수 정책 전부에 대해 철회되지 않은 동의가 있는가"
+ * 하나이며(ConsentVerifier.hasAgreedAllRequired), 응답 정보일 뿐 로그인 성공/실패에는
+ * 관여하지 않습니다. 유효한 COMMON 필수 정책이 0건이면 true 입니다.
  */
 @Service
 @RequiredArgsConstructor
@@ -107,6 +115,7 @@ public class AuthService {
     private final DormantAccountLocker dormantAccountLocker;
     private final LoginFailureTracker loginFailureTracker;
     private final AuditLogService auditLogService;
+    private final ConsentVerifier consentVerifier;
 
     @Transactional
     public AuthResult login(String universityNo, String rawPassword) {
@@ -238,10 +247,14 @@ public class AuthService {
                 .map(userRole -> userRole.getId().getRoleCode())
                 .toList();
 
+        // 인증 정보(토큰 claim, 계정 상태)와 무관하게, DB의 COMMON 필수 정책·동의 이력만으로 판정합니다.
+        boolean commonConsentCompleted = consentVerifier.hasAgreedAllRequired(
+                user.getUserId(), ConsentModuleCode.COMMON, Instant.now());
+
         LoginResponse body = LoginResponse.of(
                 accessToken,
                 jwtTokenProvider.getAccessTokenValiditySeconds(),
-                UserSummaryResponse.from(user, roleCodes)
+                UserSummaryResponse.from(user, roleCodes, commonConsentCompleted)
         );
         return new AuthResult(body, refreshToken);
     }

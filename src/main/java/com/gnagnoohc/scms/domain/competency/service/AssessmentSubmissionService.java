@@ -40,6 +40,8 @@ public class AssessmentSubmissionService {
         AssessmentAttempt attempt = assessmentAttemptAccessGuard.getOwnAttempt(attemptId, studentId);
         assessmentAttemptAccessGuard.assertNotSubmitted(attempt);
         assessmentAttemptAccessGuard.assertPeriodOpen(attempt);
+        // 잠금 대기 중 바뀔 수 있는 건 시계뿐이라, 아래 assertPeriodOpen과 달리 학적은 다시 안 본다.
+        assessmentAttemptAccessGuard.assertStillEnrolled(attempt);
 
         Integer roundId = attempt.getAssessmentRound().getAssessmentRoundId();
         List<AssessmentRoundQuestion> roundQuestions =
