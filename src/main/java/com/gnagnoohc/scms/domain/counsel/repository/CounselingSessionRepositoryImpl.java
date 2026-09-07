@@ -1,5 +1,6 @@
 package com.gnagnoohc.scms.domain.counsel.repository;
 
+import com.gnagnoohc.scms.domain.academic.entity.QStudentAcademicDetail;
 import com.gnagnoohc.scms.domain.counsel.dto.projection.CounselingSessionRow;
 import com.gnagnoohc.scms.domain.counsel.entity.QCounselingAssignment;
 import com.gnagnoohc.scms.domain.counsel.entity.QCounselingReservation;
@@ -9,6 +10,7 @@ import com.gnagnoohc.scms.domain.user.entity.QAppUser;
 import com.gnagnoohc.scms.global.common.entity.QCommonCode;
 import com.querydsl.core.types.Projections;
 import com.querydsl.core.types.dsl.BooleanExpression;
+import com.querydsl.jpa.JPAExpressions;
 import com.querydsl.jpa.impl.JPAQuery;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import lombok.RequiredArgsConstructor;
@@ -37,11 +39,14 @@ public class CounselingSessionRepositoryImpl implements CounselingSessionReposit
     private static final QAppUser student = new QAppUser("student");
     private static final QAppUser counselor = new QAppUser("counselor");
     private static final QCommonCode department = new QCommonCode("department");
+    private static final QStudentAcademicDetail academicDetail =
+            new QStudentAcademicDetail("academicDetail");
 
     @Override
     public Page<CounselingSessionRow> findSessions(
             Integer counselorId, boolean careerOnly, String sessionStatus, Instant from, Instant to, Pageable pageable
     ) {
+        BooleanExpression careerOnlyCondition = careerOnlyEq(careerOnly, counselorId);
         List<CounselingSessionRow> content = queryFactory
                 .select(Projections.constructor(
                         CounselingSessionRow.class,
@@ -65,7 +70,7 @@ public class CounselingSessionRepositoryImpl implements CounselingSessionReposit
                         sessionStatusEq(sessionStatus),
                         startsAtGoe(from),
                         startsAtLt(to),
-                        careerOnlyEq(careerOnly)
+                        careerOnlyCondition
                 )
                 .orderBy(session.startsAt.desc(), session.counselingSessionId.desc())
                 .offset(pageable.getOffset())
@@ -87,7 +92,7 @@ public class CounselingSessionRepositoryImpl implements CounselingSessionReposit
                         sessionStatusEq(sessionStatus),
                         startsAtGoe(from),
                         startsAtLt(to),
-                        careerOnlyEq(careerOnly)
+                        careerOnlyCondition
                 );
 
         return PageableExecutionUtils.getPage(content, pageable, countQuery::fetchOne);
@@ -107,8 +112,20 @@ public class CounselingSessionRepositoryImpl implements CounselingSessionReposit
         return to != null ? session.startsAt.lt(to) : null;
     }
 
-    // ST300 단독(CAREER_ONLY) 사용자는 CS200(진로상담)만 봐야 하므로, careerOnly가 false면 조건 자체를 붙이지 않는다.
-    private BooleanExpression careerOnlyEq(boolean careerOnly) {
-        return careerOnly ? counselingType.typeCode.eq("CS200") : null;
+    // ST300 단독(CAREER_ONLY) 사용자는 현재 지도학생의 CS200 회기만 봐야 한다.
+    // 지도교수가 변경되면 이전 지도학생의 식별 정보도 목록에서 제외한다.
+    private BooleanExpression careerOnlyEq(boolean careerOnly, Integer counselorId) {
+        if (!careerOnly) {
+            return null;
+        }
+        return counselingType.typeCode.eq("CS200")
+                .and(JPAExpressions
+                        .selectOne()
+                        .from(academicDetail)
+                        .where(
+                                academicDetail.userId.eq(student.userId),
+                                academicDetail.advisorUser.userId.eq(counselorId)
+                        )
+                        .exists());
     }
 }

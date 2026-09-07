@@ -40,6 +40,10 @@ public class CounselingReservationService {
 
     private static final String DIRECT_ROUTE = "DIRECT";
     private static final String CENTER_ROUTE = "CENTER";
+    // 스트레스 결과 기반 상담 제안 수락 전용 상수(설계 2장 확정 정책). 제안한 상담사의 일정으로
+    // 제한하지 않고 활성 CS300 + DIRECT 유형 자체만 대상으로 삼는다.
+    private static final String STRESS_PROPOSAL_TYPE_CODE = "CS300";
+    private static final String STRESS_PROPOSAL_REQUEST_CONTENT = "스트레스 검사 결과 기반 상담 제안 수락";
 
     private final CounselUserRepository counselUserRepository;
     private final CounselingTypeRepository counselingTypeRepository;
@@ -90,6 +94,54 @@ public class CounselingReservationService {
                 request.requestContent()
         );
         return CounselingReservationResponse.from(counselingReservationRepository.save(reservation));
+    }
+
+    /**
+     * 스트레스 결과 기반 상담 제안 수락 전용 진입점이다. 패키지 범위로 제한해
+     * 같은 패키지의 CounselingProposalService만 호출할 수 있게 하고, 별도 공개 API로 만들지 않는다.
+     * 학생 행 잠금은 호출부가 이미 잡아 넘겨주므로 여기서는 다시 잠그지 않고 활성 상태만 재검증한다.
+     * 동의·일정 검증은 기존 학생 직접 예약(create)과 완전히 같은 경계(ConsentVerifier,
+     * getScheduleForReservation → CounselingScheduleService)를 그대로 재사용해, 검증 로직이 두
+     * 곳에서 따로 관리되다 조건이 갈라지는 것을 막는다. 신청 내용은 확정 문구로 고정하며 요청
+     * DTO로는 받지 않는다.
+     */
+    CounselingReservation createFromStressProposal(
+            AppUser lockedStudent,
+            Integer scheduleId,
+            Integer consentId,
+            Instant now
+    ) {
+        if (!isActiveStudent(lockedStudent)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        CounselingType counselingType = counselingTypeRepository
+                .findByTypeCodeAndApplicationRouteAndActiveTrue(STRESS_PROPOSAL_TYPE_CODE, DIRECT_ROUTE)
+                // CS300 + DIRECT 유형 자체가 없거나 비활성이면 학생에게 보여줄 수락 대상 일정이
+                // 애초에 존재할 수 없으므로, 기존 일정 불가 사유와 같은 SCHEDULE_NOT_AVAILABLE(S002)로 합친다.
+                .orElseThrow(() -> new BusinessException(ErrorCode.SCHEDULE_NOT_AVAILABLE));
+        Integer studentId = lockedStudent.getUserId();
+        UserConsent userConsent = consentVerifier.requireOwnedValidConsent(
+                consentId,
+                studentId,
+                ConsentModuleCode.COUNSELING,
+                ConsentType.PERSONAL_INFO,
+                now
+        );
+        CounselingSchedule counselingSchedule = getScheduleForReservation(
+                scheduleId,
+                counselingType,
+                studentId,
+                now,
+                null
+        );
+        CounselingReservation reservation = CounselingReservation.create(
+                counselingType,
+                counselingSchedule,
+                lockedStudent,
+                userConsent,
+                STRESS_PROPOSAL_REQUEST_CONTENT
+        );
+        return counselingReservationRepository.save(reservation);
     }
 
     public PageResponse<CounselingReservationResponse> getReservations(
