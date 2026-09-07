@@ -173,7 +173,7 @@ public class StudentJobRelationService {
      * <ul>
      *   <li>1. 공고 접수 마감 기한 경과 여부 검증 (마감 이후 취소 불가)</li>
      *   <li>2. 지원 이력 존재 및 취소 가능 상태 여부 검증</li>
-     *   <li>3. {@code cancelApplication()} 메서드를 통해 취소 일시({@code canceled_at}) 기록 및 상태 {@code CANCELED} 전환</li>
+     *   <li>3. {@code cancelApplication()} 메서드를 통해 취소 일시({@code canceled_at}) 기록</li>
      * </ul>
      *
      * @param studentUserId 학생 식별자 (app_user.user_id)
@@ -206,8 +206,7 @@ public class StudentJobRelationService {
      * <ul>
      *   <li>1. 공고 및 학생 유효성 검증</li>
      *   <li>2. 관계 엔티티 조회 또는 신규 생성 후 {@code toggleBookmark()} 호출</li>
-     *   <li>3. 북마크 일시의 존재 여부에 따라 가상 플래그 {@code isScrapped}를 조립하여 반환</li>
-     *   <li>4. 북마크 일시 존재 여부에 따라 응답 DTO 반환</li>
+     *   <li>3. 북마크 여부 플래그 및 갱신 시각 반환</li>
      * </ul>
      *
      * @param studentUserId 학생 식별자 (app_user.user_id)

@@ -195,7 +195,7 @@ public class JobPosting extends BaseTimeEntity {
      *   </li>
      * </ul>
      *
-     * @param reviewStatus    검수 상태값 ("APPROVED" 또는 "REJECTED")
+     * @param reviewStatus    검수 상태값 (APPROVED 또는 REJECTED)
      * @param rejectionReason 반려 사유 (반려 시 필수, 승인 시 null 가능)
      * @param reviewerId      검수한 교직원 계정 식별자 (Security Context 주입)
      */

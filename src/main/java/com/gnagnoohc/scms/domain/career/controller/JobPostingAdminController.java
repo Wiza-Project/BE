@@ -146,7 +146,7 @@ public class JobPostingAdminController {
         return ResponseEntity.ok().build();
     }
 
-    @Operation(summary = "채용공고 포스터/안내문 파일 업로드")
+    @Operation(summary = "채용공고 포스터 및 안내문 파일 업로드")
     @PostMapping(value = "/poster", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<Map<String, Object>>> uploadPoster(
             @RequestParam("file") MultipartFile file,
