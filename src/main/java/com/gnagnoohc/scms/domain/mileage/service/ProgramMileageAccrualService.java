@@ -165,7 +165,11 @@ public class ProgramMileageAccrualService {
         MileagePolicy linkedPolicy = application.getProgram().getMileagePolicy();
         // 프로그램 이수 적립은 비교과 프로그램 유형별 정책만 사용한다.
         // 연결 정책과 조회 정책 모두 공통 정책 validator를 통해 학기와 적용 기간을 확인한다.
-        if (isUsablePolicy(linkedPolicy, programTypeCode, completionDate, semesterCode)) {
+        // 연결 정책은 이수일 학기와 정확히 일치할 때만 재조회 없이 사용한다. 학기 무관(ALL) 정책이
+        // 캐시돼 있어도 그사이 학기 전용 정책이 새로 생겼을 수 있으므로, 그 경우엔 아래 재조회 로직으로
+        // 넘어가 학기 전용 정책을 우선시킨다(리포지토리 정렬 기준과 동일한 우선순위 유지).
+        if (isUsablePolicy(linkedPolicy, programTypeCode, completionDate, semesterCode)
+                && linkedPolicySemesterMatches(linkedPolicy, semesterCode)) {
             return linkedPolicy;
         }
 
@@ -200,6 +204,13 @@ public class ProgramMileageAccrualService {
     }
 
     private record PolicyLookupKey(String programTypeCode, LocalDate completionDate) {
+    }
+
+    private boolean linkedPolicySemesterMatches(MileagePolicy linkedPolicy, String semesterCode) {
+        if (semesterCode == null || semesterCode.isBlank()) {
+            return true;
+        }
+        return linkedPolicy != null && semesterCode.trim().equalsIgnoreCase(linkedPolicy.getSemesterCode());
     }
 
     private boolean isUsablePolicy(MileagePolicy policy,

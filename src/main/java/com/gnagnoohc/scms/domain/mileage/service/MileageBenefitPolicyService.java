@@ -91,7 +91,10 @@ public class MileageBenefitPolicyService {
                 request.criteriaData(),
                 request.applicationStartsAt(),
                 request.applicationEndsAt(),
-                request.active()
+                request.active(),
+                request.benefitGroupCode(),
+                request.cumulativeYears(),
+                request.requiresExactPoints()
         );
 
         return MileageBenefitPolicyResponseDTO.from(policy);

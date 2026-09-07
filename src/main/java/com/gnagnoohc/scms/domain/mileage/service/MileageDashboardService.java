@@ -336,17 +336,26 @@ public class MileageDashboardService {
         return semesterCode == null ? "" : semesterCode.trim().toUpperCase(Locale.ROOT);
     }
 
-    /** 요청 학기가 실제 개별 학기 형식인지 확인하고 공백을 제거한다. */
+    /** 요청 학기가 실제 개별 학기 형식인지 확인하고 표준 형태(trim+대문자)로 정규화한다. */
     private String validateSemester(String semesterCode) {
         if (semesterCode == null || semesterCode.isBlank()) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "조회 학기 정보가 올바르지 않습니다.");
         }
 
-        String normalizedSemesterCode = semesterCode.trim();
-        if (ALL_SEMESTER_CODE.equalsIgnoreCase(normalizedSemesterCode)) {
+        String normalizedSemesterCode = normalizeSemesterCode(semesterCode);
+        if (ALL_SEMESTER_CODE.equals(normalizedSemesterCode)) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "조회 학기는 개별 학기로 지정해야 합니다.");
         }
+        if (!isActiveSemesterCode(normalizedSemesterCode)) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "존재하지 않는 학기 코드입니다.");
+        }
         return normalizedSemesterCode;
+    }
+
+    private boolean isActiveSemesterCode(String semesterCode) {
+        return commonCodeRepository.findByCodeGroupAndCode(SEMESTER_CODE_GROUP, semesterCode)
+                .filter(CommonCode::isActive)
+                .isPresent();
     }
 
     /** 거래 원장 조회 결과를 최근 내역 카드에 필요한 필드만으로 변환한다. */

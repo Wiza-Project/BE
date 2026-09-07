@@ -73,7 +73,10 @@ public class MileageBenefitPolicy extends BaseTimeEntity {
             JsonNode criteriaData,
             Instant applicationStartsAt,
             Instant applicationEndsAt,
-            Boolean active
+            Boolean active,
+            String benefitGroupCode,
+            Integer cumulativeYears,
+            Boolean requiresExactPoints
     ) {
         if (benefitName != null) {
             this.benefitName = benefitName;
@@ -95,6 +98,15 @@ public class MileageBenefitPolicy extends BaseTimeEntity {
         }
         if (active != null) {
             this.active = active;
+        }
+        if (benefitGroupCode != null) {
+            this.benefitGroupCode = benefitGroupCode;
+        }
+        if (cumulativeYears != null) {
+            this.cumulativeYears = cumulativeYears;
+        }
+        if (requiresExactPoints != null) {
+            this.requiresExactPoints = requiresExactPoints;
         }
     }
 }

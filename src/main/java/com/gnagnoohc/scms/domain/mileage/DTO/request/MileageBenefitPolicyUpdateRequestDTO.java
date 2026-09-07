@@ -2,6 +2,7 @@ package com.gnagnoohc.scms.domain.mileage.DTO.request;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
@@ -18,6 +19,9 @@ public record MileageBenefitPolicyUpdateRequestDTO(
         JsonNode criteriaData,
         Instant applicationStartsAt,
         Instant applicationEndsAt,
-        Boolean active
+        Boolean active,
+        @Size(max = 50) String benefitGroupCode,
+        @Positive Integer cumulativeYears,
+        Boolean requiresExactPoints
 ) {
 }

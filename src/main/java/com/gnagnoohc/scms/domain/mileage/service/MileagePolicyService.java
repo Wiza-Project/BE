@@ -9,6 +9,8 @@ import com.gnagnoohc.scms.domain.mileage.entity.MileagePolicy;
 import com.gnagnoohc.scms.domain.mileage.repository.MileageActivityTypeRepository;
 import com.gnagnoohc.scms.domain.mileage.repository.MileagePolicyRepository;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;
+import com.gnagnoohc.scms.global.common.entity.CommonCode;
+import com.gnagnoohc.scms.global.common.repository.CommonCodeRepository;
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.DbConstraintViolationMatcher;
 import com.gnagnoohc.scms.global.error.ErrorCode;
@@ -23,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
@@ -32,9 +35,11 @@ public class MileagePolicyService {
     // 학기 코드를 생략한 등록 요청에 채워 넣는 기본값. "전학기 공통" 정책을 의미한다(MileagePolicy 엔티티 기본값과 동일).
     private static final String DEFAULT_SEMESTER_CODE = "ALL";
     private static final String INITIAL_STATUS = "ACTIVE";
+    private static final String SEMESTER_CODE_GROUP = "SEMESTER";
 
     private final MileagePolicyRepository policyRepository;
     private final MileageActivityTypeRepository activityTypeRepository;
+    private final CommonCodeRepository commonCodeRepository;
 
     /**
      * ── "등록(Create)" 기능 ──────────────────────────────────────────────
@@ -134,7 +139,20 @@ public class MileagePolicyService {
     }
 
     private String resolveSemesterCode(String semesterCode) {
-        return (semesterCode == null || semesterCode.isBlank()) ? DEFAULT_SEMESTER_CODE : semesterCode;
+        if (semesterCode == null || semesterCode.isBlank()) {
+            return DEFAULT_SEMESTER_CODE;
+        }
+        String normalizedSemesterCode = semesterCode.trim().toUpperCase(Locale.ROOT);
+        if (!DEFAULT_SEMESTER_CODE.equals(normalizedSemesterCode) && !isActiveSemesterCode(normalizedSemesterCode)) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "존재하지 않는 학기 코드입니다.");
+        }
+        return normalizedSemesterCode;
+    }
+
+    private boolean isActiveSemesterCode(String semesterCode) {
+        return commonCodeRepository.findByCodeGroupAndCode(SEMESTER_CODE_GROUP, semesterCode)
+                .filter(CommonCode::isActive)
+                .isPresent();
     }
 
     // 적용 종료일(validTo)은 nullable(무기한)이라 있을 때만 검사한다.
