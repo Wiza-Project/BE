@@ -45,13 +45,14 @@ public class MileageScholarshipService {
     private final MileageTransactionRepository mileageTransactionRepository;
     private final AppUserRepository appUserRepository;
     private final MileageAcademicPeriodService mileageAcademicPeriodService;
+    private final MileageSemesterCodeValidator mileageSemesterCodeValidator;
 
     /** 선택 학기에 적용되는 활성 장학금 정책과 학생별 신청 가능 상태를 조회한다. */
     public List<MileageScholarshipResponse.ScholarshipItem> getScholarships(
             Integer studentId,
             String semesterCode
     ) {
-        String selectedSemesterCode = validateSemester(semesterCode);
+        String selectedSemesterCode = mileageSemesterCodeValidator.requireSemesterCode(semesterCode);
         List<MileageBenefitPolicy> policies = benefitPolicyRepository
                 .findByActiveTrueAndBenefitTypeAndSemesterCodeInOrderByMinimumPointsAsc(
                         SCHOLARSHIP, List.of(selectedSemesterCode, ALL_SEMESTER_CODE));
@@ -380,18 +381,6 @@ public class MileageScholarshipService {
                 application.getAppliedAt(),
                 application.getProcessedAt(),
                 application.getDecisionReason());
-    }
-
-    private String validateSemester(String semesterCode) {
-        if (semesterCode == null || semesterCode.isBlank()) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT, "조회 학기 정보가 올바르지 않습니다.");
-        }
-
-        String normalizedSemesterCode = semesterCode.trim();
-        if (ALL_SEMESTER_CODE.equalsIgnoreCase(normalizedSemesterCode)) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT, "조회 학기는 개별 학기로 지정해야 합니다.");
-        }
-        return normalizedSemesterCode;
     }
 
     private BigDecimal valueOrZero(BigDecimal value) {

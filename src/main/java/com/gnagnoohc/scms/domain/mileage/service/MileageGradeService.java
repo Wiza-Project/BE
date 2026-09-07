@@ -4,10 +4,6 @@ import com.gnagnoohc.scms.domain.mileage.DTO.MileageGradeResponse;
 import com.gnagnoohc.scms.domain.mileage.entity.MileageBenefitPolicy;
 import com.gnagnoohc.scms.domain.mileage.repository.MileageBenefitPolicyRepository;
 import com.gnagnoohc.scms.domain.mileage.repository.MileageTransactionRepository;
-import com.gnagnoohc.scms.global.common.entity.CommonCode;
-import com.gnagnoohc.scms.global.common.repository.CommonCodeRepository;
-import com.gnagnoohc.scms.global.error.BusinessException;
-import com.gnagnoohc.scms.global.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,7 +12,6 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Locale;
 
 /** 학생의 누적 확정 마일리지를 등급 정책과 비교해 현재 등급을 계산한다. */
 @Service
@@ -26,18 +21,17 @@ public class MileageGradeService {
 
     private static final String GRADE_BENEFIT_TYPE = "GRADE";
     private static final String ALL_SEMESTER_CODE = "ALL";
-    private static final String SEMESTER_CODE_GROUP = "SEMESTER";
 
     private final MileageTransactionRepository mileageTransactionRepository;
     private final MileageBenefitPolicyRepository mileageBenefitPolicyRepository;
-    private final CommonCodeRepository commonCodeRepository;
+    private final MileageSemesterCodeValidator mileageSemesterCodeValidator;
 
     /** 선택 학기에 적용되는 등급 정책으로 학생의 누적 마일리지 등급을 조회한다. */
     public MileageGradeResponse getGrade(
             Integer studentId,
             String semesterCode
     ) {
-        String selectedSemesterCode = validateSemester(semesterCode);
+        String selectedSemesterCode = mileageSemesterCodeValidator.requireSemesterCode(semesterCode);
         BigDecimal cumulativePoints = valueOrZero(
                 mileageTransactionRepository.sumPostedPointsByStudent(studentId));
 
@@ -113,28 +107,6 @@ public class MileageGradeService {
                 policy.getMinimumPoints(),
                 policy.getSemesterCode()
         );
-    }
-
-    /** 요청 학기가 실제 개별 학기인지 확인하고 공백을 제거한다. */
-    private String validateSemester(String semesterCode) {
-        if (semesterCode == null || semesterCode.isBlank()) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT, "조회 학기 정보가 올바르지 않습니다.");
-        }
-
-        String normalizedSemesterCode = semesterCode.trim().toUpperCase(Locale.ROOT);
-        if (ALL_SEMESTER_CODE.equals(normalizedSemesterCode)) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT, "조회 학기는 개별 학기로 지정해야 합니다.");
-        }
-        if (!isActiveSemesterCode(normalizedSemesterCode)) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT, "존재하지 않는 학기 코드입니다.");
-        }
-        return normalizedSemesterCode;
-    }
-
-    private boolean isActiveSemesterCode(String semesterCode) {
-        return commonCodeRepository.findByCodeGroupAndCode(SEMESTER_CODE_GROUP, semesterCode)
-                .filter(CommonCode::isActive)
-                .isPresent();
     }
 
     private BigDecimal valueOrZero(BigDecimal value) {

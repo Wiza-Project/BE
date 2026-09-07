@@ -9,8 +9,6 @@ import com.gnagnoohc.scms.domain.mileage.repository.MileageBenefitPolicyReposito
 import com.gnagnoohc.scms.domain.mileage.repository.MileageTransactionRepository;
 import com.gnagnoohc.scms.global.common.entity.CommonCode;
 import com.gnagnoohc.scms.global.common.repository.CommonCodeRepository;
-import com.gnagnoohc.scms.global.error.BusinessException;
-import com.gnagnoohc.scms.global.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -21,7 +19,6 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -43,6 +40,7 @@ public class MileageDashboardService {
     private final CompetencyRepository competencyRepository;
     private final MileageAcademicPeriodService mileageAcademicPeriodService;
     private final CommonCodeRepository commonCodeRepository;
+    private final MileageSemesterCodeValidator mileageSemesterCodeValidator;
 
     /**
      * 로그인한 학생의 선택 학기 기준 대시보드 데이터를 생성한다.
@@ -52,7 +50,7 @@ public class MileageDashboardService {
             Integer studentId,
             String semesterCode
     ) {
-        String selectedSemesterCode = validateSemester(semesterCode);
+        String selectedSemesterCode = mileageSemesterCodeValidator.requireSemesterCode(semesterCode);
         MileageAcademicPeriodService.PeriodBounds periodBounds =
                 mileageAcademicPeriodService.resolveCurrentPeriodBounds();
 
@@ -279,7 +277,7 @@ public class MileageDashboardService {
                         periodBounds.endAt())
                 .stream()
                 .collect(Collectors.toMap(
-                        item -> normalizeSemesterCode(item.getSemesterCode()),
+                        item -> mileageSemesterCodeValidator.normalize(item.getSemesterCode()),
                         item -> valueOrZero(item.getPoints()),
                         BigDecimal::add));
 
@@ -290,12 +288,12 @@ public class MileageDashboardService {
         Map<String, String> definedCodeByNormalizedCode = definedSemesters
                 .stream()
                 .collect(Collectors.toMap(
-                        code -> normalizeSemesterCode(code.getCode()),
+                        code -> mileageSemesterCodeValidator.normalize(code.getCode()),
                         CommonCode::getCode,
                         (first, ignored) -> first));
         Map<String, Integer> semesterOrderByCode = definedSemesters.stream()
                 .collect(Collectors.toMap(
-                        code -> normalizeSemesterCode(code.getCode()),
+                        code -> mileageSemesterCodeValidator.normalize(code.getCode()),
                         CommonCode::getSortOrder,
                         (first, ignored) -> first));
 
@@ -324,38 +322,11 @@ public class MileageDashboardService {
                 .sorted(Comparator
                         .comparingInt((MileageDashboardResponse.SemesterTrendSummary item) ->
                                 semesterOrderByCode.getOrDefault(
-                                        normalizeSemesterCode(item.semesterCode()),
+                                        mileageSemesterCodeValidator.normalize(item.semesterCode()),
                                         Integer.MAX_VALUE))
                         .thenComparing(MileageDashboardResponse.SemesterTrendSummary::semesterCode))
                 .skip(Math.max(0, trend.size() - SEMESTER_TREND_LIMIT))
                 .toList();
-    }
-
-    /** 백엔드 공통코드와 비교할 수 있도록 학기 코드를 표준화한다. */
-    private String normalizeSemesterCode(String semesterCode) {
-        return semesterCode == null ? "" : semesterCode.trim().toUpperCase(Locale.ROOT);
-    }
-
-    /** 요청 학기가 실제 개별 학기 형식인지 확인하고 표준 형태(trim+대문자)로 정규화한다. */
-    private String validateSemester(String semesterCode) {
-        if (semesterCode == null || semesterCode.isBlank()) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT, "조회 학기 정보가 올바르지 않습니다.");
-        }
-
-        String normalizedSemesterCode = normalizeSemesterCode(semesterCode);
-        if (ALL_SEMESTER_CODE.equals(normalizedSemesterCode)) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT, "조회 학기는 개별 학기로 지정해야 합니다.");
-        }
-        if (!isActiveSemesterCode(normalizedSemesterCode)) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT, "존재하지 않는 학기 코드입니다.");
-        }
-        return normalizedSemesterCode;
-    }
-
-    private boolean isActiveSemesterCode(String semesterCode) {
-        return commonCodeRepository.findByCodeGroupAndCode(SEMESTER_CODE_GROUP, semesterCode)
-                .filter(CommonCode::isActive)
-                .isPresent();
     }
 
     /** 거래 원장 조회 결과를 최근 내역 카드에 필요한 필드만으로 변환한다. */
