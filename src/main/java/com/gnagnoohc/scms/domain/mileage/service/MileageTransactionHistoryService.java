@@ -191,6 +191,6 @@ public class MileageTransactionHistoryService {
                 activityType == null ? null : activityType.getActivityName(),
                 activityType == null ? null : activityType.getCategoryCode(),
                 activityType == null ? null : activityType.getEarningRoute(),
-                claim.getDetailData());
+                MileageJsonNodeConverter.toJackson3(claim.getDetailData()));
     }
 }
