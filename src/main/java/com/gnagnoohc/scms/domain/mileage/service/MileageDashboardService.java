@@ -4,8 +4,6 @@ import com.gnagnoohc.scms.domain.competency.entity.Competency;
 import com.gnagnoohc.scms.domain.competency.repository.CompetencyRepository;
 import com.gnagnoohc.scms.domain.mileage.DTO.MileageDashboardResponse;
 import com.gnagnoohc.scms.domain.mileage.repository.ExternalActivityClaimRepository;
-import com.gnagnoohc.scms.domain.mileage.repository.MileageBenefitApplicationRepository;
-import com.gnagnoohc.scms.domain.mileage.repository.MileageBenefitPolicyRepository;
 import com.gnagnoohc.scms.domain.mileage.repository.MileageTransactionRepository;
 import com.gnagnoohc.scms.global.common.entity.CommonCode;
 import com.gnagnoohc.scms.global.common.repository.CommonCodeRepository;
@@ -30,13 +28,10 @@ public class MileageDashboardService {
 
     private static final int RECENT_ITEM_LIMIT = 5;
     private static final int SEMESTER_TREND_LIMIT = 4;
-    private static final String ALL_SEMESTER_CODE = "ALL";
     private static final String SEMESTER_CODE_GROUP = "SEMESTER";
 
     private final MileageTransactionRepository mileageTransactionRepository;
     private final ExternalActivityClaimRepository externalActivityClaimRepository;
-    private final MileageBenefitPolicyRepository mileageBenefitPolicyRepository;
-    private final MileageBenefitApplicationRepository mileageBenefitApplicationRepository;
     private final CompetencyRepository competencyRepository;
     private final MileageAcademicPeriodService mileageAcademicPeriodService;
     private final CommonCodeRepository commonCodeRepository;
@@ -68,25 +63,11 @@ public class MileageDashboardService {
 
         PageRequest recentItems = PageRequest.of(0, RECENT_ITEM_LIMIT);
 
-        var programTypeBreakdown = mileageTransactionRepository
-                .findProgramTypeBreakdown(
-                        studentId,
-                        periodBounds.startAt(),
-                        periodBounds.endAt(),
-                        selectedSemesterCode)
-                .stream()
-                .map(item -> new MileageDashboardResponse.ProgramTypeSummary(
-                        item.getProgramTypeName(), item.getPoints()))
-                .toList();
-
         var competencyBreakdown = getCompetencyBreakdown(
                 studentId,
                 periodBounds.startAt(),
                 periodBounds.endAt(),
                 selectedSemesterCode);
-
-        var benefitProgress = getBenefitProgress(
-                studentId, selectedSemesterCode, cumulativePoints);
 
         var semesterTrend = getSemesterTrend(
                 studentId,
@@ -104,8 +85,6 @@ public class MileageDashboardService {
                         annualPoints,
                         cumulativePoints,
                         mileageTransactionRepository.findLastPostedAt(studentId)),
-                benefitProgress,
-                programTypeBreakdown,
                 competencyBreakdown,
                 semesterTrend,
                 recentTransactions,
@@ -145,88 +124,6 @@ public class MileageDashboardService {
                         item.getClaimStatus(),
                         item.getRejectionReason()))
                 .toList();
-    }
-
-    /** 선택 학기에 활성인 인증·장학 정책을 누적 마일리지 기준으로 판정한다. */
-    private List<MileageDashboardResponse.BenefitProgress> getBenefitProgress(
-            Integer studentId,
-            String semesterCode,
-            BigDecimal cumulativePoints
-    ) {
-        var benefitPolicies = mileageBenefitPolicyRepository
-                .findByActiveTrueAndSemesterCodeInOrderByMinimumPointsAsc(
-                        List.of(semesterCode, ALL_SEMESTER_CODE));
-
-        if (benefitPolicies.isEmpty()) {
-            return List.of();
-        }
-
-        var applicationStatuses = mileageBenefitApplicationRepository
-                .findApplicationStatuses(
-                        studentId,
-                        benefitPolicies.stream()
-                                .map(policy -> policy.getBenefitPolicyId())
-                                .toList())
-                .stream()
-                .collect(Collectors.toMap(
-                        MileageBenefitApplicationRepository.ApplicationStatusProjection::getBenefitPolicyId,
-                        MileageBenefitApplicationRepository.ApplicationStatusProjection::getApplicationStatus,
-                        (first, ignored) -> first));
-
-        Instant now = Instant.now();
-        return benefitPolicies.stream()
-                .map(policy -> toBenefitProgress(policy, cumulativePoints,
-                        applicationStatuses.get(policy.getBenefitPolicyId()), now))
-                .toList();
-    }
-
-    /** 정책별 목표 점수, 부족 점수, 신청 가능 상태를 하나의 응답으로 만든다. */
-    private MileageDashboardResponse.BenefitProgress toBenefitProgress(
-            com.gnagnoohc.scms.domain.mileage.entity.MileageBenefitPolicy policy,
-            BigDecimal cumulativePoints,
-            String applicationStatus,
-            Instant now
-    ) {
-        BigDecimal shortagePoints = policy.getMinimumPoints()
-                .subtract(cumulativePoints)
-                .max(BigDecimal.ZERO);
-        String progressStatus = resolveBenefitProgressStatus(
-                policy, shortagePoints, applicationStatus, now);
-
-        return new MileageDashboardResponse.BenefitProgress(
-                policy.getBenefitPolicyId(),
-                policy.getBenefitType(),
-                policy.getBenefitName(),
-                policy.getMinimumPoints(),
-                cumulativePoints,
-                shortagePoints,
-                policy.getBenefitAmount(),
-                progressStatus,
-                applicationStatus,
-                "ELIGIBLE".equals(progressStatus)
-        );
-    }
-
-    /** 신청 이력, 누적 점수, 신청 기간 순서로 정책의 현재 상태를 결정한다. */
-    private String resolveBenefitProgressStatus(
-            com.gnagnoohc.scms.domain.mileage.entity.MileageBenefitPolicy policy,
-            BigDecimal shortagePoints,
-            String applicationStatus,
-            Instant now
-    ) {
-        if (applicationStatus != null) {
-            return "APPLIED";
-        }
-        if (shortagePoints.signum() > 0) {
-            return "INSUFFICIENT_POINTS";
-        }
-        if (policy.getApplicationStartsAt() != null && now.isBefore(policy.getApplicationStartsAt())) {
-            return "APPLICATION_NOT_OPEN";
-        }
-        if (policy.getApplicationEndsAt() != null && !now.isBefore(policy.getApplicationEndsAt())) {
-            return "APPLICATION_CLOSED";
-        }
-        return "ELIGIBLE";
     }
 
     /** 활성 최상위 핵심역량을 모두 반환해 점수가 0인 역량도 차트에 표시한다. */
@@ -274,7 +171,8 @@ public class MileageDashboardService {
                 .findSemesterTrendByStudent(
                         studentId,
                         periodBounds.startAt(),
-                        periodBounds.endAt())
+                        periodBounds.endAt(),
+                        semesterCode)
                 .stream()
                 .collect(Collectors.toMap(
                         item -> mileageSemesterCodeValidator.normalize(item.getSemesterCode()),

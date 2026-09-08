@@ -136,32 +136,9 @@ public interface MileageTransactionRepository extends JpaRepository<MileageTrans
               and t.transactionStatus = 'POSTED'
               and coalesce(t.postedAt, t.createdAt) >= :periodStart
               and coalesce(t.postedAt, t.createdAt) < :periodEnd
-              and p.semesterCode <> 'ALL'
             group by p.semesterCode
             """)
     List<SemesterTrendProjection> findSemesterTrendByStudent(
-            @Param("studentId") Integer studentId,
-            @Param("periodStart") Instant periodStart,
-            @Param("periodEnd") Instant periodEnd
-    );
-
-    /** 지정한 학사기간의 확정 적립 점수를 비교과 프로그램 유형별로 합산한다. */
-    @Query("""
-            select pt.codeName as programTypeName,
-                   coalesce(sum(t.points), 0) as points
-            from MileageTransaction t
-            join t.mileagePolicy p
-            join p.activityType activityType
-            join activityType.programTypeCode pt
-            where t.student.userId = :studentId
-              and t.transactionStatus = 'POSTED'
-              and coalesce(t.postedAt, t.createdAt) >= :periodStart
-              and coalesce(t.postedAt, t.createdAt) < :periodEnd
-              and (p.semesterCode = :semesterCode or p.semesterCode = 'ALL')
-            group by pt.codeName
-            order by sum(t.points) desc
-            """)
-    List<ProgramTypeSummaryProjection> findProgramTypeBreakdown(
             @Param("studentId") Integer studentId,
             @Param("periodStart") Instant periodStart,
             @Param("periodEnd") Instant periodEnd,
@@ -202,9 +179,9 @@ public interface MileageTransactionRepository extends JpaRepository<MileageTrans
                    t.points as points,
                    t.transactionStatus as transactionStatus,
                    coalesce(
-                       pa.program.programName,
+                       paProgram.programName,
                        ec.activityName,
-                       reversalPa.program.programName,
+                       reversalPaProgram.programName,
                        reversalEc.activityName,
                        reversalActivityType.activityName,
                        activityType.activityName,
@@ -216,9 +193,11 @@ public interface MileageTransactionRepository extends JpaRepository<MileageTrans
             left join t.mileagePolicy p
             left join p.activityType activityType
             left join t.sourceProgramApplication pa
+            left join pa.program paProgram
             left join t.sourceExternalClaim ec
             left join t.reversalOfTransaction reversal
             left join reversal.sourceProgramApplication reversalPa
+            left join reversalPa.program reversalPaProgram
             left join reversal.sourceExternalClaim reversalEc
             left join reversal.mileagePolicy reversalPolicy
             left join reversalPolicy.activityType reversalActivityType
@@ -232,9 +211,12 @@ public interface MileageTransactionRepository extends JpaRepository<MileageTrans
     );
 
     /**
-     * 학생 본인의 확정 적립 거래를 최신순 페이지로 조회한다.
-     * periodStart가 null이면 학기 필터 없이 전체 이력을 반환하고,
-     * 지정되면 sumPostedPointsByStudentAndPeriod와 동일하게 해당 기간의 선택 학기 또는 ALL 정책 거래만 반환한다.
+     * 학생 본인의 확정 적립 거래를 학기 필터 없이 전체 이력으로 최신순 페이지 조회한다.
+     *
+     * <p>periodStart/semesterCode를 항상 null로 바인딩하는 대신 별도 쿼리로 분리했다.
+     * {@code (:periodStart is null or ...)} 형태로 IS NULL 비교에서만 쓰이는 파라미터를
+     * NULL로 바인딩하면 PostgreSQL이 파라미터 타입을 추론하지 못해
+     * "could not determine data type of parameter" 오류로 500이 발생했다.</p>
      */
     @Query(value = """
             select t.mileageTransactionId as transactionId,
@@ -242,9 +224,9 @@ public interface MileageTransactionRepository extends JpaRepository<MileageTrans
                    t.points as points,
                    t.transactionStatus as transactionStatus,
                    coalesce(
-                       pa.program.programName,
+                       paProgram.programName,
                        ec.activityName,
-                       reversalPa.program.programName,
+                       reversalPaProgram.programName,
                        reversalEc.activityName,
                        reversalActivityType.activityName,
                        activityType.activityName,
@@ -263,19 +245,77 @@ public interface MileageTransactionRepository extends JpaRepository<MileageTrans
             left join t.mileagePolicy p
             left join p.activityType activityType
             left join t.sourceProgramApplication pa
+            left join pa.program paProgram
             left join t.sourceExternalClaim ec
             left join t.reversalOfTransaction reversal
             left join reversal.sourceProgramApplication reversalPa
+            left join reversalPa.program reversalPaProgram
             left join reversal.sourceExternalClaim reversalEc
             left join reversal.mileagePolicy reversalPolicy
             left join reversalPolicy.activityType reversalActivityType
             where t.student.userId = :studentId
               and t.transactionType = 'EARN'
               and t.transactionStatus = 'POSTED'
-              and (:periodStart is null
-                   or (coalesce(t.postedAt, t.createdAt) >= :periodStart
-                       and coalesce(t.postedAt, t.createdAt) < :periodEnd
-                       and (p.semesterCode = :semesterCode or p.semesterCode = 'ALL')))
+            order by coalesce(t.postedAt, t.createdAt) desc,
+                     t.mileageTransactionId desc
+            """,
+            countQuery = """
+                    select count(t)
+                    from MileageTransaction t
+                    where t.student.userId = :studentId
+                      and t.transactionType = 'EARN'
+                      and t.transactionStatus = 'POSTED'
+                    """)
+    Page<TransactionHistoryProjection> findAllEarnedTransactions(
+            @Param("studentId") Integer studentId,
+            Pageable pageable
+    );
+
+    /**
+     * 학생 본인의 확정 적립 거래 중 지정한 학사기간의 선택 학기 또는 ALL 정책 거래만
+     * sumPostedPointsByStudentAndPeriod와 동일한 조건으로 최신순 페이지 조회한다.
+     */
+    @Query(value = """
+            select t.mileageTransactionId as transactionId,
+                   t.transactionType as transactionType,
+                   t.points as points,
+                   t.transactionStatus as transactionStatus,
+                   coalesce(
+                       paProgram.programName,
+                       ec.activityName,
+                       reversalPaProgram.programName,
+                       reversalEc.activityName,
+                       reversalActivityType.activityName,
+                       activityType.activityName,
+                       t.transactionReason,
+                       '마일리지 정정'
+                   ) as activityName,
+                   case
+                       when pa.applicationId is not null or reversalPa.applicationId is not null
+                           then 'EXTRACURRICULAR_PROGRAM'
+                       when ec.externalClaimId is not null or reversalEc.externalClaimId is not null
+                           then 'EXTERNAL_ACTIVITY'
+                       else 'OTHER'
+                   end as sourceType,
+                   coalesce(t.postedAt, t.createdAt) as occurredAt
+            from MileageTransaction t
+            left join t.mileagePolicy p
+            left join p.activityType activityType
+            left join t.sourceProgramApplication pa
+            left join pa.program paProgram
+            left join t.sourceExternalClaim ec
+            left join t.reversalOfTransaction reversal
+            left join reversal.sourceProgramApplication reversalPa
+            left join reversalPa.program reversalPaProgram
+            left join reversal.sourceExternalClaim reversalEc
+            left join reversal.mileagePolicy reversalPolicy
+            left join reversalPolicy.activityType reversalActivityType
+            where t.student.userId = :studentId
+              and t.transactionType = 'EARN'
+              and t.transactionStatus = 'POSTED'
+              and coalesce(t.postedAt, t.createdAt) >= :periodStart
+              and coalesce(t.postedAt, t.createdAt) < :periodEnd
+              and (p.semesterCode = :semesterCode or p.semesterCode = 'ALL')
             order by coalesce(t.postedAt, t.createdAt) desc,
                      t.mileageTransactionId desc
             """,
@@ -286,10 +326,9 @@ public interface MileageTransactionRepository extends JpaRepository<MileageTrans
                     where t.student.userId = :studentId
                       and t.transactionType = 'EARN'
                       and t.transactionStatus = 'POSTED'
-                      and (:periodStart is null
-                           or (coalesce(t.postedAt, t.createdAt) >= :periodStart
-                               and coalesce(t.postedAt, t.createdAt) < :periodEnd
-                               and (p.semesterCode = :semesterCode or p.semesterCode = 'ALL')))
+                      and coalesce(t.postedAt, t.createdAt) >= :periodStart
+                      and coalesce(t.postedAt, t.createdAt) < :periodEnd
+                      and (p.semesterCode = :semesterCode or p.semesterCode = 'ALL')
                     """)
     Page<TransactionHistoryProjection> findEarnedTransactions(
             @Param("studentId") Integer studentId,
@@ -306,13 +345,6 @@ public interface MileageTransactionRepository extends JpaRepository<MileageTrans
             String transactionType,
             String transactionStatus
     );
-
-    /** 프로그램 유형별 점수 집계 쿼리의 조회 전용 결과다. */
-    interface ProgramTypeSummaryProjection {
-        String getProgramTypeName();
-
-        BigDecimal getPoints();
-    }
 
     /** 핵심역량별 점수 집계 쿼리의 조회 전용 결과다. */
     interface CompetencySummaryProjection {
