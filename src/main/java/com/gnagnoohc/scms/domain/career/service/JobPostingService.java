@@ -110,7 +110,13 @@ public class JobPostingService {
      */
     public List<JobPostingSummaryResponseDTO> getLatestJobPostingsForSlider() {
         Pageable topTen = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "jobPostingId"));
-        Page<JobPosting> postingPage = jobPostingRepository.searchStudentPostings(null, topTen);
+//        Page<JobPosting> postingPage = jobPostingRepository.searchStudentPostings(null, topTen);
+
+        // null 대신 빈 검색 조건 DTO 전달하여 NPE 방지
+        Page<JobPosting> postingPage = jobPostingRepository.searchStudentPostings(
+                new JobPostingSearchConditionDTO(),
+                topTen
+        );
         return postingPage.getContent().stream()
                 .map(this::convertToSummaryDTO)
                 .toList();

@@ -31,8 +31,20 @@ public class StudentProfileService {
 
     @Transactional
     public void syncStudentEmbeddingFromNcs(Integer userId, String ncsCode) {
+//        if (ncsCode == null || ncsCode.isBlank()) {
+//            log.debug("[StudentProfile] NCS 코드가 없어 벡터 동기화를 생략합니다. (userId: {})", userId);
+//            return;
+//        }
+
+        // 1. ncsCode가 없거나 빈 값이면 기존 프로필 벡터를 비워줌 (무효화)
         if (ncsCode == null || ncsCode.isBlank()) {
-            log.debug("[StudentProfile] NCS 코드가 없어 벡터 동기화를 생략합니다. (userId: {})", userId);
+            log.debug("[StudentProfile] NCS 코드가 없어 프로필 벡터를 초기화합니다. (userId: {})", userId);
+
+            // 프로필이 이미 존재하는 경우에만 벡터를 null로 업데이트
+            studentProfileRepository.findById(userId).ifPresent(profile -> {
+                profile.updateEmbeddingVector(null);
+                studentProfileRepository.saveAndFlush(profile);
+            });
             return;
         }
 
@@ -49,16 +61,28 @@ public class StudentProfileService {
                 .orElse(null);
 
         // 3. 없을 경우 전체 유효 벡터 Fallback
-        if (targetVector == null) {
-            targetVector = ncsStandardRepository.findAll().stream()
-                    .map(NcsStandard::getEmbeddingVector)
-                    .filter(vec -> vec != null && vec.length > 0)
-                    .findFirst()
-                    .orElse(null);
-        }
+//        if (targetVector == null) {
+//            targetVector = ncsStandardRepository.findAll().stream()
+//                    .map(NcsStandard::getEmbeddingVector)
+//                    .filter(vec -> vec != null && vec.length > 0)
+//                    .findFirst()
+//                    .orElse(null);
+//        }
+//
+//        if (targetVector == null) {
+//            log.warn("[StudentProfile] 적재 가능한 NCS 표준 벡터가 원장에 전혀 존재하지 않습니다.");
+//            return;
+//        }
 
+        // 엉뚱한 직무 공고가 추천되지 않도록 전체 유효 벡터 Fallback 로직은 완전히 제거함!
         if (targetVector == null) {
-            log.warn("[StudentProfile] 적재 가능한 NCS 표준 벡터가 원장에 전혀 존재하지 않습니다.");
+            log.warn("[StudentProfile] 대분류({})에 일치하는 NCS 표준 벡터가 존재하지 않아 벡터를 비웁니다.", majorCategoryPrefix);
+
+            // 매칭되는 벡터가 없어도 기존 벡터를 null로 초기화 갱신
+            studentProfileRepository.findById(userId).ifPresent(profile -> {
+                profile.updateEmbeddingVector(null);
+                studentProfileRepository.saveAndFlush(profile);
+            });
             return;
         }
 

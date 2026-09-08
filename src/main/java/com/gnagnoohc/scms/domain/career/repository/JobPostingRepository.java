@@ -62,6 +62,7 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, Integer>
             WHERE jp.posting_status = 'PUBLISHED'
               AND (jp.application_ends_at IS NULL OR jp.application_ends_at >= :now)
             ORDER BY jp.created_at DESC
+            LIMIT :topK
             """, nativeQuery = true)
     List<JobPosting> findVectorRecommendedPostings(
             @Param("embeddingVector") String embeddingVector,
