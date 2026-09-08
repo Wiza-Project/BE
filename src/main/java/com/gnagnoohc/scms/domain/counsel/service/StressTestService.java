@@ -11,7 +11,6 @@ import com.gnagnoohc.scms.domain.counsel.repository.PsychologicalTestQuestionRep
 import com.gnagnoohc.scms.domain.counsel.repository.PsychologicalTestResultRepository;
 import com.gnagnoohc.scms.domain.user.entity.AppUser;
 import com.gnagnoohc.scms.domain.user.entity.UserConsent;
-import com.gnagnoohc.scms.domain.user.repository.AppUserRepository;
 import com.gnagnoohc.scms.domain.user.service.consent.ConsentModuleCode;
 import com.gnagnoohc.scms.domain.user.service.consent.ConsentType;
 import com.gnagnoohc.scms.domain.user.service.consent.ConsentVerifier;
@@ -52,7 +51,6 @@ public class StressTestService {
     );
 
     private final CounselUserRepository counselUserRepository;
-    private final AppUserRepository appUserRepository;
     private final PsychologicalTestQuestionRepository psychologicalTestQuestionRepository;
     private final PsychologicalTestResultRepository psychologicalTestResultRepository;
     private final ConsentVerifier consentVerifier;
@@ -73,12 +71,13 @@ public class StressTestService {
     }
 
     /**
-     * 설계 6.2의 순서를 그대로 따른다: 활성 학생 → 버전 → 문항 구성 → 답변 → 채점 → 동의 잠금 → 저장.
-     * 입력 오류를 먼저 걸러낸 뒤 저장 직전에만 동의 행을 잠가, 검증에 걸리는 시간만큼 잠금을 쥐고
-     * 있지 않게 한다.
+     * 설계 6.2의 순서를 그대로 따른다: 버전 → 문항 구성 → 답변 → 채점 → 학생 잠금 → 동의 검증 → 저장.
+     * 입력 오류를 먼저 걸러낸 뒤 결과를 저장하기 직전에만 학생 행을 잠가, 검증에 걸리는 시간만큼
+     * 제안 생성과 다른 제출을 대기시키지 않는다.
      */
     @Transactional
     public StressTestResultResponse submit(Integer studentId, StressTestSubmitRequest request) {
+        // 권한 확인은 잠금이 없는 조회로 먼저 끝내고, 계정 상태는 저장 직전 잠금 아래에서 다시 확인한다.
         ensureActiveStudent(studentId);
         if (!TEST_VERSION.equals(request.testVersion())) {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
@@ -87,6 +86,11 @@ public class StressTestService {
         int totalScore = scoreAnswers(questions, request.answers());
         ScoreJudgment judgment = judgeScore(totalScore);
 
+        // 상담 제안 생성(CounselingProposalService.create)도 대상 학생 행을 PESSIMISTIC_WRITE로
+        // 잠근 뒤 "최신 STRESS 결과"를 재확인한다. 순수 검증·채점이 끝난 뒤 같은 학생 행을
+        // 잠가 동의 검증과 결과 저장을 직렬화하므로, 제안 생성 직후 이 제출이 먼저 커밋되는
+        // 경쟁에서 제안이 이미 최신이 아닌 결과를 대상으로 만들어지는 것을 막는다(설계 5.1).
+        AppUser student = getActiveStudentForUpdate(studentId);
         Instant now = Instant.now();
         UserConsent consentCandidate = consentVerifier.findCurrentValidConsent(
                         studentId, ConsentModuleCode.COUNSELING, ConsentType.PERSONAL_INFO, now)
@@ -109,8 +113,6 @@ public class StressTestService {
             throw e;
         }
 
-        // 존재가 이미 isActiveStudent로 확인된 학생이므로 추가 조회 없이 지연 참조만 만들어 FK로 연결한다.
-        AppUser student = appUserRepository.getReferenceById(studentId);
         PsychologicalTestResult result = PsychologicalTestResult.createSelfTestResult(
                 student,
                 TEST_TYPE,
@@ -141,6 +143,21 @@ public class StressTestService {
         if (!counselUserRepository.isActiveStudent(studentId)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
+    }
+
+    /**
+     * submit() 전용이다. 조회만 하는 ensureActiveStudent와 달리 학생 행을 PESSIMISTIC_WRITE로
+     * 잠근 뒤 활성 학생인지 다시 확인하고, 잠근 엔티티를 그대로 결과 생성에 사용한다.
+     */
+    private AppUser getActiveStudentForUpdate(Integer studentId) {
+        AppUser student = counselUserRepository.findByIdForUpdate(studentId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
+        boolean active = "STUDENT".equals(student.getUserType())
+                && "ACTIVE".equals(student.getAccountStatus());
+        if (!active) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        return student;
     }
 
     /**
