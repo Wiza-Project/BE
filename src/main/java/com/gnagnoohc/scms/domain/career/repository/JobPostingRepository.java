@@ -58,7 +58,7 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, Integer>
             SELECT DISTINCT jp.*
             FROM job_posting jp
             JOIN common_code cc ON jp.ncs_code_id = cc.code_id
-            JOIN top_ncs tn ON cc.code = tn.ncs_code
+            JOIN top_ncs tn ON SUBSTRING(tn.ncs_code, 1, 2) = SUBSTRING(REPLACE(REPLACE(cc.code, 'NCS_', ''), 'NC', ''), 1, 2)
             WHERE jp.posting_status = 'PUBLISHED'
               AND (jp.application_ends_at IS NULL OR jp.application_ends_at >= :now)
             ORDER BY jp.created_at DESC

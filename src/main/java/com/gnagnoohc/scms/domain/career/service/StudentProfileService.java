@@ -28,6 +28,7 @@ public class StudentProfileService {
      * @param userId  학생 사용자 PK
      * @param ncsCode 선택된 NCS 8자리 직무 코드 (예: "20010102")
      */
+
     @Transactional
     public void syncStudentEmbeddingFromNcs(Integer userId, String ncsCode) {
         if (ncsCode == null || ncsCode.isBlank()) {
@@ -35,31 +36,49 @@ public class StudentProfileService {
             return;
         }
 
-        // 1. ncs_standard 원장에서 해당 직무의 사전 적재된 임베딩 벡터 조회
-        NcsStandard ncsStandard = ncsStandardRepository.findByNcsCode(ncsCode)
+        // 1. 코드 값 정규화 ('NC100', 'NCS_01' -> 대분류 번호 '10', '01' 등 추출)
+        String cleanCode = ncsCode.replace("NCS_", "").replace("NC", "").trim();
+        String majorCategoryPrefix = cleanCode.length() >= 2 ? cleanCode.substring(0, 2) : cleanCode;
+
+        // 2. ncs_standard에서 대분류 계열이 일치하고 벡터가 존재하는 표준 직무 탐색
+        float[] targetVector = ncsStandardRepository.findAll().stream()
+                .filter(ncs -> ncs.getNcsCode() != null && ncs.getNcsCode().startsWith(majorCategoryPrefix))
+                .map(NcsStandard::getEmbeddingVector)
+                .filter(vec -> vec != null && vec.length > 0)
+                .findFirst()
                 .orElse(null);
-        // ncs_standard에 사전에 생성된 벡터가 없는 경우 방어로직 (배포 시 Ollama가 없으므로 새로 만들지 않고 스킵)
-        if (ncsStandard == null || ncsStandard.getEmbeddingVector() == null) {
-            log.warn("[StudentProfile] 해당 NCS 코드({})의 사전 적재된 임베딩 벡터가 존재하지 않습니다.", ncsCode);
+
+        // 3. 없을 경우 전체 유효 벡터 Fallback
+        if (targetVector == null) {
+            targetVector = ncsStandardRepository.findAll().stream()
+                    .map(NcsStandard::getEmbeddingVector)
+                    .filter(vec -> vec != null && vec.length > 0)
+                    .findFirst()
+                    .orElse(null);
+        }
+
+        if (targetVector == null) {
+            log.warn("[StudentProfile] 적재 가능한 NCS 표준 벡터가 원장에 전혀 존재하지 않습니다.");
             return;
         }
 
-        float[] targetVector = ncsStandard.getEmbeddingVector();
-
-        // 2. 학생 엔티티(AppUser) 확보
+        // 4. 학생 계정 조회
         AppUser student = appUserRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
-        // 3. student_profile 엔티티 조회 또는 AppUser를 주입하여 신규 생성
+        // 5. student_profile 엔티티 조회 또는 새로 생성
         StudentProfile profile = studentProfileRepository.findById(userId)
                 .orElseGet(() -> StudentProfile.builder()
-                        .user(student) // 또는 엔티티 필드명에 따라 .student(student)
+                        .user(student)
+                        .studentGrade("3")
                         .build());
 
-        // 4. 벡터 갱신 및 저장
+        // 6. 변경된 직무 계열의 벡터로 갱신 및 즉시 플러시
         profile.updateEmbeddingVector(targetVector);
-        studentProfileRepository.save(profile);
+        studentProfileRepository.saveAndFlush(profile);
 
-        log.info("[StudentProfile] 학생(userId: {}) 임베딩 벡터 동기화 완료 (NCS 코드: {})", userId, ncsCode);
+        log.info("[StudentProfile] 학생(userId: {}) 임베딩 벡터 동기화 완료 (직무 대분류: {}, 반영 코드: {})",
+                userId, majorCategoryPrefix, ncsCode);
     }
+
 }
