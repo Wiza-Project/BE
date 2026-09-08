@@ -22,9 +22,13 @@ import com.gnagnoohc.scms.domain.user.service.consent.ConsentModuleCode;
 import com.gnagnoohc.scms.domain.user.service.consent.ConsentType;
 import com.gnagnoohc.scms.domain.user.service.consent.ConsentVerifier;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;
+import com.gnagnoohc.scms.global.common.service.AuditAction;
+import com.gnagnoohc.scms.global.common.service.AuditLogService;
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -44,8 +48,12 @@ import java.time.Instant;
 @Transactional(readOnly = true)
 public class CounselorReservationService {
 
+    private static final Logger log = LoggerFactory.getLogger(CounselorReservationService.class);
+
     // 학번 조회 입력 상한. 확정 ERD의 university_no 컬럼 길이(30자)와 맞춘다.
     private static final int MAX_UNIVERSITY_NO_LENGTH = 30;
+    // 학생 학번 조회 감사 로그의 resourceType. 성공은 조회된 내부 studentId, 실패는 null로 남긴다.
+    private static final String STUDENT_PROFILE_RESOURCE_TYPE = "STUDENT_PROFILE";
 
     private final CounselUserRepository counselUserRepository;
     private final CounselingTypeRepository counselingTypeRepository;
@@ -56,6 +64,7 @@ public class CounselorReservationService {
     private final CounselingScheduleService counselingScheduleService;
     private final ConsentVerifier consentVerifier;
     private final ApplicationEventPublisher eventPublisher;
+    private final AuditLogService auditLogService;
 
     /**
      * ST300 단독(CAREER_ONLY) 상담사는 자신의 CS200 예약만 대기 목록에서 봐야 하므로, 조회 조건 자체에
@@ -96,15 +105,38 @@ public class CounselorReservationService {
      * 같은 U001로 응답하고, "지도학생이 아니다"라는 사실을 별도 코드로 노출하지 않는다.</p>
      */
     public CounselorStudentLookupResponse lookupStudent(Integer counselorId, String universityNo) {
-        CounselManagementAccessPolicy.Scope scope = counselManagementAccessPolicy.requireScope(counselorId);
-        String trimmed = universityNo == null ? "" : universityNo.trim();
-        if (trimmed.isEmpty() || trimmed.length() > MAX_UNIVERSITY_NO_LENGTH) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        try {
+            CounselManagementAccessPolicy.Scope scope = counselManagementAccessPolicy.requireScope(counselorId);
+            String trimmed = universityNo == null ? "" : universityNo.trim();
+            if (trimmed.isEmpty() || trimmed.length() > MAX_UNIVERSITY_NO_LENGTH) {
+                throw new BusinessException(ErrorCode.INVALID_INPUT);
+            }
+            var result = scope == CounselManagementAccessPolicy.Scope.CAREER_ONLY
+                    ? counselUserRepository.findActiveAdviseeByUniversityNo(trimmed, counselorId)
+                    : counselUserRepository.findActiveStudentByUniversityNo(trimmed);
+            CounselorStudentLookupResponse response = result
+                    .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+            // 성공만 조회된 내부 studentId로 대상을 남긴다. 학번 문자열·학생 이름은 감사 로그에 넣지 않는다.
+            recordAuditSafely(() -> auditLogService.recordAccess(
+                    counselorId, STUDENT_PROFILE_RESOURCE_TYPE, response.studentId()
+            ));
+            return response;
+        } catch (RuntimeException e) {
+            // 실패는 학번 존재 여부·권한 범위를 숨기기 위해 대상 ID 없이 실패만 남긴다.
+            recordAuditSafely(() -> auditLogService.recordFailure(
+                    counselorId, STUDENT_PROFILE_RESOURCE_TYPE, null, AuditAction.READ
+            ));
+            throw e;
         }
-        var result = scope == CounselManagementAccessPolicy.Scope.CAREER_ONLY
-                ? counselUserRepository.findActiveAdviseeByUniversityNo(trimmed, counselorId)
-                : counselUserRepository.findActiveStudentByUniversityNo(trimmed);
-        return result.orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+    }
+
+    /** 감사 로그 기록 실패가 학생 조회 결과(응답 코드·데이터)에 영향을 주지 않도록 예외를 흡수한다(fail-open). */
+    private void recordAuditSafely(Runnable recorder) {
+        try {
+            recorder.run();
+        } catch (RuntimeException e) {
+            log.warn("학생 조회 감사 로그 기록에 실패했습니다.");
+        }
     }
 
     /**

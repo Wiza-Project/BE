@@ -4,8 +4,10 @@ import com.gnagnoohc.scms.domain.counsel.dto.request.CounselingProposalCreateReq
 import com.gnagnoohc.scms.domain.counsel.dto.response.CounselingProposalEligibleResultResponse;
 import com.gnagnoohc.scms.domain.counsel.dto.response.CounselingProposalResponse;
 import com.gnagnoohc.scms.domain.counsel.service.CounselingProposalService;
+import com.gnagnoohc.scms.global.common.audit.AuditTrail;
 import com.gnagnoohc.scms.global.common.dto.ApiResponse;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;
+import com.gnagnoohc.scms.global.common.service.AuditAction;
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
 import com.gnagnoohc.scms.global.security.AuthUser;
@@ -34,6 +36,7 @@ public class CounselorCounselingProposalController {
 
     private final CounselingProposalService counselingProposalService;
 
+    @AuditTrail(resourceType = "PSYCHOLOGICAL_TEST_RESULT", action = AuditAction.READ)
     @GetMapping("/eligible-results")
     public ApiResponse<PageResponse<CounselingProposalEligibleResultResponse>> getEligibleResults(
             @RequestParam(defaultValue = "0") int page,
