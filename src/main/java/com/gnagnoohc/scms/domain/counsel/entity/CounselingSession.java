@@ -122,6 +122,25 @@ public class CounselingSession extends BaseTimeEntity {
         this.cancellationReason = trimmed;
     }
 
+    // 예약 취소로 인한 자동 취소 사유는 학생이 입력한 예약 취소 사유와 절대 섞이지 않도록 고정 문구만 쓴다.
+    private static final String RESERVATION_CANCELED_REASON = "예약 취소로 회기가 자동 취소되었습니다.";
+
+    /**
+     * 승인된 예약이 취소될 때 그 배정 아래 PLANNED 회기를 함께 종료하기 위한 전용 상태 전이다.
+     * 상담사가 개별 회기를 취소하는 cancel(reason, now)와는 의미가 다르다 — 이쪽은 학생의 취소 사유를
+     * 절대 복사하지 않고 고정 문구만 쓰며, 회기 시작 시각이 이미 지났어도(cancel()과 달리 시각 제약
+     * 없이) 일관되게 취소해야 한다(예약이 취소된 이상 그 아래 계획 회기가 남아있으면 안 되기 때문).
+     */
+    public void cancelDueToReservationCancellation() {
+        if (!SESSION_PLANNED.equals(sessionStatus)) {
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR);
+        }
+        this.sessionStatus = SESSION_CANCELED;
+        this.attendanceStatus = ATTENDANCE_SCHEDULED;
+        this.nextSessionAt = null;
+        this.cancellationReason = RESERVATION_CANCELED_REASON;
+    }
+
     /** 응답의 canComplete 계산에 쓰는 파생 판정. now는 서비스가 값으로 넘긴다. */
     public boolean isCompletable(Instant now) {
         return SESSION_PLANNED.equals(sessionStatus) && endsAt != null && now.isAfter(endsAt);

@@ -64,14 +64,16 @@ public class CounselingPrivateRecordService {
     @Transactional
     public CounselingPrivateRecordResponse saveDraft(Integer sessionId, String privateContent, Integer counselorId) {
         CounselManagementAccessPolicy.Scope scope = counselManagementAccessPolicy.requireScope(counselorId);
-        CounselingSession session = counselingSessionRepository.findByIdForUpdate(sessionId)
+        // 예약 취소가 "예약 → 배정 → 회기" 순서로 잠그므로, 이 메서드도 회기보다 배정을 먼저 잠가야
+        // 두 트랜잭션이 반대 순서로 자원을 기다리다 교착되지 않는다. 잠금 없는 스칼라 조회로 배정 ID를
+        // 먼저 식별한 뒤(권한 확인 완료로 간주하지 않음) 배정 → 회기 순서로 잠그고, 잠근 엔티티에서
+        // 소유권·유형·상태를 기존과 같은 순서·에러코드로 다시 검증한다.
+        Integer assignmentId = counselingSessionRepository
+                .findOwnedAssignmentIdBySessionId(sessionId, counselorId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SESSION_NOT_FOUND));
-        // 배정 종료(예약 취소)가 예약 행만 잠그고 이 회기 행과는 다른 행이라 직렬화되지 않는다.
-        // 배정 행도 잠가야 "활성 여부를 확인한 시점"이 커밋까지 유효함을 보장한다. session.getCounselingAssignment()의
-        // isOwnedBy/isActive를 먼저 호출하면 프록시가 초기화돼 이 잠금으로도 필드가 갱신되지 않을 수 있으므로,
-        // 이 잠금 조회가 배정에 대한 첫 접근이어야 한다(CounselingSessionService.complete()와 같은 패턴).
-        Integer assignmentId = session.getCounselingAssignment().getCounselingAssignmentId();
         CounselingAssignment assignment = counselingAssignmentRepository.findByIdForUpdate(assignmentId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.SESSION_NOT_FOUND));
+        CounselingSession session = counselingSessionRepository.findByIdForUpdate(sessionId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SESSION_NOT_FOUND));
         if (!assignment.isOwnedBy(counselorId)) {
             throw new BusinessException(ErrorCode.SESSION_NOT_FOUND);
