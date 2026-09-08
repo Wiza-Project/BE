@@ -1,5 +1,6 @@
 package com.gnagnoohc.scms.domain.mileage.service;
 
+import com.gnagnoohc.scms.domain.competency.entity.AssessmentAttempt;
 import com.gnagnoohc.scms.domain.mileage.DTO.MileageTransactionHistoryResponse;
 import com.gnagnoohc.scms.domain.mileage.entity.MileageActivityType;
 import com.gnagnoohc.scms.domain.mileage.entity.MileagePolicy;
@@ -90,7 +91,7 @@ public class MileageTransactionHistoryService {
                 transaction.getPostedAt() != null
                         ? transaction.getPostedAt()
                         : transaction.getCreatedAt(),
-                resolveSourceType(programApplication),
+                resolveSourceType(transaction, programApplication),
                 toPolicyDetail(policy),
                 toProgramDetail(programApplication));
     }
@@ -113,9 +114,21 @@ public class MileageTransactionHistoryService {
                 : transaction.getReversalOfTransaction().getSourceProgramApplication();
     }
 
-    private String resolveSourceType(ProgramApplication programApplication) {
+    private AssessmentAttempt resolveAssessmentAttempt(MileageTransaction transaction) {
+        if (transaction.getSourceAssessmentAttempt() != null) {
+            return transaction.getSourceAssessmentAttempt();
+        }
+        return transaction.getReversalOfTransaction() == null
+                ? null
+                : transaction.getReversalOfTransaction().getSourceAssessmentAttempt();
+    }
+
+    private String resolveSourceType(MileageTransaction transaction, ProgramApplication programApplication) {
         if (programApplication != null) {
             return "EXTRACURRICULAR_PROGRAM";
+        }
+        if (resolveAssessmentAttempt(transaction) != null) {
+            return "COMPETENCY_DIAGNOSIS";
         }
         return "OTHER";
     }

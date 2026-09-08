@@ -227,6 +227,8 @@ public interface MileageTransactionRepository extends JpaRepository<MileageTrans
                    case
                        when pa.applicationId is not null or reversalPa.applicationId is not null
                            then 'EXTRACURRICULAR_PROGRAM'
+                       when saa.attemptId is not null or reversalSaa.attemptId is not null
+                           then 'COMPETENCY_DIAGNOSIS'
                        else 'OTHER'
                    end as sourceType,
                    coalesce(t.postedAt, t.createdAt) as occurredAt
@@ -235,9 +237,11 @@ public interface MileageTransactionRepository extends JpaRepository<MileageTrans
             left join p.activityType activityType
             left join t.sourceProgramApplication pa
             left join pa.program paProgram
+            left join t.sourceAssessmentAttempt saa
             left join t.reversalOfTransaction reversal
             left join reversal.sourceProgramApplication reversalPa
             left join reversalPa.program reversalPaProgram
+            left join reversal.sourceAssessmentAttempt reversalSaa
             left join reversal.mileagePolicy reversalPolicy
             left join reversalPolicy.activityType reversalActivityType
             where t.student.userId = :studentId
@@ -278,6 +282,8 @@ public interface MileageTransactionRepository extends JpaRepository<MileageTrans
                    case
                        when pa.applicationId is not null or reversalPa.applicationId is not null
                            then 'EXTRACURRICULAR_PROGRAM'
+                       when saa.attemptId is not null or reversalSaa.attemptId is not null
+                           then 'COMPETENCY_DIAGNOSIS'
                        else 'OTHER'
                    end as sourceType,
                    coalesce(t.postedAt, t.createdAt) as occurredAt
@@ -286,9 +292,11 @@ public interface MileageTransactionRepository extends JpaRepository<MileageTrans
             left join p.activityType activityType
             left join t.sourceProgramApplication pa
             left join pa.program paProgram
+            left join t.sourceAssessmentAttempt saa
             left join t.reversalOfTransaction reversal
             left join reversal.sourceProgramApplication reversalPa
             left join reversalPa.program reversalPaProgram
+            left join reversal.sourceAssessmentAttempt reversalSaa
             left join reversal.mileagePolicy reversalPolicy
             left join reversalPolicy.activityType reversalActivityType
             where t.student.userId = :studentId
