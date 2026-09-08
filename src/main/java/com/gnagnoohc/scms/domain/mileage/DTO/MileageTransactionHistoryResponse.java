@@ -1,6 +1,6 @@
 package com.gnagnoohc.scms.domain.mileage.DTO;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 import java.math.BigDecimal;
 import java.time.Instant;
