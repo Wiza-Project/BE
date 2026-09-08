@@ -1,10 +1,11 @@
 package com.gnagnoohc.scms.domain.mileage.DTO.response;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.gnagnoohc.scms.domain.mileage.entity.ExternalActivityClaim;
 import com.gnagnoohc.scms.domain.mileage.entity.MileageActivityType;
 import com.gnagnoohc.scms.domain.mileage.entity.MileagePolicy;
 import com.gnagnoohc.scms.domain.mileage.entity.MileageTransaction;
+import com.gnagnoohc.scms.domain.mileage.support.MileageJsonNodeConverter;
+import tools.jackson.databind.JsonNode;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -54,7 +55,7 @@ public record MileageClaimReviewDetailResponse(
                 claim.getActivityDate(),
                 claim.getActivityName(),
                 claim.getRequestedPoints(),
-                claim.getDetailData(),
+                MileageJsonNodeConverter.toJackson3(claim.getDetailData()),
                 claim.getFileGroup() == null ? null : claim.getFileGroup().getFileGroupId(),
                 claim.getClaimStatus(),
                 claim.getReviewedBy(),

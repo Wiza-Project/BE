@@ -1,7 +1,8 @@
 package com.gnagnoohc.scms.domain.mileage.DTO.response;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.gnagnoohc.scms.domain.mileage.entity.MileageBenefitPolicy;
+import com.gnagnoohc.scms.domain.mileage.support.MileageJsonNodeConverter;
+import tools.jackson.databind.JsonNode;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -32,7 +33,7 @@ public record MileageBenefitPolicyResponseDTO(
                 policy.getBenefitName(),
                 policy.getMinimumPoints(),
                 policy.getBenefitAmount(),
-                policy.getCriteriaData(),
+                MileageJsonNodeConverter.toJackson3(policy.getCriteriaData()),
                 policy.getApplicationStartsAt(),
                 policy.getApplicationEndsAt(),
                 policy.isActive(),

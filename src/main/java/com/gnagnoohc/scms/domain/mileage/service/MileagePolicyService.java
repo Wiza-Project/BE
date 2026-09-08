@@ -1,6 +1,6 @@
 package com.gnagnoohc.scms.domain.mileage.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import com.gnagnoohc.scms.domain.mileage.DTO.request.MileagePolicyRegisterRequestDTO;
 import com.gnagnoohc.scms.domain.mileage.DTO.request.MileagePolicyUpdateRequestDTO;
 import com.gnagnoohc.scms.domain.mileage.DTO.response.MileagePolicyResponseDTO;
@@ -117,14 +117,16 @@ public class MileagePolicyService {
         LocalDate validFrom = request.validFrom() != null ? request.validFrom() : policy.getValidFrom();
         LocalDate validTo = request.clearValidTo() ? null
                 : request.validTo() != null ? request.validTo() : policy.getValidTo();
-        JsonNode duplicateRule = request.duplicateRule() != null ? request.duplicateRule() : policy.getDuplicateRule();
+        String duplicateRuleJson = request.duplicateRule() != null
+                ? writeJson(request.duplicateRule())
+                : (policy.getDuplicateRule() == null ? null : policy.getDuplicateRule().toString());
         String policyStatus = request.policyStatus() != null ? request.policyStatus() : policy.getPolicyStatus();
 
         validatePeriod(validFrom, validTo);
         validatePoints(points);
 
         int updatedRows = policyRepository.updatePolicy(
-                mileagePolicyId, points, maximumPoints, validFrom, validTo, writeJson(duplicateRule), policyStatus);
+                mileagePolicyId, points, maximumPoints, validFrom, validTo, duplicateRuleJson, policyStatus);
         if (updatedRows == 0) {
             throw new BusinessException(ErrorCode.MILEAGE_POLICY_NOT_FOUND);
         }

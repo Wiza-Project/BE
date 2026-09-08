@@ -10,6 +10,7 @@ import com.gnagnoohc.scms.domain.mileage.entity.MileagePolicy;
 import com.gnagnoohc.scms.domain.mileage.repository.ExternalActivityClaimRepository;
 import com.gnagnoohc.scms.domain.mileage.repository.MileageActivityTypeRepository;
 import com.gnagnoohc.scms.domain.mileage.repository.MileagePolicyRepository;
+import com.gnagnoohc.scms.domain.mileage.support.MileageJsonNodeConverter;
 import com.gnagnoohc.scms.domain.user.entity.AppUser;
 import com.gnagnoohc.scms.domain.user.repository.AppUserRepository;
 import com.gnagnoohc.scms.global.common.entity.FileGroup;
@@ -123,7 +124,7 @@ public class MileageExternalActivityClaimService {
                 request.activityName(),
                 request.activityDate(),
                 request.requestedPoints(),
-                request.detailData(),
+                MileageJsonNodeConverter.toJackson2(request.detailData()),
                 fileGroup
         );
 

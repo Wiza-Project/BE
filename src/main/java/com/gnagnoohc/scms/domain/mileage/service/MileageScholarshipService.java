@@ -6,6 +6,7 @@ import com.gnagnoohc.scms.domain.mileage.entity.MileageBenefitPolicy;
 import com.gnagnoohc.scms.domain.mileage.repository.MileageBenefitApplicationRepository;
 import com.gnagnoohc.scms.domain.mileage.repository.MileageBenefitPolicyRepository;
 import com.gnagnoohc.scms.domain.mileage.repository.MileageTransactionRepository;
+import com.gnagnoohc.scms.domain.mileage.support.MileageJsonNodeConverter;
 import com.gnagnoohc.scms.domain.user.entity.AppUser;
 import com.gnagnoohc.scms.domain.user.repository.AppUserRepository;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;
@@ -224,7 +225,7 @@ public class MileageScholarshipService {
                 currentPoints,
                 shortagePoints,
                 policy.getBenefitAmount(),
-                policy.getCriteriaData(),
+                MileageJsonNodeConverter.toJackson3(policy.getCriteriaData()),
                 policy.getApplicationStartsAt(),
                 policy.getApplicationEndsAt(),
                 eligibilityStatus,

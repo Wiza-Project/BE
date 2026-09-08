@@ -5,6 +5,7 @@ import com.gnagnoohc.scms.domain.mileage.DTO.request.MileageBenefitPolicyUpdateR
 import com.gnagnoohc.scms.domain.mileage.DTO.response.MileageBenefitPolicyResponseDTO;
 import com.gnagnoohc.scms.domain.mileage.entity.MileageBenefitPolicy;
 import com.gnagnoohc.scms.domain.mileage.repository.MileageBenefitPolicyRepository;
+import com.gnagnoohc.scms.domain.mileage.support.MileageJsonNodeConverter;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
@@ -39,7 +40,7 @@ public class MileageBenefitPolicyService {
                 request.benefitName(),
                 request.minimumPoints(),
                 request.benefitAmount(),
-                request.criteriaData(),
+                MileageJsonNodeConverter.toJackson2(request.criteriaData()),
                 request.applicationStartsAt(),
                 request.applicationEndsAt(),
                 staffId,
@@ -86,7 +87,7 @@ public class MileageBenefitPolicyService {
                 request.benefitName(),
                 request.minimumPoints(),
                 request.benefitAmount(),
-                request.criteriaData(),
+                MileageJsonNodeConverter.toJackson2(request.criteriaData()),
                 request.applicationStartsAt(),
                 request.applicationEndsAt(),
                 request.active(),

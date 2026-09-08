@@ -6,12 +6,14 @@ import com.gnagnoohc.scms.domain.mileage.entity.MileageActivityType;
 import com.gnagnoohc.scms.domain.mileage.entity.MileagePolicy;
 import com.gnagnoohc.scms.domain.mileage.entity.MileageTransaction;
 import com.gnagnoohc.scms.domain.mileage.repository.MileageTransactionRepository;
+import com.gnagnoohc.scms.domain.mileage.support.MileageJsonNodeConverter;
 import com.gnagnoohc.scms.domain.program.entity.ExtracurricularProgram;
 import com.gnagnoohc.scms.domain.program.entity.ProgramApplication;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -42,18 +44,21 @@ public class MileageTransactionHistoryService {
     ) {
         String normalizedSemesterCode = mileageSemesterCodeValidator.normalizeSemesterCodeIfPresent(semesterCode);
         PageRequest pageRequest = PageRequest.of(pageable.getPageNumber(), PAGE_SIZE);
-        MileageAcademicPeriodService.PeriodBounds periodBounds = normalizedSemesterCode == null
-                ? null
-                : mileageAcademicPeriodService.resolveCurrentPeriodBounds();
+        Page<MileageTransactionRepository.TransactionHistoryProjection> page;
+        if (normalizedSemesterCode == null) {
+            page = mileageTransactionRepository.findAllEarnedTransactions(studentId, pageRequest);
+        } else {
+            MileageAcademicPeriodService.PeriodBounds periodBounds =
+                    mileageAcademicPeriodService.resolveCurrentPeriodBounds();
+            page = mileageTransactionRepository.findEarnedTransactions(
+                    studentId,
+                    periodBounds.startAt(),
+                    periodBounds.endAt(),
+                    normalizedSemesterCode,
+                    pageRequest);
+        }
         return PageResponse.from(
-                mileageTransactionRepository
-                        .findEarnedTransactions(
-                                studentId,
-                                periodBounds == null ? null : periodBounds.startAt(),
-                                periodBounds == null ? null : periodBounds.endAt(),
-                                normalizedSemesterCode,
-                                pageRequest)
-                        .map(item -> new MileageTransactionHistoryResponse.ListItem(
+                page.map(item -> new MileageTransactionHistoryResponse.ListItem(
                                 item.getTransactionId(),
                                 item.getActivityName(),
                                 item.getSourceType(),

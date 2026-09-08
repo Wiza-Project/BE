@@ -1,7 +1,8 @@
 package com.gnagnoohc.scms.domain.mileage.DTO.response;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.gnagnoohc.scms.domain.mileage.entity.MileagePolicy;
+import com.gnagnoohc.scms.domain.mileage.support.MileageJsonNodeConverter;
+import tools.jackson.databind.JsonNode;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -38,7 +39,7 @@ public record MileageExternalActivityPolicyResponse(
                 policy.getMaximumPoints(),
                 policy.getValidFrom(),
                 policy.getValidTo(),
-                policy.getDuplicateRule(),
+                MileageJsonNodeConverter.toJackson3(policy.getDuplicateRule()),
                 policy.getPolicyStatus()
         );
     }

@@ -1,8 +1,9 @@
 package com.gnagnoohc.scms.domain.mileage.DTO.response;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.gnagnoohc.scms.domain.mileage.entity.ExternalActivityClaim;
 import com.gnagnoohc.scms.domain.mileage.entity.MileagePolicy;
+import com.gnagnoohc.scms.domain.mileage.support.MileageJsonNodeConverter;
+import tools.jackson.databind.JsonNode;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -35,7 +36,7 @@ public record MileageExternalActivityClaimResponse(
                 claim.getActivityName(),
                 claim.getActivityDate(),
                 claim.getRequestedPoints(),
-                claim.getDetailData(),
+                MileageJsonNodeConverter.toJackson3(claim.getDetailData()),
                 claim.getFileGroup() == null ? null : claim.getFileGroup().getFileGroupId(),
                 claim.getClaimStatus(),
                 claim.getCreatedAt()
