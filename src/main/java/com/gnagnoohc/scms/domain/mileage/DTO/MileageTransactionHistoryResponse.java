@@ -1,10 +1,7 @@
 package com.gnagnoohc.scms.domain.mileage.DTO;
 
-import tools.jackson.databind.JsonNode;
-
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.time.LocalDate;
 
 /** 학생 본인의 확정 마일리지 적립 원장과 상세 정보를 위한 응답 모델. */
 public final class MileageTransactionHistoryResponse {
@@ -34,8 +31,7 @@ public final class MileageTransactionHistoryResponse {
             Instant occurredAt,
             String sourceType,
             PolicyDetail policy,
-            ProgramDetail extracurricularProgram,
-            ExternalActivityDetail externalActivity
+            ProgramDetail extracurricularProgram
     ) {
     }
 
@@ -58,22 +54,6 @@ public final class MileageTransactionHistoryResponse {
             String completionStatus,
             String certificateNo,
             Instant certificateIssuedAt
-    ) {
-    }
-
-    /** 외부활동·자격증 취득 신청으로 적립된 경우의 출처다. */
-    public record ExternalActivityDetail(
-            Integer externalClaimId,
-            String activityName,
-            LocalDate activityDate,
-            BigDecimal requestedPoints,
-            String claimStatus,
-            String reviewReason,
-            String activityCode,
-            String activityTypeName,
-            String categoryCode,
-            String earningRoute,
-            JsonNode detailData
     ) {
     }
 }

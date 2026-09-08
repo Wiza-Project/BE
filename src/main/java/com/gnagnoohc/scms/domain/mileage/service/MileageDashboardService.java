@@ -3,7 +3,6 @@ package com.gnagnoohc.scms.domain.mileage.service;
 import com.gnagnoohc.scms.domain.competency.entity.Competency;
 import com.gnagnoohc.scms.domain.competency.repository.CompetencyRepository;
 import com.gnagnoohc.scms.domain.mileage.DTO.MileageDashboardResponse;
-import com.gnagnoohc.scms.domain.mileage.repository.ExternalActivityClaimRepository;
 import com.gnagnoohc.scms.domain.mileage.repository.MileageTransactionRepository;
 import com.gnagnoohc.scms.global.common.entity.CommonCode;
 import com.gnagnoohc.scms.global.common.repository.CommonCodeRepository;
@@ -31,7 +30,6 @@ public class MileageDashboardService {
     private static final String SEMESTER_CODE_GROUP = "SEMESTER";
 
     private final MileageTransactionRepository mileageTransactionRepository;
-    private final ExternalActivityClaimRepository externalActivityClaimRepository;
     private final CompetencyRepository competencyRepository;
     private final MileageAcademicPeriodService mileageAcademicPeriodService;
     private final CommonCodeRepository commonCodeRepository;
@@ -76,8 +74,6 @@ public class MileageDashboardService {
 
         var recentTransactions = getRecentTransactions(studentId, recentItems);
 
-        var recentClaims = getRecentExternalActivityApplications(studentId, recentItems);
-
         return new MileageDashboardResponse(
                 new MileageDashboardResponse.Period(selectedSemesterCode),
                 new MileageDashboardResponse.Summary(
@@ -87,43 +83,13 @@ public class MileageDashboardService {
                         mileageTransactionRepository.findLastPostedAt(studentId)),
                 competencyBreakdown,
                 semesterTrend,
-                recentTransactions,
-                recentClaims
+                recentTransactions
         );
     }
 
     /** 대시보드 외의 화면에서도 사용할 수 있도록 최근 거래 미리보기를 제공한다. */
     public List<MileageDashboardResponse.TransactionSummary> getRecentTransactions(Integer studentId) {
         return getRecentTransactions(studentId, PageRequest.of(0, RECENT_ITEM_LIMIT));
-    }
-
-    /** 대시보드 외의 화면에서도 사용할 수 있도록 최근 외부활동 신청 미리보기를 제공한다. */
-    public List<MileageDashboardResponse.ClaimSummary> getRecentExternalActivityApplications(
-            Integer studentId
-    ) {
-        return getRecentExternalActivityApplications(
-                studentId,
-                PageRequest.of(0, RECENT_ITEM_LIMIT));
-    }
-
-    /** 외부활동 신청 목록을 화면 전용 응답 모델로 변환한다. */
-    private List<MileageDashboardResponse.ClaimSummary> getRecentExternalActivityApplications(
-            Integer studentId,
-            PageRequest pageRequest
-    ) {
-        return externalActivityClaimRepository
-                .findRecentClaims(studentId, pageRequest)
-                .stream()
-                .map(item -> new MileageDashboardResponse.ClaimSummary(
-                        item.getExternalClaimId(),
-                        item.getActivityName(),
-                        item.getRequestedPoints(),
-                        item.getPolicyPoints(),
-                        item.getGrantedPoints(),
-                        item.getApplicationDate(),
-                        item.getClaimStatus(),
-                        item.getRejectionReason()))
-                .toList();
     }
 
     /** 활성 최상위 핵심역량을 모두 반환해 점수가 0인 역량도 차트에 표시한다. */

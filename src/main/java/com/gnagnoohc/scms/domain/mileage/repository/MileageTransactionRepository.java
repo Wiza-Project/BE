@@ -18,9 +18,6 @@ public interface MileageTransactionRepository extends JpaRepository<MileageTrans
     /** 동일 비교과 신청으로 이미 생성된 적립 원장을 찾아 중복 적립을 막는다. */
     Optional<MileageTransaction> findBySourceProgramApplication_ApplicationId(Integer applicationId);
 
-    /** 동일 외부활동 신청의 승인 적립 원장을 찾아 중복 적립을 막는다. */
-    Optional<MileageTransaction> findBySourceExternalClaim_ExternalClaimId(Integer externalClaimId);
-
     /** 동일 역량진단 응시 회차로 이미 생성된 적립 원장을 찾아 중복 적립을 막는다. */
     Optional<MileageTransaction> findBySourceAssessmentAttempt_AttemptId(Integer attemptId);
 
@@ -171,7 +168,7 @@ public interface MileageTransactionRepository extends JpaRepository<MileageTrans
      *
      * <p>대기·반려 거래도 처리 상태를 화면에 보여줘야 하므로 POSTED만 필터링하지 않는다.
      * 또한 정책이 없는 수동 정정 거래가 있을 수 있어 mileagePolicy는 LEFT JOIN으로 조회한다.
-     * 취소·정정 역분개는 원거래의 프로그램명 또는 외부활동명을 이어받는다.</p>
+     * 취소·정정 역분개는 원거래의 프로그램명 또는 활동유형명을 이어받는다.</p>
      */
     @Query("""
             select t.mileageTransactionId as transactionId,
@@ -180,9 +177,7 @@ public interface MileageTransactionRepository extends JpaRepository<MileageTrans
                    t.transactionStatus as transactionStatus,
                    coalesce(
                        paProgram.programName,
-                       ec.activityName,
                        reversalPaProgram.programName,
-                       reversalEc.activityName,
                        reversalActivityType.activityName,
                        activityType.activityName,
                        t.transactionReason,
@@ -194,11 +189,9 @@ public interface MileageTransactionRepository extends JpaRepository<MileageTrans
             left join p.activityType activityType
             left join t.sourceProgramApplication pa
             left join pa.program paProgram
-            left join t.sourceExternalClaim ec
             left join t.reversalOfTransaction reversal
             left join reversal.sourceProgramApplication reversalPa
             left join reversalPa.program reversalPaProgram
-            left join reversal.sourceExternalClaim reversalEc
             left join reversal.mileagePolicy reversalPolicy
             left join reversalPolicy.activityType reversalActivityType
             where t.student.userId = :studentId
@@ -225,9 +218,7 @@ public interface MileageTransactionRepository extends JpaRepository<MileageTrans
                    t.transactionStatus as transactionStatus,
                    coalesce(
                        paProgram.programName,
-                       ec.activityName,
                        reversalPaProgram.programName,
-                       reversalEc.activityName,
                        reversalActivityType.activityName,
                        activityType.activityName,
                        t.transactionReason,
@@ -236,8 +227,6 @@ public interface MileageTransactionRepository extends JpaRepository<MileageTrans
                    case
                        when pa.applicationId is not null or reversalPa.applicationId is not null
                            then 'EXTRACURRICULAR_PROGRAM'
-                       when ec.externalClaimId is not null or reversalEc.externalClaimId is not null
-                           then 'EXTERNAL_ACTIVITY'
                        else 'OTHER'
                    end as sourceType,
                    coalesce(t.postedAt, t.createdAt) as occurredAt
@@ -246,11 +235,9 @@ public interface MileageTransactionRepository extends JpaRepository<MileageTrans
             left join p.activityType activityType
             left join t.sourceProgramApplication pa
             left join pa.program paProgram
-            left join t.sourceExternalClaim ec
             left join t.reversalOfTransaction reversal
             left join reversal.sourceProgramApplication reversalPa
             left join reversalPa.program reversalPaProgram
-            left join reversal.sourceExternalClaim reversalEc
             left join reversal.mileagePolicy reversalPolicy
             left join reversalPolicy.activityType reversalActivityType
             where t.student.userId = :studentId
@@ -282,9 +269,7 @@ public interface MileageTransactionRepository extends JpaRepository<MileageTrans
                    t.transactionStatus as transactionStatus,
                    coalesce(
                        paProgram.programName,
-                       ec.activityName,
                        reversalPaProgram.programName,
-                       reversalEc.activityName,
                        reversalActivityType.activityName,
                        activityType.activityName,
                        t.transactionReason,
@@ -293,8 +278,6 @@ public interface MileageTransactionRepository extends JpaRepository<MileageTrans
                    case
                        when pa.applicationId is not null or reversalPa.applicationId is not null
                            then 'EXTRACURRICULAR_PROGRAM'
-                       when ec.externalClaimId is not null or reversalEc.externalClaimId is not null
-                           then 'EXTERNAL_ACTIVITY'
                        else 'OTHER'
                    end as sourceType,
                    coalesce(t.postedAt, t.createdAt) as occurredAt
@@ -303,11 +286,9 @@ public interface MileageTransactionRepository extends JpaRepository<MileageTrans
             left join p.activityType activityType
             left join t.sourceProgramApplication pa
             left join pa.program paProgram
-            left join t.sourceExternalClaim ec
             left join t.reversalOfTransaction reversal
             left join reversal.sourceProgramApplication reversalPa
             left join reversalPa.program reversalPaProgram
-            left join reversal.sourceExternalClaim reversalEc
             left join reversal.mileagePolicy reversalPolicy
             left join reversalPolicy.activityType reversalActivityType
             where t.student.userId = :studentId

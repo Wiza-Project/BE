@@ -27,7 +27,6 @@ public class MileageTransaction extends BaseCreatedAtEntity {
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "mileage_policy_id") private MileagePolicy mileagePolicy;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "competency_id", nullable = false) private Competency competency;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "source_program_application_id", unique = true) private ProgramApplication sourceProgramApplication;
-    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "source_external_claim_id", unique = true) private ExternalActivityClaim sourceExternalClaim;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "source_assessment_attempt_id") private AssessmentAttempt sourceAssessmentAttempt;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "reversal_of_transaction_id", unique = true) private MileageTransaction reversalOfTransaction;
     @Column(name = "transaction_type", nullable = false, length = 20) private String transactionType;
@@ -70,30 +69,6 @@ public class MileageTransaction extends BaseCreatedAtEntity {
         return transaction;
     }
 
-    /** 외부활동 신청을 승인할 때, 상한 반영 후 지급액만큼 적립 원장을 생성한다. */
-    public static MileageTransaction earnFromExternalClaim(
-            ExternalActivityClaim claim,
-            Instant postedAt,
-            Integer processedBy,
-            BigDecimal points
-    ) {
-        MileagePolicy policy = claim.getMileagePolicy();
-
-        MileageTransaction transaction = new MileageTransaction();
-        transaction.student = claim.getStudent();
-        transaction.mileagePolicy = policy;
-        transaction.competency = claim.getActivityType().getCompetency();
-        transaction.sourceExternalClaim = claim;
-        transaction.transactionType = "EARN";
-        transaction.points = points;
-        transaction.transactionStatus = "POSTED";
-        transaction.requestedBy = claim.getStudent().getUserId();
-        transaction.processedBy = processedBy;
-        transaction.transactionReason = capReason("외부활동 마일리지 심사 승인 자동 적립", policy.getPoints(), points);
-        transaction.postedAt = postedAt;
-        return transaction;
-    }
-
     /** 역량진단(사전/사후) 제출을 완료했을 때, 상한 반영 후 지급액만큼 적립 원장을 생성한다. */
     public static MileageTransaction earnFromAssessmentCompletion(
             AssessmentAttempt attempt,
@@ -105,7 +80,7 @@ public class MileageTransaction extends BaseCreatedAtEntity {
         transaction.student = attempt.getStudent();
         transaction.mileagePolicy = policy;
         // 진단 결과는 역량별 점수 여러 개를 담고 있어 하나로 특정할 수 없으므로,
-        // 외부활동 적립과 동일하게 활동유형에 미리 지정된 대표 역량을 사용한다.
+        // 활동유형에 미리 지정된 대표 역량을 사용한다.
         transaction.competency = policy.getActivityType().getCompetency();
         transaction.sourceAssessmentAttempt = attempt;
         transaction.transactionType = "EARN";
@@ -123,27 +98,5 @@ public class MileageTransaction extends BaseCreatedAtEntity {
             return baseReason + " (적립 한도 초과로 " + grantedPoints + "점만 지급)";
         }
         return baseReason;
-    }
-
-    /** 승인된 외부활동 원장을 취소할 때 원거래를 보존하고 반대 부호의 역분개를 생성한다. */
-    public static MileageTransaction reverseExternalClaim(
-            MileageTransaction original,
-            Integer processedBy,
-            String reason,
-            Instant postedAt
-    ) {
-        MileageTransaction transaction = new MileageTransaction();
-        transaction.student = original.getStudent();
-        transaction.mileagePolicy = original.getMileagePolicy();
-        transaction.competency = original.getCompetency();
-        transaction.reversalOfTransaction = original;
-        transaction.transactionType = "REVERSE";
-        transaction.points = original.getPoints().negate();
-        transaction.transactionStatus = "POSTED";
-        transaction.requestedBy = original.getRequestedBy();
-        transaction.processedBy = processedBy;
-        transaction.transactionReason = reason.trim();
-        transaction.postedAt = postedAt;
-        return transaction;
     }
 }

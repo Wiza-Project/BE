@@ -1,12 +1,10 @@
 package com.gnagnoohc.scms.domain.mileage.service;
 
 import com.gnagnoohc.scms.domain.mileage.DTO.MileageTransactionHistoryResponse;
-import com.gnagnoohc.scms.domain.mileage.entity.ExternalActivityClaim;
 import com.gnagnoohc.scms.domain.mileage.entity.MileageActivityType;
 import com.gnagnoohc.scms.domain.mileage.entity.MileagePolicy;
 import com.gnagnoohc.scms.domain.mileage.entity.MileageTransaction;
 import com.gnagnoohc.scms.domain.mileage.repository.MileageTransactionRepository;
-import com.gnagnoohc.scms.domain.mileage.support.MileageJsonNodeConverter;
 import com.gnagnoohc.scms.domain.program.entity.ExtracurricularProgram;
 import com.gnagnoohc.scms.domain.program.entity.ProgramApplication;
 import com.gnagnoohc.scms.global.common.dto.PageResponse;
@@ -81,7 +79,6 @@ public class MileageTransactionHistoryService {
                         "마일리지 적립 내역을 찾을 수 없습니다."));
 
         ProgramApplication programApplication = resolveProgramApplication(transaction);
-        ExternalActivityClaim externalActivityClaim = resolveExternalActivityClaim(transaction);
         MileagePolicy policy = resolveMileagePolicy(transaction);
 
         return new MileageTransactionHistoryResponse.Detail(
@@ -93,10 +90,9 @@ public class MileageTransactionHistoryService {
                 transaction.getPostedAt() != null
                         ? transaction.getPostedAt()
                         : transaction.getCreatedAt(),
-                resolveSourceType(programApplication, externalActivityClaim),
+                resolveSourceType(programApplication),
                 toPolicyDetail(policy),
-                toProgramDetail(programApplication),
-                toExternalActivityDetail(externalActivityClaim));
+                toProgramDetail(programApplication));
     }
 
     private MileagePolicy resolveMileagePolicy(MileageTransaction transaction) {
@@ -117,24 +113,9 @@ public class MileageTransactionHistoryService {
                 : transaction.getReversalOfTransaction().getSourceProgramApplication();
     }
 
-    private ExternalActivityClaim resolveExternalActivityClaim(MileageTransaction transaction) {
-        if (transaction.getSourceExternalClaim() != null) {
-            return transaction.getSourceExternalClaim();
-        }
-        return transaction.getReversalOfTransaction() == null
-                ? null
-                : transaction.getReversalOfTransaction().getSourceExternalClaim();
-    }
-
-    private String resolveSourceType(
-            ProgramApplication programApplication,
-            ExternalActivityClaim externalActivityClaim
-    ) {
+    private String resolveSourceType(ProgramApplication programApplication) {
         if (programApplication != null) {
             return "EXTRACURRICULAR_PROGRAM";
-        }
-        if (externalActivityClaim != null) {
-            return "EXTERNAL_ACTIVITY";
         }
         return "OTHER";
     }
@@ -170,27 +151,5 @@ public class MileageTransactionHistoryService {
                 application.getCompletionStatus(),
                 application.getCertificateNo(),
                 application.getCertificateIssuedAt());
-    }
-
-    private MileageTransactionHistoryResponse.ExternalActivityDetail toExternalActivityDetail(
-            ExternalActivityClaim claim
-    ) {
-        if (claim == null) {
-            return null;
-        }
-
-        MileageActivityType activityType = claim.getActivityType();
-        return new MileageTransactionHistoryResponse.ExternalActivityDetail(
-                claim.getExternalClaimId(),
-                claim.getActivityName(),
-                claim.getActivityDate(),
-                claim.getRequestedPoints(),
-                claim.getClaimStatus(),
-                claim.getReviewReason(),
-                activityType == null ? null : activityType.getActivityCode(),
-                activityType == null ? null : activityType.getActivityName(),
-                activityType == null ? null : activityType.getCategoryCode(),
-                activityType == null ? null : activityType.getEarningRoute(),
-                MileageJsonNodeConverter.toJackson3(claim.getDetailData()));
     }
 }

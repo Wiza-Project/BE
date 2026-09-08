@@ -15,7 +15,6 @@ import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -78,33 +77,6 @@ public interface MileagePolicyRepository extends JpaRepository<MileagePolicy, In
     List<MileagePolicy> findActivePoliciesByActivityTypeOn(
             @Param("activityTypeId") Integer activityTypeId,
             @Param("activityDate") LocalDate activityDate,
-            @Param("semesterCode") String semesterCode
-    );
-
-    /**
-     * 학생 외부활동 등록 화면에 표시할 현재 적용 가능한 외부활동 정책을 조회한다. 기준일이 속한
-     * 학기(semesterCode) 전용 정책을 학기 무관(ALL) 정책보다 우선하고, 그 안에서는 최신 버전을 우선한다.
-     */
-    @Query("""
-            select p
-            from MileagePolicy p
-            join fetch p.activityType activityType
-            where activityType.programTypeCode is null
-              and activityType.competency is not null
-              and upper(activityType.earningRoute) not in :excludedEarningRoutes
-              and activityType.active = true
-              and p.policyStatus = 'ACTIVE'
-              and p.points > 0
-              and p.validFrom <= :asOfDate
-              and (p.validTo is null or p.validTo >= :asOfDate)
-              and (p.semesterCode = :semesterCode or p.semesterCode = 'ALL')
-            order by activityType.activityName asc,
-                     case when p.semesterCode = :semesterCode then 0 else 1 end,
-                     p.versionNo desc
-            """)
-    List<MileagePolicy> findActiveExternalPoliciesOn(
-            @Param("asOfDate") LocalDate asOfDate,
-            @Param("excludedEarningRoutes") Collection<String> excludedEarningRoutes,
             @Param("semesterCode") String semesterCode
     );
 

@@ -13,8 +13,7 @@ public record MileageDashboardResponse(
         Summary summary,
         List<CompetencySummary> competencyBreakdown,
         List<SemesterTrendSummary> semesterTrend,
-        List<TransactionSummary> recentTransactions,
-        List<ClaimSummary> recentClaims
+        List<TransactionSummary> recentTransactions
 ) {
 
     public record Period(
@@ -56,18 +55,6 @@ public record MileageDashboardResponse(
             BigDecimal points,
             String transactionStatus,
             Instant occurredAt
-    ) {
-    }
-
-    public record ClaimSummary(
-            Integer externalClaimId,
-            String activityName,
-            BigDecimal requestedPoints,
-            BigDecimal policyPoints,
-            BigDecimal grantedPoints,
-            Instant applicationDate,
-            String claimStatus,
-            String rejectionReason
     ) {
     }
 }
