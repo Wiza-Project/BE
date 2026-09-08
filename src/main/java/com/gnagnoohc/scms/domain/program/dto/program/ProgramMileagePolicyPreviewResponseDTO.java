@@ -11,20 +11,18 @@ public record ProgramMileagePolicyPreviewResponseDTO(
         Integer mileagePolicyId,
         BigDecimal mileagePoints,
         String mileageActivityName,
-        Integer academicYear,
         String semesterCode
 ) {
 
     public static ProgramMileagePolicyPreviewResponseDTO from(Integer programTypeCodeId, MileagePolicy policy) {
         if (policy == null) {
-            return new ProgramMileagePolicyPreviewResponseDTO(programTypeCodeId, null, null, null, null, null);
+            return new ProgramMileagePolicyPreviewResponseDTO(programTypeCodeId, null, null, null, null);
         }
         return new ProgramMileagePolicyPreviewResponseDTO(
                 programTypeCodeId,
                 policy.getMileagePolicyId(),
                 policy.getPoints(),
                 policy.getActivityType().getActivityName(),
-                policy.getAcademicYear(),
                 policy.getSemesterCode()
         );
     }
