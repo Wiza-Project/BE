@@ -195,7 +195,7 @@ public class JobPosting extends BaseTimeEntity {
      *   </li>
      * </ul>
      *
-     * @param reviewStatus    검수 상태값 ("APPROVED" 또는 "REJECTED")
+     * @param reviewStatus    검수 상태값 (APPROVED 또는 REJECTED)
      * @param rejectionReason 반려 사유 (반려 시 필수, 승인 시 null 가능)
      * @param reviewerId      검수한 교직원 계정 식별자 (Security Context 주입)
      */
@@ -210,6 +210,29 @@ public class JobPosting extends BaseTimeEntity {
             this.publishedAt = Instant.now();
         } else if ("REJECTED".equalsIgnoreCase(reviewStatus)) {
             this.postingStatus = "DRAFT";
+        }
+    }
+
+    /**
+     * [교직원/관리자 전용] 공고 게시 상태 직접 변경 (게시/마감/임시저장)
+     * 기존 검수자(reviewedBy) 및 검수 승인 이력을 보존하면서 노출 상태(postingStatus)만 전이
+     */
+    public void updatePostingStatusOnly(String newPostingStatus) {
+        if (newPostingStatus == null || newPostingStatus.isBlank()) {
+            throw new IllegalArgumentException("변경할 게시 상태값이 비어 있습니다.");
+        }
+
+        String targetStatus = newPostingStatus.toUpperCase();
+        switch (targetStatus) {
+            case "PUBLISHED" -> {
+                this.postingStatus = "PUBLISHED";
+                if (this.publishedAt == null) {
+                    this.publishedAt = Instant.now();
+                }
+            }
+            case "CLOSED" -> this.postingStatus = "CLOSED";
+            case "DRAFT" -> this.postingStatus = "DRAFT";
+            default -> throw new IllegalArgumentException("유효하지 않은 게시 상태입니다: " + newPostingStatus);
         }
     }
 }
