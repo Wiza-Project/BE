@@ -33,11 +33,6 @@ public interface MileageBenefitPolicyRepository extends JpaRepository<MileageBen
             String benefitType
     );
 
-    /** 해당 학기와 연간(ALL) 정책을 목표 점수 오름차순으로 조회한다. */
-    List<MileageBenefitPolicy> findByActiveTrueAndSemesterCodeInOrderByMinimumPointsAsc(
-            Collection<String> semesterCodes
-    );
-
     /**
      * 정책 row에 비관적 락을 걸어 조회한다(MileagePolicyRepository.findByIdForUpdate와 동일 패턴).
      * update()의 조회→병합→저장 전체를 이 락 아래에서 수행해야, 두 교직원이 같은 정책을 동시에

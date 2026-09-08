@@ -11,8 +11,6 @@ import java.util.List;
 public record MileageDashboardResponse(
         Period period,
         Summary summary,
-        List<BenefitProgress> benefitProgress,
-        List<ProgramTypeSummary> programTypeBreakdown,
         List<CompetencySummary> competencyBreakdown,
         List<SemesterTrendSummary> semesterTrend,
         List<TransactionSummary> recentTransactions,
@@ -34,30 +32,6 @@ public record MileageDashboardResponse(
             BigDecimal annualPoints,
             BigDecimal cumulativePoints,
             Instant lastPostedAt
-    ) {
-    }
-
-    /**
-     * 선택 학기에 적용되는 인증·장학 정책의 누적 점수 기준 진행도.
-     * 점수 산정은 확정(POSTED) 거래의 누적값을 기준으로 한다.
-     */
-    public record BenefitProgress(
-            Integer benefitPolicyId,
-            String benefitType,
-            String benefitName,
-            BigDecimal targetPoints,
-            BigDecimal currentPoints,
-            BigDecimal shortagePoints,
-            BigDecimal benefitAmount,
-            String progressStatus,
-            String applicationStatus,
-            boolean canApply
-    ) {
-    }
-
-    public record ProgramTypeSummary(
-            String programTypeName,
-            BigDecimal points
     ) {
     }
 

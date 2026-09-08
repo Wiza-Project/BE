@@ -113,9 +113,22 @@ public interface MileageTransactionRepository extends JpaRepository<MileageTrans
             """)
     Instant findLastPostedAt(@Param("studentId") Integer studentId);
 
-    /** 선택 학사기간 안의 확정 거래를 정책의 학기 코드별로 DB에서 합산한다. */
+    /**
+     * 선택 학사기간 안의 확정 거래를 정책의 학기 코드별로 DB에서 합산한다.
+     * 학기 무관 공통(ALL) 정책 거래는 선택 학기 버킷에 합산한다.
+     *
+     * <p>:semesterCode가 컬럼과 직접 비교되지 않고 CASE 절 안에서만 쓰이면 PostgreSQL이
+     * 파라미터 타입을 추론하지 못해 "could not determine data type of parameter" 오류로
+     * 500이 발생하므로 명시적으로 캐스팅한다.</p>
+     *
+     * <p>GROUP BY는 이 CASE 식을 반복하지 않고 실제 컬럼인 p.semesterCode만 사용한다.
+     * Hibernate가 :semesterCode를 SELECT와 GROUP BY에서 서로 다른 바인드 파라미터로
+     * 치환해 PostgreSQL이 두 CASE 식을 동일 표현식으로 인식하지 못하고 "column must
+     * appear in the GROUP BY clause" 오류를 던지기 때문이다. SELECT의 CASE 식은
+     * p.semesterCode만의 함수이므로 p.semesterCode로 그룹핑하는 것으로 충분하다.</p>
+     */
     @Query("""
-            select p.semesterCode as semesterCode,
+            select case when p.semesterCode = 'ALL' then cast(:semesterCode as string) else p.semesterCode end as semesterCode,
                    coalesce(sum(t.points), 0) as points
             from MileageTransaction t
             join t.mileagePolicy p
