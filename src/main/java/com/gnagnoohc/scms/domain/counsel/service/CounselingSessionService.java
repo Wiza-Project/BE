@@ -130,6 +130,10 @@ public class CounselingSessionService {
     /**
      * 트랜잭션 경계(설계 4.3): PLANNED 확인, 출결·회기 상태·nextSessionAt 반영, PRESENT일 때만
      * APPROVED 예약을 IN_PROGRESS로 바꾸는 것까지 한 트랜잭션이다.
+     * 잠금 순서는 항상 "예약 → 회기"다. 예약 취소가 "예약 → 배정 → PLANNED 회기" 순서로 잠그게
+     * 되면서, 완료가 반대로 "회기 → 예약" 순서로 잠그면 두 트랜잭션이 서로 다른 순서로 자원을
+     * 기다리다 교착될 수 있다. PRESENT가 아닐 때도 예약을 실제로 바꾸지 않을 뿐 같은 순서로 잠가
+     * 완료-취소 경쟁이 예약 행 잠금 하나로 직렬화되게 한다.
      */
     @Transactional
     public CounselingSessionResponse complete(
@@ -137,6 +141,11 @@ public class CounselingSessionService {
     ) {
         CounselManagementAccessPolicy.Scope scope = counselManagementAccessPolicy.requireScope(counselorId);
         Instant now = Instant.now();
+        Integer reservationId = counselingSessionRepository
+                .findOwnedReservationIdBySessionId(sessionId, counselorId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.SESSION_NOT_FOUND));
+        CounselingReservation reservation = counselingReservationRepository.findByIdForUpdate(reservationId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESERVATION_NOT_FOUND));
         CounselingSession session = getOwnedSessionForUpdate(sessionId, counselorId);
         CounselingAssignment assignment = session.getCounselingAssignment();
         // 회기 상태를 바꾸거나 예약을 IN_PROGRESS로 넘기기 전에 유형 범위부터 확인한다.
@@ -147,14 +156,9 @@ public class CounselingSessionService {
 
         session.complete(attendanceStatus, nextSessionAt, now);
         if ("PRESENT".equals(attendanceStatus)) {
-            // 예약 상태를 바꾸기 전에 예약 행을 잠그고 최신 상태를 다시 읽어 전이한다. 학생 취소도 같은
-            // 예약 행을 잠그므로(findByIdForUpdate) 두 트랜잭션이 직렬화된다. 잠금 없이 LAZY 로드한 예약을
-            // 그대로 수정하면 이 트랜잭션의 flush가 @Version 없는 전체 컬럼 UPDATE로 나가, 먼저 커밋된 취소를
-            // 덮어써 취소된 예약이 IN_PROGRESS로 되살아나고 취소 사유가 사라진다(lost update).
-            // markInProgressIfApproved()는 APPROVED일 때만 전이하므로, 사이에 취소가 커밋됐으면 no-op이 되어 취소가 보존된다.
-            Integer reservationId = assignment.getCounselingReservation().getCounselingReservationId();
-            CounselingReservation reservation = counselingReservationRepository.findByIdForUpdate(reservationId)
-                    .orElseThrow(() -> new BusinessException(ErrorCode.RESERVATION_NOT_FOUND));
+            // 예약 행은 위에서 이미 잠갔으므로 markInProgressIfApproved()만 호출한다. 사이에 취소가
+            // 먼저 커밋됐으면(예약 잠금을 먼저 얻었으면) 이 메서드는 APPROVED일 때만 전이하므로
+            // no-op이 되어 취소가 보존된다(lost update 방지).
             reservation.markInProgressIfApproved();
         }
 
