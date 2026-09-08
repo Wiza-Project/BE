@@ -32,28 +32,21 @@ public class CounselingPrivateRecordService {
 
     /**
      * 조회는 현재 활성 배정 담당자뿐 아니라 과거(종료된) 배정 담당자도 허용한다 — 자신이 작성한
-     * 기록의 사후 열람은 막을 이유가 없기 때문이다. 접근 사유(ACTIVE_ASSIGNMENT_WORK /
-     * PAST_ASSIGNMENT_DOCUMENTATION)는 감사로그용으로만 쓰고 응답에는 포함하지 않는다.
+     * 기록의 사후 열람은 막을 이유가 없기 때문이다. 공통 감사 인프라가 접근 사유를 받지 않으므로
+     * 활성 배정과 과거 배정을 감사 로그에서 별도로 구분하지 않는다.
      */
     public CounselingPrivateRecordResponse getRecord(Integer sessionId, Integer counselorId) {
-        // TODO(common-audit): requireScope 실패(활성·역할·유형 범위 포함) 시에도 READ_PRIVATE_RECORD 실패 —
-        // actorUserId=counselorId, resourceType=COUNSELING_SESSION, resourceId=sessionId,
-        // actionCode=READ_PRIVATE_RECORD, actionResult=FAILURE. privateContent 전달 금지.
+        // 감사 로그(COUNSELING_SESSION/READ)는 컨트롤러의 @AuditTrail+@AuditResourceId(AOP)가
+        // 이 메서드의 정상 반환을 SUCCESS로, 아래에서 던지는 예외를 FAILURE로 자동 기록한다.
+        // 서비스에서 별도로 감사 호출을 추가하지 않는다.
         CounselManagementAccessPolicy.Scope scope = counselManagementAccessPolicy.requireScope(counselorId);
-        // TODO(common-audit): READ_PRIVATE_RECORD 실패 — actorUserId=counselorId, resourceType=COUNSELING_SESSION,
-        // resourceId=sessionId, actionCode=READ_PRIVATE_RECORD, actionResult=FAILURE. privateContent 전달 금지.
         CounselingSession session = counselingSessionRepository.findById(sessionId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SESSION_NOT_FOUND));
         if (!session.getCounselingAssignment().isOwnedBy(counselorId)) {
-            // TODO(common-audit): READ_PRIVATE_RECORD 실패 — actorUserId=counselorId, resourceType=COUNSELING_SESSION,
-            // resourceId=sessionId, actionCode=READ_PRIVATE_RECORD, actionResult=FAILURE. privateContent 전달 금지.
             throw new BusinessException(ErrorCode.SESSION_NOT_FOUND);
         }
         // 원문(privateContent)을 읽기 전에 유형 범위부터 확인한다. 걸리면 아래 조회를 아예 하지 않는다.
         ensureTypeInScope(scope, session);
-
-        // 감사로그의 accessReason 값. active면 현재 담당자의 업무 조회, 아니면 과거 담당자의 기록 열람이다.
-        boolean active = session.getCounselingAssignment().isActive();
 
         Instant now = Instant.now();
         CounselingPrivateRecord record = counselingPrivateRecordRepository
@@ -61,14 +54,7 @@ public class CounselingPrivateRecordService {
                 .orElse(null);
         boolean canSaveDraft = canSaveDraft(session, record, now);
         boolean canConfirm = canConfirm(session, record, now);
-        CounselingPrivateRecordResponse response = CounselingPrivateRecordResponse.from(
-                sessionId, record, canSaveDraft, canConfirm
-        );
-
-        // TODO(common-audit): READ_PRIVATE_RECORD 성공 — actorUserId=counselorId, resourceType=COUNSELING_SESSION,
-        // resourceId=sessionId, actionCode=READ_PRIVATE_RECORD, actionResult=SUCCESS,
-        // accessReason=(active?ACTIVE_ASSIGNMENT_WORK:PAST_ASSIGNMENT_DOCUMENTATION). privateContent 전달 금지.
-        return response;
+        return CounselingPrivateRecordResponse.from(sessionId, record, canSaveDraft, canConfirm);
     }
 
     /**
