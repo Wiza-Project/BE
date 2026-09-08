@@ -58,7 +58,8 @@ public class MileageBenefitPolicyService {
             Boolean active,
             Pageable pageable
     ) {
-        Specification<MileageBenefitPolicy> spec = buildFilter(benefitType, semesterCode, active);
+        String normalizedSemesterCode = semesterCodeValidator.normalizeSemesterCodeIfPresent(semesterCode);
+        Specification<MileageBenefitPolicy> spec = buildFilter(benefitType, normalizedSemesterCode, active);
         Page<MileageBenefitPolicy> page = benefitPolicyRepository.findAll(spec, pageable);
         return PageResponse.from(page.map(MileageBenefitPolicyResponseDTO::from));
     }
