@@ -24,6 +24,11 @@ public class MileageSemesterCodeValidator {
         return semesterCode == null ? "" : semesterCode.trim().toUpperCase(Locale.ROOT);
     }
 
+    /** 정규화 기준으로 전체 학기(ALL) 특수값인지 판별한다. */
+    public boolean isAllSemesterCode(String semesterCode) {
+        return ALL_SEMESTER_CODE.equals(normalize(semesterCode));
+    }
+
     /** semesterCode가 필수인 호출용: null/blank, ALL, 비활성/미존재 코드를 모두 거부한다. */
     public String requireSemesterCode(String semesterCode) {
         if (semesterCode == null || semesterCode.isBlank()) {

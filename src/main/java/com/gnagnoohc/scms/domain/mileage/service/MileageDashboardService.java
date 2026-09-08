@@ -148,6 +148,7 @@ public class MileageDashboardService {
         List<CommonCode> definedSemesters = commonCodeRepository
                 .findByCodeGroupAndActiveTrueOrderBySortOrderAsc(SEMESTER_CODE_GROUP)
                 .stream()
+                .filter(code -> !mileageSemesterCodeValidator.isAllSemesterCode(code.getCode()))
                 .toList();
         Map<String, String> definedCodeByNormalizedCode = definedSemesters
                 .stream()
