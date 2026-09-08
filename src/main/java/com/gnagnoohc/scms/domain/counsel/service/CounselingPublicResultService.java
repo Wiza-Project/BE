@@ -77,18 +77,22 @@ public class CounselingPublicResultService {
     /**
      * 초안 저장. 첫 저장은 새 행을 만들고, 이후 저장은 같은 행을 수정한다(versionNo=1 고정).
      * 공개된 결과의 수정은 CounselingPublicResult.updateDraft()가 S010으로 막는다.
-     * 잠금 순서(회기 → 배정)와 "배정에 대한 첫 접근이 잠금 조회여야 한다"는 제약은
-     * CounselingPrivateRecordService.saveDraft()와 동일한 이유(프록시 선초기화로 인한 무효 잠금 방지)다.
+     * 잠금 순서는 "배정 → 회기"다. 예약 취소가 "예약 → 배정 → 회기" 순서로 잠그므로, 회기를 먼저
+     * 잠그면 반대 순서가 되어 교착할 수 있다(CounselingPrivateRecordService.saveDraft()와 동일한 이유).
+     * 잠금 없는 스칼라 조회로 배정 ID를 먼저 식별하고(권한 확인 완료로 간주하지 않음), 잠근 엔티티에서
+     * 소유권·유형·상태를 기존과 같은 순서·에러코드로 다시 검증한다.
      */
     @Transactional
     public CounselorCounselingPublicResultResponse saveDraft(
             Integer sessionId, String resultSummary, String actionPlan, Integer counselorId
     ) {
         CounselManagementAccessPolicy.Scope scope = counselManagementAccessPolicy.requireScope(counselorId);
-        CounselingSession session = counselingSessionRepository.findByIdForUpdate(sessionId)
+        Integer assignmentId = counselingSessionRepository
+                .findOwnedAssignmentIdBySessionId(sessionId, counselorId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SESSION_NOT_FOUND));
-        Integer assignmentId = session.getCounselingAssignment().getCounselingAssignmentId();
         CounselingAssignment assignment = counselingAssignmentRepository.findByIdForUpdate(assignmentId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.SESSION_NOT_FOUND));
+        CounselingSession session = counselingSessionRepository.findByIdForUpdate(sessionId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SESSION_NOT_FOUND));
         if (!assignment.isOwnedBy(counselorId)) {
             throw new BusinessException(ErrorCode.SESSION_NOT_FOUND);
@@ -120,14 +124,17 @@ public class CounselingPublicResultService {
     /**
      * 회기 결과 일반 공개. 예약 상태와 활성 배정은 변경하지 않는다(최종 완료와의 결정적 차이).
      * 공개 전에 같은 회기의 비공개 기록이 CONFIRMED인지만 확인하고 원문 자체는 조회하지 않는다.
+     * saveDraft()와 같은 이유로 잠금 순서는 "배정 → 회기"다.
      */
     @Transactional
     public CounselorCounselingPublicResultResponse publish(Integer sessionId, Integer counselorId) {
         CounselManagementAccessPolicy.Scope scope = counselManagementAccessPolicy.requireScope(counselorId);
-        CounselingSession session = counselingSessionRepository.findByIdForUpdate(sessionId)
+        Integer assignmentId = counselingSessionRepository
+                .findOwnedAssignmentIdBySessionId(sessionId, counselorId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SESSION_NOT_FOUND));
-        Integer assignmentId = session.getCounselingAssignment().getCounselingAssignmentId();
         CounselingAssignment assignment = counselingAssignmentRepository.findByIdForUpdate(assignmentId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.SESSION_NOT_FOUND));
+        CounselingSession session = counselingSessionRepository.findByIdForUpdate(sessionId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SESSION_NOT_FOUND));
         if (!assignment.isOwnedBy(counselorId)) {
             throw new BusinessException(ErrorCode.SESSION_NOT_FOUND);
@@ -155,26 +162,29 @@ public class CounselingPublicResultService {
     }
 
     /**
-     * 최종 완료. 잠금 순서는 반드시 회기 → 예약 → 배정이어야 한다(예약 취소의 "예약 → 배정 변경"
-     * 순서와 맞춰 교착을 피하기 위함, 공개 상담 결과 설계 5.1). 회기에서 배정 ID만 얻고(프록시를
-     * 초기화하지 않음), 잠금 없는 ID 전용 조회로 불변인 예약 ID를 구한 뒤 예약 → 배정 순서로 잠근다.
-     * 모든 잠금을 잡은 뒤에야 전체 완료 조건을 다시 검증하고, 초안이면 공개까지 같은 트랜잭션에서 처리한다.
+     * 최종 완료. 잠금 순서는 반드시 예약 → 배정 → 회기여야 한다(예약 취소의 "예약 → 배정 → 회기"
+     * 순서와 맞춰 교착을 피하기 위함). 잠금 없는 스칼라 조회로 소유 회기의 배정 ID를 먼저 식별하고,
+     * 배정·예약 관계는 생성 후 바뀌지 않는 불변값이므로 그 값으로 다시 잠금 없이 예약 ID를 구한 뒤
+     * 예약 → 배정 → 회기 순서로 잠근다. 두 스칼라 조회는 잠금 순서를 정하기 위한 식별 단계일 뿐이므로
+     * 권한 확인 완료로 간주하지 않고, 모든 잠금을 잡은 뒤에야 소유권을 포함한 전체 완료 조건을
+     * 다시 검증하고, 초안이면 공개까지 같은 트랜잭션에서 처리한다.
      */
     @Transactional
     public CounselorCounselingPublicResultResponse complete(Integer sessionId, Integer counselorId) {
         CounselManagementAccessPolicy.Scope scope = counselManagementAccessPolicy.requireScope(counselorId);
         Instant now = Instant.now();
 
-        CounselingSession session = counselingSessionRepository.findByIdForUpdate(sessionId)
+        Integer assignmentId = counselingSessionRepository
+                .findOwnedAssignmentIdBySessionId(sessionId, counselorId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SESSION_NOT_FOUND));
-        Integer assignmentId = session.getCounselingAssignment().getCounselingAssignmentId();
-
         Integer reservationId = counselingAssignmentRepository.findReservationIdByAssignmentId(assignmentId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ASSIGNMENT_NOT_FOUND));
         CounselingReservation reservation = counselingReservationRepository.findByIdForUpdate(reservationId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESERVATION_NOT_FOUND));
         CounselingAssignment assignment = counselingAssignmentRepository.findByIdForUpdate(assignmentId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ASSIGNMENT_NOT_FOUND));
+        CounselingSession session = counselingSessionRepository.findByIdForUpdate(sessionId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.SESSION_NOT_FOUND));
 
         if (!assignment.isOwnedBy(counselorId)) {
             throw new BusinessException(ErrorCode.SESSION_NOT_FOUND);
