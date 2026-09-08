@@ -86,12 +86,6 @@ public class CounselingSessionService {
         if (startsAt == null || endsAt == null || !startsAt.isBefore(endsAt)) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "회기 시작 시각은 종료 시각보다 빨라야 합니다.");
         }
-        // 미래 시각의 후속 회기 생성은 API 계약(consultation-domain-api.md 오류표)상 S008(허용되지 않은 상태)이다.
-        // 잘못된 시간 범위(startsAt>=endsAt, startsAt<assignedAt)의 C001과 구분한다.
-        if (startsAt.isAfter(now)) {
-            throw new BusinessException(ErrorCode.SESSION_STATE_NOT_ALLOWED, "미래 시각의 회기는 생성할 수 없습니다.");
-        }
-
         // 같은 상담사의 빈 시간대를 동시에 선점하지 못하도록 사용자 행부터 잠근다(일정 등록·수정과 같은 순서).
         // 잠근 뒤 정책이 활성·STAFF·ST200을 다시 확인해, 이 요청 시작 전에 이미 커밋된 계정 비활성화·
         // 역할 회수는 놓치지 않는다(CounselingScheduleService와 같은 패턴). 다만 UserRole 행 자체는
