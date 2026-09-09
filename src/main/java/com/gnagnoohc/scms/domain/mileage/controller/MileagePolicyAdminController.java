@@ -46,15 +46,14 @@ public class MileagePolicyAdminController {
         return ApiResponse.ok(mileagePolicyService.register(request, authUser.getId()));
     }
 
-    @Operation(summary = "마일리지 정책 목록 조회", description = "활동 유형/학년도/학기/상태로 필터링하여 정책 목록을 페이지 단위로 조회합니다.")
+    @Operation(summary = "마일리지 정책 목록 조회", description = "활동 유형/학기/상태로 필터링하여 정책 목록을 페이지 단위로 조회합니다.")
     @GetMapping
     public ApiResponse<PageResponse<MileagePolicyResponseDTO>> list(
             @RequestParam(required = false) Integer activityTypeId,
-            @RequestParam(required = false) Integer academicYear,
             @RequestParam(required = false) String semesterCode,
             @RequestParam(required = false) String policyStatus,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
-        return ApiResponse.ok(mileagePolicyService.list(activityTypeId, academicYear, semesterCode, policyStatus, pageable));
+        return ApiResponse.ok(mileagePolicyService.list(activityTypeId, semesterCode, policyStatus, pageable));
     }
 
     @Operation(summary = "마일리지 정책 상세 조회")
@@ -63,7 +62,7 @@ public class MileagePolicyAdminController {
         return ApiResponse.ok(mileagePolicyService.getDetail(mileagePolicyId));
     }
 
-    @Operation(summary = "마일리지 정책 수정", description = "점수/최대점수/적용기간/중복적립규칙/상태를 부분 수정합니다. 활동 유형·학년도·학기·버전은 변경할 수 없습니다.")
+    @Operation(summary = "마일리지 정책 수정", description = "점수/최대점수/적용기간/중복적립규칙/상태를 부분 수정합니다. 활동 유형·학기·버전은 변경할 수 없습니다.")
     @PatchMapping("/{mileagePolicyId}")
     public ApiResponse<MileagePolicyResponseDTO> update(
             @PathVariable Integer mileagePolicyId,
