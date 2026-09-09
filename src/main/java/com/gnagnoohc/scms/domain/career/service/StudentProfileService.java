@@ -53,13 +53,17 @@ public class StudentProfileService {
         String majorCategoryPrefix = cleanCode.length() >= 2 ? cleanCode.substring(0, 2) : cleanCode;
 
         // 2. ncs_standard에서 대분류 계열이 일치하고 벡터가 존재하는 표준 직무 탐색
-        float[] targetVector = ncsStandardRepository.findAll().stream()
-                .filter(ncs -> ncs.getNcsCode() != null && ncs.getNcsCode().startsWith(majorCategoryPrefix))
-                .map(NcsStandard::getEmbeddingVector)
-                .filter(vec -> vec != null && vec.length > 0)
-                .findFirst()
-                .orElse(null);
+//        float[] targetVector = ncsStandardRepository.findAll().stream()
+//                .filter(ncs -> ncs.getNcsCode() != null && ncs.getNcsCode().startsWith(majorCategoryPrefix))
+//                .map(NcsStandard::getEmbeddingVector)
+//                .filter(vec -> vec != null && vec.length > 0)
+//                .findFirst()
+//                .orElse(null);
 
+        float[] targetVector = ncsStandardRepository
+                .findFirstByNcsCodeStartingWithAndEmbeddingVectorIsNotNullOrderByNcsCodeAsc(majorCategoryPrefix)
+                .map(NcsStandard::getEmbeddingVector)
+                .orElse(null);
         // 3. 없을 경우 전체 유효 벡터 Fallback
 //        if (targetVector == null) {
 //            targetVector = ncsStandardRepository.findAll().stream()

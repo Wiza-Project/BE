@@ -23,4 +23,9 @@ public interface NcsStandardRepository extends JpaRepository<NcsStandard, Intege
 
     /** 특정 코드 존재 여부 확인 */
     boolean existsByNcsCode(String ncsCode);
+
+    /**
+     * 특정 대분류 접두사로 시작하고 임베딩 벡터가 존재하는 첫 번째 NCS 표준 단건 조회
+     */
+    Optional<NcsStandard> findFirstByNcsCodeStartingWithAndEmbeddingVectorIsNotNullOrderByNcsCodeAsc(String prefix);
 }

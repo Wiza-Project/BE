@@ -108,16 +108,29 @@ public class JobPostingService {
     /**
      *0907 [학생 메인 슬라이더용] 게시 완료 및 접수 진행 중인 최신 공고 상위 10건 조회
      */
-    public List<JobPostingSummaryResponseDTO> getLatestJobPostingsForSlider() {
-        Pageable topTen = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "jobPostingId"));
-//        Page<JobPosting> postingPage = jobPostingRepository.searchStudentPostings(null, topTen);
+//    public List<JobPostingSummaryResponseDTO> getLatestJobPostingsForSlider() {
+//        Pageable topTen = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "jobPostingId"));
+////        Page<JobPosting> postingPage = jobPostingRepository.searchStudentPostings(null, topTen);
+//
+//        // null 대신 빈 검색 조건 DTO 전달하여 NPE 방지
+//        Page<JobPosting> postingPage = jobPostingRepository.searchStudentPostings(
+//                new JobPostingSearchConditionDTO(),
+//                topTen
+//        );
+//        return postingPage.getContent().stream()
+//                .map(this::convertToSummaryDTO)
+//                .toList();
+//    }
 
-        // null 대신 빈 검색 조건 DTO 전달하여 NPE 방지
-        Page<JobPosting> postingPage = jobPostingRepository.searchStudentPostings(
-                new JobPostingSearchConditionDTO(),
-                topTen
-        );
-        return postingPage.getContent().stream()
+    /**
+     * [학생 메인 슬라이더용] 게시 완료 및 접수 진행 중인 최신 공고 상위 10건 조회
+     */
+    public List<JobPostingSummaryResponseDTO> getLatestJobPostingsForSlider() {
+        List<JobPosting> activePostings = jobPostingRepository
+                .findDefaultActivePostingsWithDetails(Instant.now());
+
+        return activePostings.stream()
+                .limit(10)
                 .map(this::convertToSummaryDTO)
                 .toList();
     }
