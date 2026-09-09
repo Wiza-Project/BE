@@ -123,7 +123,7 @@ public class JobPostingService {
 //    }
 
     /**
-     * [학생 메인 슬라이더용] 게시 완료 및 접수 진행 중인 최신 공고 상위 10건 조회
+     * [학생 메인 슬라이더용] 게시 완료 및 접수 진행 중인 마감 임박 공고 상위 10건 조회
      */
     public List<JobPostingSummaryResponseDTO> getLatestJobPostingsForSlider() {
         List<JobPosting> activePostings = jobPostingRepository
