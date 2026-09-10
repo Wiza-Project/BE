@@ -61,10 +61,13 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, Integer>
             JOIN top_ncs tn ON SUBSTRING(tn.ncs_code, 1, 2) = SUBSTRING(REPLACE(REPLACE(cc.code, 'NCS_', ''), 'NC', ''), 1, 2)
             WHERE jp.posting_status = 'PUBLISHED'
               AND (jp.application_ends_at IS NULL OR jp.application_ends_at >= :now)
-            ORDER BY jp.created_at DESC
+              AND (CAST(:preferredRegionId AS integer) IS NULL OR jp.region_code_id = CAST(:preferredRegionId AS integer))
+            ORDER BY jp.application_ends_at ASC NULLS LAST, jp.job_posting_id DESC
+            LIMIT :topK
             """, nativeQuery = true)
     List<JobPosting> findVectorRecommendedPostings(
             @Param("embeddingVector") String embeddingVector,
+            @Param("preferredRegionId") Integer preferredRegionId,
             @Param("topK") int topK,
             @Param("now") Instant now
     );

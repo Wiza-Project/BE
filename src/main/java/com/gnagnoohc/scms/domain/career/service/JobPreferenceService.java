@@ -110,9 +110,16 @@ public class JobPreferenceService {
         log.info("[JobPreferenceService] 학생 취업 희망조건 저장 완료. studentUserId: {}", studentUserId);
 
         // [임베딩용(잡매칭)] 희망 직무가 지정된 경우 해당 NCS 직무 벡터를 student_profile에 동기화하는 로직
-        if (ncsCode != null) {
+//        if (ncsCode != null) {
+//            studentProfileService.syncStudentEmbeddingFromNcs(studentUserId, ncsCode.getCode());
+//        }
+        // 0910 하이브리드랭킹엔진적용테스트 - 학생 프로필 벡터 동기화 연결
+        if (ncsCode != null && ncsCode.getCode() != null) {
             studentProfileService.syncStudentEmbeddingFromNcs(studentUserId, ncsCode.getCode());
         }
+
+        log.info("[JobPreferenceService] 학생 취업 희망조건 저장 완료. studentUserId: {}", studentUserId);
+
 
         return mapToResponseDTO(preference);
     }

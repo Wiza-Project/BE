@@ -2,8 +2,10 @@ package com.gnagnoohc.scms.domain.career.service;
 
 import com.gnagnoohc.scms.domain.career.dto.posting.JobPostingSummaryResponseDTO;
 import com.gnagnoohc.scms.domain.career.entity.JobPosting;
+import com.gnagnoohc.scms.domain.career.entity.JobPreference;
 import com.gnagnoohc.scms.domain.career.entity.StudentProfile;
 import com.gnagnoohc.scms.domain.career.repository.JobPostingRepository;
+import com.gnagnoohc.scms.domain.career.repository.JobPreferenceRepository;
 import com.gnagnoohc.scms.domain.career.repository.StudentProfileRepository;
 import com.gnagnoohc.scms.domain.user.service.consent.ConsentModuleCode;
 import com.gnagnoohc.scms.domain.user.service.consent.ConsentType;
@@ -15,10 +17,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.Instant;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -37,6 +38,7 @@ public class JobMatchingService {
 
     private final JobPostingRepository jobPostingRepository;
     private final StudentProfileRepository studentProfileRepository;
+    private final JobPreferenceRepository jobPreferenceRepository;
     private final ConsentVerifier consentVerifier;
 
     /**
@@ -48,25 +50,29 @@ public class JobMatchingService {
     public List<JobPostingSummaryResponseDTO> getRecommendedPostingsForStudent(Integer studentUserId) {
         Instant now = Instant.now();
 
+        // 1. 개인정보 PROFILING 동의 여부 확인 0910
+        boolean hasProfilingConsent = consentVerifier.hasValidConsent(
+                studentUserId, ConsentModuleCode.CAREER, ConsentType.PROFILING, now);
 
-        // [테스트용 계정: 박서연(238 / 20240034)] 전용 하이브리드 랭킹 시뮬레이션 인터셉트
-        if (studentUserId != null && studentUserId == 238) {
-            return runHybridSimulationForPark(studentUserId);
+        if (!hasProfilingConsent) {
+            log.debug("[JobMatchingService] 학생(userId: {}) PROFILING 미동의 상태", studentUserId);
+            return List.of();
         }
 
         // AI 맞춤 추천은 CAREER 모듈의 PROFILING 선택 동의 검사
         // (과도기 화면에서 수집된 THIRD_PARTY_SHARE도 함께 허용)
-        boolean hasConsent = consentVerifier.hasValidConsent(
-                studentUserId, ConsentModuleCode.CAREER, ConsentType.PROFILING, now)
-                || consentVerifier.hasValidConsent(
-                studentUserId, ConsentModuleCode.CAREER, ConsentType.THIRD_PARTY_SHARE, now)
-                || consentVerifier.hasValidConsent(
-                studentUserId, ConsentModuleCode.COMMON, ConsentType.THIRD_PARTY_SHARE, now);
+//        boolean hasConsent = consentVerifier.hasValidConsent(
+//                studentUserId, ConsentModuleCode.CAREER, ConsentType.PROFILING, now)
+//                || consentVerifier.hasValidConsent(
+//                studentUserId, ConsentModuleCode.CAREER, ConsentType.THIRD_PARTY_SHARE, now)
+//                || consentVerifier.hasValidConsent(
+//                studentUserId, ConsentModuleCode.COMMON, ConsentType.THIRD_PARTY_SHARE, now);
+//
+//        if (!hasConsent) {
+//            log.debug("[JobMatchingService] 학생(userId: {}) 맞춤 추천 동의 미완료 상태", studentUserId);
+//            return List.of();
+//        }
 
-        if (!hasConsent) {
-            log.debug("[JobMatchingService] 학생(userId: {}) 맞춤 추천 동의 미완료 상태", studentUserId);
-            return List.of();
-        }
 
         // 2. 학생 벡터 조회
         StudentProfile profile = studentProfileRepository.findByUserId(studentUserId).orElse(null);
@@ -76,19 +82,96 @@ public class JobMatchingService {
         }
 
         // 3. PostgreSQL vector 문자열 변환 후 코사인 유사도 매칭 실행
+//        String vectorString = Arrays.toString(profile.getEmbeddingVector());
+//        List<JobPosting> matchedPostings = jobPostingRepository.findVectorRecommendedPostings(
+//                vectorString, topKMatchLimit, now
+//        );
+//
+//        if (matchedPostings.isEmpty()) {
+//            return getFallbackPostings(now);
+//        }
+//
+//        return matchedPostings.stream()
+//                .map(this::convertToSummaryDTO)
+//                .toList();
+        // 3. 학생 취업 희망조건 조회 (지역, 선호 고용형태) 0910
+        Optional<JobPreference> preferenceOpt = jobPreferenceRepository.findByStudent_UserId(studentUserId);
+        Integer preferredRegionId = preferenceOpt
+                .filter(p -> p.getRegionCode() != null)
+                .map(p -> p.getRegionCode().getCodeId())
+                .orElse(null);
+        String preferredEmploymentType = preferenceOpt
+                .map(JobPreference::getPreferredEmploymentType)
+                .orElse(null);
+
         String vectorString = Arrays.toString(profile.getEmbeddingVector());
-        List<JobPosting> matchedPostings = jobPostingRepository.findVectorRecommendedPostings(
-                vectorString, topKMatchLimit, now
+
+        // 4. 후보군 추출 (1차: 희망지역 우선 조회) 0910
+        int candidatePoolSize = topKMatchLimit * 2;
+        List<JobPosting> candidates = new ArrayList<>(
+                jobPostingRepository.findVectorRecommendedPostings(vectorString, preferredRegionId, candidatePoolSize, now)
         );
 
-        if (matchedPostings.isEmpty()) {
+        // 5. 지역 공고가 부족할 경우 전국 단위 공고로 후보군 보충 (Fallback 방어) 0910
+        if (candidates.size() < topKMatchLimit && preferredRegionId != null) {
+            List<JobPosting> fallbackNationwide = jobPostingRepository.findVectorRecommendedPostings(
+                    vectorString, null, candidatePoolSize, now
+            );
+            Set<Integer> existingIds = new HashSet<>(candidates.stream().map(JobPosting::getJobPostingId).toList());
+            for (JobPosting fb : fallbackNationwide) {
+                if (!existingIds.contains(fb.getJobPostingId())) {
+                    candidates.add(fb);
+                }
+            }
+        }
+
+        if (candidates.isEmpty()) {
             return getFallbackPostings(now);
         }
 
-        return matchedPostings.stream()
-                .map(this::convertToSummaryDTO)
+        // 6. [하이브리드 랭킹 엔진] 종합 가중치 스코어링 & 정렬 0910
+        return candidates.stream()
+                .map(posting -> new ScoredPosting(
+                        posting,
+                        calculateScore(posting, preferredRegionId, preferredEmploymentType, now)
+                ))
+                .sorted(Comparator.comparingDouble(ScoredPosting::score).reversed())
+                .limit(topKMatchLimit)
+                .map(sp -> convertToSummaryDTO(sp.posting()))
                 .toList();
+
+
     }
+
+    /** 0910
+     * 하이브리드 가중치 점수 계산
+     * - 기본점수: 50.0 (NCS 직무 매칭 통과분)
+     * - 지역 일치 가산점: +35.0 (타 지역 공고 유입 원천 방어)
+     * - 고용형태 일치 가산점: +10.0 (정규직 등)
+     * - 마감 임박 가산점: 최대 +5.0 (지원 유도)
+     */
+    private double calculateScore(JobPosting posting, Integer preferredRegionId, String preferredEmploymentType, Instant now) {
+        double score = 50.0;
+
+        if (preferredRegionId != null && posting.getRegionCode() != null
+                && preferredRegionId.equals(posting.getRegionCode().getCodeId())) {
+            score += 35.0;
+        }
+
+        if (preferredEmploymentType != null && preferredEmploymentType.equalsIgnoreCase(posting.getEmploymentType())) {
+            score += 10.0;
+        }
+
+        if (posting.getApplicationEndsAt() != null) {
+            long daysLeft = Duration.between(now, posting.getApplicationEndsAt()).toDays();
+            if (daysLeft >= 0 && daysLeft <= 7) {
+                score += (7 - daysLeft) * 0.7;
+            }
+        }
+
+        return score;
+    }
+    private record ScoredPosting(JobPosting posting, double score) {}
 
     /**
      * PROFILING 미동의 / 벡터 부재 / 매칭 결과 0건 시 Fallback 기본 최신 공고 반환
@@ -121,61 +204,4 @@ public class JobMatchingService {
                 .build();
     }
 
-
-
-    /**
-     * [시연 전용] 박서연(238) 학생 맞춤형 하이브리드 AI 랭킹 시뮬레이터
-     */
-    private List<JobPostingSummaryResponseDTO> runHybridSimulationForPark(Integer studentUserId) {
-        // 1. 서울 + 백엔드 + 정보통신 타겟 공고 10건 (추천채용 우선 배치)
-        List<Integer> targetIds = List.of(140, 141, 142, 144, 143, 145, 146, 147, 148, 31);
-
-        // DB에서 해당 공고들을 조회한 뒤, targetIds 순서대로 정확하게 재정렬
-        Map<Integer, JobPosting> postingMap = jobPostingRepository.findAllById(targetIds).stream()
-                .collect(Collectors.toMap(JobPosting::getJobPostingId, jp -> jp));
-
-        List<JobPosting> sortedPostings = targetIds.stream()
-                .filter(postingMap::containsKey)
-                .map(postingMap::get)
-                .toList();
-
-        // 2. 가산점 채점 및 콘솔 로그 출력
-        log.info("\n=========================================================================================");
-        log.info("🎯 [HYBRID AI RANKING ENGINE] 실시간 하이브리드 정밀 채점 가동");
-        log.info("▶ 대상 학생: 박서연 (학번: 20240034 | User PK: {})", studentUserId);
-        log.info("▶ 파라미터 : 직무[정보통신] | 지역[서울] | 희망키워드[백엔드] | 선호채용[교내 추천채용]");
-        log.info("▶ 가중치   : KoSimCSE 벡터 유사도(60%) + 직무 키워드(20%) + 교내 추천채용(20%)");
-        log.info("-----------------------------------------------------------------------------------------");
-
-        int rank = 1;
-        for (JobPosting jp : sortedPostings) {
-            // 코사인 유사도 점수 (0.91 ~ 0.74 점진적 감소)
-            double baseSim = Math.max(0.70, 0.915 - (rank * 0.022));
-            double vectorScore = baseSim * 60.0;
-
-            // 키워드(백엔드) 일치 가산점 (20.0점)
-            double keywordBonus = 20.0;
-
-            // 교내 추천채용 가산점 (+18.5점)
-            boolean isRecommended = "RECOMMENDED".equalsIgnoreCase(jp.getPostingType());
-            double recBonus = isRecommended ? 18.5 : 0.0;
-
-            double totalScore = vectorScore + keywordBonus + recBonus;
-
-            log.info("【Rank {}】 공고 ID: [{}] '{}'", rank, jp.getJobPostingId(), jp.getPostingTitle());
-            log.info("   ├─ KoSimCSE 임베딩 코사인 유사도 : {} pts (Raw Sim: {})", String.format("%.2f", vectorScore), String.format("%.4f", baseSim));
-            log.info("   ├─ '백엔드' 직무 키워드 일치 가점: +{} pts (일치)", String.format("%.1f", keywordBonus));
-            log.info("   ├─ 교내 추천채용 우대 가산점     : +{} pts ({})", String.format("%.1f", recBonus), isRecommended ? "추천채용 공고 가점 부여" : "일반채용");
-            log.info("   └─ 최종 하이브리드 종합 스코어   : {} / 100.0 pts", String.format("%.2f", totalScore));
-            log.info("-----------------------------------------------------------------------------------------");
-            rank++;
-        }
-
-        log.info("✅ [HYBRID ENGINE] 서울/백엔드 최적화 공고 Top-{} 건 리랭킹 및 반환 완료", sortedPostings.size());
-        log.info("=========================================================================================\n");
-
-        return sortedPostings.stream()
-                .map(this::convertToSummaryDTO)
-                .toList();
-    }
 }
