@@ -31,34 +31,75 @@ public class StudentProfileService {
 
     @Transactional
     public void syncStudentEmbeddingFromNcs(Integer userId, String ncsCode) {
+//        if (ncsCode == null || ncsCode.isBlank()) {
+//            log.debug("[StudentProfile] NCS 코드가 없어 벡터 동기화를 생략합니다. (userId: {})", userId);
+//            return;
+//        }
+
+        // 1. ncsCode가 없거나 빈 값이면 기존 프로필 벡터를 비워줌 (무효화)
         if (ncsCode == null || ncsCode.isBlank()) {
-            log.debug("[StudentProfile] NCS 코드가 없어 벡터 동기화를 생략합니다. (userId: {})", userId);
+            log.debug("[StudentProfile] NCS 코드가 없어 프로필 벡터를 초기화합니다. (userId: {})", userId);
+
+            // 프로필이 이미 존재하는 경우에만 벡터를 null로 업데이트
+            studentProfileRepository.findById(userId).ifPresent(profile -> {
+                profile.updateEmbeddingVector(null);
+                studentProfileRepository.saveAndFlush(profile);
+            });
             return;
         }
 
-        // 1. 코드 값 정규화 ('NC100', 'NCS_01' -> 대분류 번호 '10', '01' 등 추출)
-        String cleanCode = ncsCode.replace("NCS_", "").replace("NC", "").trim();
+        String trimmedCode = ncsCode.trim();
+
+        // NCS_CODE 그룹 및 허용된 형식 검증 (NC100 ~ NC2400 범위, 3~4자리 숫자 허용) 방어 로직 추가
+        if (!trimmedCode.matches("^NC\\d{3,4}$")) {
+            log.warn("[StudentProfile] 유효하지 않은 NCS 코드 형식입니다. 검증 실패로 임베딩 벡터를 초기화합니다. (userId: {}, ncsCode: {})", userId, ncsCode);
+
+            studentProfileRepository.findById(userId).ifPresent(profile -> {
+                profile.updateEmbeddingVector(null);
+                studentProfileRepository.saveAndFlush(profile);
+            });
+            return;
+        }
+
+        // 안전하게 nc제거 및 대분류 접두사 추출
+        String cleanCode = trimmedCode.replaceFirst("^NC", "");
         String majorCategoryPrefix = cleanCode.length() >= 2 ? cleanCode.substring(0, 2) : cleanCode;
 
         // 2. ncs_standard에서 대분류 계열이 일치하고 벡터가 존재하는 표준 직무 탐색
-        float[] targetVector = ncsStandardRepository.findAll().stream()
-                .filter(ncs -> ncs.getNcsCode() != null && ncs.getNcsCode().startsWith(majorCategoryPrefix))
+//        float[] targetVector = ncsStandardRepository.findAll().stream()
+//                .filter(ncs -> ncs.getNcsCode() != null && ncs.getNcsCode().startsWith(majorCategoryPrefix))
+//                .map(NcsStandard::getEmbeddingVector)
+//                .filter(vec -> vec != null && vec.length > 0)
+//                .findFirst()
+//                .orElse(null);
+
+        float[] targetVector = ncsStandardRepository
+                .findFirstByNcsCodeStartingWithAndEmbeddingVectorIsNotNullOrderByNcsCodeAsc(majorCategoryPrefix)
                 .map(NcsStandard::getEmbeddingVector)
-                .filter(vec -> vec != null && vec.length > 0)
-                .findFirst()
                 .orElse(null);
-
         // 3. 없을 경우 전체 유효 벡터 Fallback
-        if (targetVector == null) {
-            targetVector = ncsStandardRepository.findAll().stream()
-                    .map(NcsStandard::getEmbeddingVector)
-                    .filter(vec -> vec != null && vec.length > 0)
-                    .findFirst()
-                    .orElse(null);
-        }
+//        if (targetVector == null) {
+//            targetVector = ncsStandardRepository.findAll().stream()
+//                    .map(NcsStandard::getEmbeddingVector)
+//                    .filter(vec -> vec != null && vec.length > 0)
+//                    .findFirst()
+//                    .orElse(null);
+//        }
+//
+//        if (targetVector == null) {
+//            log.warn("[StudentProfile] 적재 가능한 NCS 표준 벡터가 원장에 전혀 존재하지 않습니다.");
+//            return;
+//        }
 
+        // 엉뚱한 직무 공고가 추천되지 않도록 전체 유효 벡터 Fallback 로직은 완전히 제거함!
         if (targetVector == null) {
-            log.warn("[StudentProfile] 적재 가능한 NCS 표준 벡터가 원장에 전혀 존재하지 않습니다.");
+            log.warn("[StudentProfile] 대분류({})에 일치하는 NCS 표준 벡터가 존재하지 않아 벡터를 비웁니다.", majorCategoryPrefix);
+
+            // 매칭되는 벡터가 없어도 기존 벡터를 null로 초기화 갱신
+            studentProfileRepository.findById(userId).ifPresent(profile -> {
+                profile.updateEmbeddingVector(null);
+                studentProfileRepository.saveAndFlush(profile);
+            });
             return;
         }
 

@@ -21,7 +21,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
-import java.util.stream.Collectors;
 
 /**
  * 학생 맞춤형 채용공고 추천 및 매칭 서비스
