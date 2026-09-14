@@ -48,8 +48,21 @@ public class StudentProfileService {
             return;
         }
 
-        // 1. 코드 값 정규화 ('NC100', 'NCS_01' -> 대분류 번호 '10', '01' 등 추출)
-        String cleanCode = ncsCode.replace("NCS_", "").replace("NC", "").trim();
+        String trimmedCode = ncsCode.trim();
+
+        // NCS_CODE 그룹 및 허용된 형식 검증 (NC100 ~ NC2400 범위, 3~4자리 숫자 허용) 방어 로직 추가
+        if (!trimmedCode.matches("^NC\\d{3,4}$")) {
+            log.warn("[StudentProfile] 유효하지 않은 NCS 코드 형식입니다. 검증 실패로 임베딩 벡터를 초기화합니다. (userId: {}, ncsCode: {})", userId, ncsCode);
+
+            studentProfileRepository.findById(userId).ifPresent(profile -> {
+                profile.updateEmbeddingVector(null);
+                studentProfileRepository.saveAndFlush(profile);
+            });
+            return;
+        }
+
+        // 안전하게 nc제거 및 대분류 접두사 추출
+        String cleanCode = trimmedCode.replaceFirst("^NC", "");
         String majorCategoryPrefix = cleanCode.length() >= 2 ? cleanCode.substring(0, 2) : cleanCode;
 
         // 2. ncs_standard에서 대분류 계열이 일치하고 벡터가 존재하는 표준 직무 탐색
