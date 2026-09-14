@@ -45,14 +45,41 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, Integer>
     Optional<JobPosting> findByIdWithDetails(@Param("jobPostingId") Integer jobPostingId);
 
     /**
-     * [pgvector AI 잡매칭] 학생 임베딩 벡터 코사인 유사도 상위 Top-K 공고 조회
+     * 추천 후보 공고들의 ID를 받아 N+1 없이 회사 및 공통코드(직무, 지역)를 일괄 패치 조인 조회
+     */
+    @Query("SELECT DISTINCT jp FROM JobPosting jp " +
+            "JOIN FETCH jp.companyAccount ca " +
+            "LEFT JOIN FETCH jp.ncsCode nc " +
+            "LEFT JOIN FETCH jp.regionCode rc " +
+            "WHERE jp.jobPostingId IN :ids")
+    List<JobPosting> findAllByIdsWithDetails(@Param("ids") List<Integer> ids);
+
+    /**
+     * [pgvector AI 잡매칭] 학생 지정 희망 직무(NCS) 및 지역 필수 기준 추천 공고 조회
+     *
+     * WHERE ns.embedding_vector IS NOT NULL
+     * -- 희망 직무가 지정된 경우 해당 대분류(앞 2자리) 풀 내에서만 벡터 유사도 탐색
+     * AND (tc.code IS NULL OR SUBSTRING(ns.ncs_code, 1, 2) = SUBSTRING(REPLACE(REPLACE(tc.code, 'NCS_', ''), 'NC', ''), 1, 2))
+     *
+     *
+     * WHERE jp.posting_status = 'PUBLISHED'
+     * AND (jp.application_ends_at IS NULL OR jp.application_ends_at >= :now)
+     * -- [무조건 학생 희망 직무 기준 강제]
+     * AND (CAST(:preferredNcsId AS integer) IS NULL OR jp.ncs_code_id = CAST(:preferredNcsId AS integer))
+     * -- [지역 조건]
+     * AND (CAST(:preferredRegionId AS integer) IS NULL OR jp.region_code_id = CAST(:preferredRegionId AS integer))
      */
     @Query(value = """
-            WITH top_ncs AS (
+            WITH target_ncs_code AS (
+                SELECT code FROM common_code WHERE code_id = CAST(:preferredNcsId AS integer)
+            ),
+            top_ncs AS (
                 SELECT ncs_code
-                FROM ncs_standard
-                WHERE embedding_vector IS NOT NULL
-                ORDER BY embedding_vector <=> CAST(:embeddingVector AS vector)
+                FROM ncs_standard ns
+                CROSS JOIN target_ncs_code tc
+                WHERE ns.embedding_vector IS NOT NULL
+                  AND (tc.code IS NULL OR SUBSTRING(ns.ncs_code, 1, 2) = SUBSTRING(REPLACE(REPLACE(tc.code, 'NCS_', ''), 'NC', ''), 1, 2))
+                ORDER BY ns.embedding_vector <=> CAST(:embeddingVector AS vector)
                 LIMIT :topK
             )
             SELECT DISTINCT jp.*
@@ -61,6 +88,7 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, Integer>
             JOIN top_ncs tn ON SUBSTRING(tn.ncs_code, 1, 2) = SUBSTRING(REPLACE(REPLACE(cc.code, 'NCS_', ''), 'NC', ''), 1, 2)
             WHERE jp.posting_status = 'PUBLISHED'
               AND (jp.application_ends_at IS NULL OR jp.application_ends_at >= :now)
+              AND (CAST(:preferredNcsId AS integer) IS NULL OR jp.ncs_code_id = CAST(:preferredNcsId AS integer))
               AND (CAST(:preferredRegionId AS integer) IS NULL OR jp.region_code_id = CAST(:preferredRegionId AS integer))
             ORDER BY jp.application_ends_at ASC NULLS LAST, jp.job_posting_id DESC
             LIMIT :topK
@@ -68,6 +96,7 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, Integer>
     List<JobPosting> findVectorRecommendedPostings(
             @Param("embeddingVector") String embeddingVector,
             @Param("preferredRegionId") Integer preferredRegionId,
+            @Param("preferredNcsId") Integer preferredNcsId,
             @Param("topK") int topK,
             @Param("now") Instant now
     );
