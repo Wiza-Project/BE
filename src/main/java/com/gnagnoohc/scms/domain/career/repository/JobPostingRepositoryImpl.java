@@ -17,7 +17,6 @@ import java.util.List;
 
 import static com.gnagnoohc.scms.domain.career.entity.QCompanyAccount.companyAccount;
 import static com.gnagnoohc.scms.domain.career.entity.QJobPosting.jobPosting;
-import static com.gnagnoohc.scms.global.common.entity.QCommonCode.commonCode;
 
 /**
  * 채용공고 QueryDSL 동적 쿼리 커스텀 레포지토리 구현체
