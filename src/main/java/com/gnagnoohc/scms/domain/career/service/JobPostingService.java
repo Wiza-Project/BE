@@ -320,18 +320,6 @@ public class JobPostingService {
         JobPosting jobPosting = jobPostingRepository.findById(jobPostingId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.JOB_POSTING_NOT_FOUND));
 
-<<<<<<< HEAD
-        if ("PUBLISHED".equalsIgnoreCase(postingStatus)) {
-            jobPosting.review("APPROVED", null, null);
-        } else if ("CLOSED".equalsIgnoreCase(postingStatus)) {
-            jobPosting.review("CLOSED", null, null);
-        } else if ("DRAFT".equalsIgnoreCase(postingStatus)) {
-            jobPosting.review("REQUESTED", null, null);
-        } else {
-            throw new BusinessException(ErrorCode.INVALID_INPUT, "유효하지 않은 게시 상태입니다.");
-        }
-
-=======
 //        if ("PUBLISHED".equalsIgnoreCase(postingStatus)) {
 //            jobPosting.review("APPROVED", null, null);
 //        } else if ("CLOSED".equalsIgnoreCase(postingStatus)) {
@@ -346,7 +334,6 @@ public class JobPostingService {
         } catch (IllegalArgumentException e) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, e.getMessage());
         }
->>>>>>> origin/develop
         log.info("[JobPostingService] 채용공고 게시 상태 변경 완료. ID: {}, 상태: {}", jobPostingId, postingStatus);
     }
 

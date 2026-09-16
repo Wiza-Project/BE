@@ -56,4 +56,10 @@ public class JobPreferenceResponseDTO {
 
     @Schema(description = "최종 수정 일시 (KST)")
     private OffsetDateTime updatedAt;
+
+    @Schema(description = "선호 채용 구분")
+    private String preferredPostingType;
+
+    @Schema(description = "희망 직무 키워드")
+    private String jobKeyword;
 }
