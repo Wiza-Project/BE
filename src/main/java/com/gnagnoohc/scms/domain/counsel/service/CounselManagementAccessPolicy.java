@@ -7,14 +7,17 @@ import com.gnagnoohc.scms.global.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.util.Optional;
+
 /**
  * 상담 관리 업무 범위를 활성 STAFF의 실제 역할 조합(user_role)만으로 판정하는 단일 지점이다.
  * 각 서비스가 ST200·ST300 조건을 각자 복제하면 어느 생명주기에서는 검사를 빠뜨릴 수 있어,
  * 판정 결과(Scope)를 여기서 한 번만 계산하고 목록 필터·단건 검증은 이 결과를 재사용한다.
  *
- * <p>ST200+ST300을 "합집합"으로 계산하지 않는다. 확정 권한 행렬(설계 문서 2장)에 따라
- * ST300을 함께 가진 사용자는 일반 상담사보다 더 많은 유형이 아니라, 오히려 CS200(진로상담)
- * 하나로 범위가 "축소"된다. 이 축소를 각 서비스가 아니라 이 클래스 하나에서만 표현한다.</p>
+ * <p>ST200과 ST300은 서로 배타적인 역할로 다룬다(ST300 지도교수 진로상담 관리 리팩터링 설계
+ * 2장). ST200만 있으면 ALL_DIRECT, ST300만 있으면 CAREER_ONLY이고, 두 역할을 동시에 갖거나
+ * 둘 다 없으면 잘못된 데이터로 보고 403(A004)으로 실패 폐쇄한다. "겸임을 CAREER_ONLY로 축소
+ * 허용"하던 이전 정책(체크리스트 11-2)은 더 이상 유효하지 않다.</p>
  */
 @Component
 @RequiredArgsConstructor
@@ -31,19 +34,20 @@ public class CounselManagementAccessPolicy {
     public enum Scope {
         // ST200만 보유: 활성 DIRECT 유형 전체를 관리한다.
         ALL_DIRECT,
-        // ST200+ST300 보유: 활성 DIRECT 유형 중 CS200(진로상담)만 관리한다.
+        // ST300만 보유: 활성 DIRECT 유형 중 CS200(진로상담)만 관리한다.
         CAREER_ONLY
     }
 
     /**
      * 사용자 행을 잠그지 않는 조회 경로(목록 조회 등)에서 counselorId만으로 범위를 판정한다.
-     * 활성 STAFF + ST200이 아니면 기존 인가 예외(A004/403)로 종료한다.
+     * 활성 STAFF + (ST200 또는 ST300)이 아니면 기존 인가 예외(A004/403)로 종료한다.
      */
     public Scope requireScope(Integer counselorId) {
-        if (!counselUserRepository.isActiveCounselor(counselorId)) {
+        if (!counselUserRepository.isActiveCounselManager(counselorId)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
-        return scopeOf(counselorId);
+        return resolveExclusiveScope(counselorId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
     }
 
     /**
@@ -58,11 +62,11 @@ public class CounselManagementAccessPolicy {
     public Scope requireScope(AppUser lockedCounselor) {
         boolean active = "ACTIVE".equals(lockedCounselor.getAccountStatus());
         boolean staff = "STAFF".equals(lockedCounselor.getUserType());
-        boolean counselorRole = counselUserRepository.hasCounselorRole(lockedCounselor.getUserId());
-        if (!active || !staff || !counselorRole) {
+        if (!active || !staff) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
-        return scopeOf(lockedCounselor.getUserId());
+        return resolveExclusiveScope(lockedCounselor.getUserId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
     }
 
     /**
@@ -83,16 +87,43 @@ public class CounselManagementAccessPolicy {
      * 학생 일정 노출·직접 예약 검증 전용 boolean 판정이다. 상담사 쪽 권한 예외를 학생에게
      * 그대로 노출하면 다른 사람의 계정 상태를 추측하는 단서가 될 수 있으므로, 예외 대신
      * false만 돌려주고 호출부가 기존 SCHEDULE_NOT_AVAILABLE(S002)로 응답을 통일하게 한다.
+     *
+     * <p>범위가 CAREER_ONLY(ST300만 보유)일 때는 이 학생이 해당 상담사의 지도학생인지까지
+     * 함께 확인한다(ST300 지도교수 진로상담 관리 리팩터링 설계 5.2장). ALL_DIRECT(ST200만
+     * 보유)는 지도교수 관계와 무관하게 기존처럼 통과한다. 이 메서드가 목록 필터
+     * (CounselingScheduleRepository.findAvailableSchedules)와 단건 예약 검증
+     * (CounselingScheduleService.requireReservableDirectSchedule) 양쪽에서 같은 기준으로
+     * 재사용되므로, 학생별 지도교수 판정 로직을 여기 한 곳에만 둔다. studentId를 받지 않는
+     * 버전은 일부러 두지 않는다 — 지도교수 검사를 빠뜨린 채 호출되는 실수를 막기 위해서다.</p>
      */
-    public boolean isEligibleForType(Integer counselorId, String typeCode, String applicationRoute) {
-        if (!counselUserRepository.isActiveCounselor(counselorId)) {
+    public boolean isEligibleForType(
+            Integer counselorId,
+            String typeCode,
+            String applicationRoute,
+            Integer studentId
+    ) {
+        if (!counselUserRepository.isActiveCounselManager(counselorId)) {
             return false;
         }
-        return allows(scopeOf(counselorId), typeCode, applicationRoute);
+        return resolveExclusiveScope(counselorId)
+                .filter(scope -> allows(scope, typeCode, applicationRoute))
+                .map(scope -> scope != Scope.CAREER_ONLY
+                        || counselUserRepository.isAdviseeOf(studentId, counselorId))
+                .orElse(false);
     }
 
-    private Scope scopeOf(Integer counselorId) {
+    /**
+     * ST200·ST300 보유 여부를 각각 조회해 배타 행렬로 Scope를 계산한다. 두 boolean이 같으면
+     * (둘 다 없음 또는 둘 다 있음) 유효한 범위가 없다는 뜻이므로 빈 Optional을 돌려주고,
+     * 정확히 하나만 있을 때만 그에 대응하는 Scope를 채워 돌려준다. 예외를 던질지(requireScope류)
+     * false로 흡수할지(isEligibleForType)는 각 호출부가 결정한다.
+     */
+    private Optional<Scope> resolveExclusiveScope(Integer counselorId) {
+        boolean hasCounselorRole = counselUserRepository.hasCounselorRole(counselorId);
         boolean hasProfessorRole = counselUserRepository.hasProfessorRole(counselorId);
-        return hasProfessorRole ? Scope.CAREER_ONLY : Scope.ALL_DIRECT;
+        if (hasCounselorRole == hasProfessorRole) {
+            return Optional.empty();
+        }
+        return Optional.of(hasCounselorRole ? Scope.ALL_DIRECT : Scope.CAREER_ONLY);
     }
 }

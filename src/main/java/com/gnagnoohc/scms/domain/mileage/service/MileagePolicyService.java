@@ -1,6 +1,6 @@
 package com.gnagnoohc.scms.domain.mileage.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import com.gnagnoohc.scms.domain.mileage.DTO.request.MileagePolicyRegisterRequestDTO;
 import com.gnagnoohc.scms.domain.mileage.DTO.request.MileagePolicyUpdateRequestDTO;
 import com.gnagnoohc.scms.domain.mileage.DTO.response.MileagePolicyResponseDTO;
@@ -29,12 +29,11 @@ import java.time.LocalDate;
 @Transactional
 public class MileagePolicyService {
 
-    // 학기 코드를 생략한 등록 요청에 채워 넣는 기본값. "전학기 공통" 정책을 의미한다(MileagePolicy 엔티티 기본값과 동일).
-    private static final String DEFAULT_SEMESTER_CODE = "ALL";
     private static final String INITIAL_STATUS = "ACTIVE";
 
     private final MileagePolicyRepository policyRepository;
     private final MileageActivityTypeRepository activityTypeRepository;
+    private final MileageSemesterCodeValidator semesterCodeValidator;
 
     /**
      * ── "등록(Create)" 기능 ──────────────────────────────────────────────
@@ -42,26 +41,25 @@ public class MileagePolicyService {
      * request      : 등록할 정책 내용 (요청 바디에서 옴)
      * staffId      : 지금 로그인해서 이 요청을 보낸 교직원의 id (인증 정보에서 옴, 클라이언트가 위조 불가) → created_by로 사용
      *
-     * version_no는 클라이언트가 정하지 않는다 — 같은 활동유형+학년도+학기 조합 내에서 서버가 자동으로 다음 버전을 채번한다.
+     * version_no는 클라이언트가 정하지 않는다 — 같은 활동유형+학기 조합 내에서 서버가 자동으로 다음 버전을 채번한다.
      */
     public MileagePolicyResponseDTO register(MileagePolicyRegisterRequestDTO request, Integer staffId) {
         MileageActivityType activityType = activityTypeRepository.findByIdForUpdate(request.activityTypeId())
                 .filter(MileageActivityType::isActive)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MILEAGE_ACTIVITY_TYPE_NOT_FOUND));
 
-        String semesterCode = resolveSemesterCode(request.semesterCode());
+        String semesterCode = semesterCodeValidator.resolveSemesterCodeOrDefault(request.semesterCode());
         validatePeriod(request.validFrom(), request.validTo());
-        validateExtracurricularPoints(activityType, request.points());
+        validatePoints(request.points());
 
         Integer nextVersionNo = policyRepository.findNextVersionNo(
-                activityType.getActivityTypeId(), request.academicYear(), semesterCode);
+                activityType.getActivityTypeId(), semesterCode);
 
         Instant now = Instant.now();
         Integer mileagePolicyId;
         try {
             mileagePolicyId = policyRepository.insertPolicy(
-                    activityType.getActivityTypeId(),
-                    request.academicYear(),
+                activityType.getActivityTypeId(),
                     semesterCode,
                     nextVersionNo,
                     request.points(),
@@ -85,10 +83,10 @@ public class MileagePolicyService {
     }
 
     @Transactional(readOnly = true)
-    public PageResponse<MileagePolicyResponseDTO> list(Integer activityTypeId, Integer academicYear,
+    public PageResponse<MileagePolicyResponseDTO> list(Integer activityTypeId,
                                                          String semesterCode, String policyStatus,
                                                          Pageable pageable) {
-        Specification<MileagePolicy> spec = buildFilter(activityTypeId, academicYear, semesterCode, policyStatus);
+        Specification<MileagePolicy> spec = buildFilter(activityTypeId, semesterCode, policyStatus);
         Page<MileagePolicy> page = policyRepository.findAll(spec, pageable);
         return PageResponse.from(page.map(MileagePolicyResponseDTO::from));
     }
@@ -103,7 +101,7 @@ public class MileagePolicyService {
     /**
      * ── "수정(Update)" 기능 ──────────────────────────────────────────────
      *
-     * 활동유형/학년도/학기/버전(정책의 식별 필드)은 바꿀 수 없고, 그 외 필드만 부분 수정한다.
+     * 활동유형/학기/버전(정책의 식별 필드)은 바꿀 수 없고, 그 외 필드만 부분 수정한다.
      * 요청 필드가 null이면 기존 값을 그대로 유지한다.
      */
     public MileagePolicyResponseDTO update(Integer mileagePolicyId, MileagePolicyUpdateRequestDTO request) {
@@ -119,23 +117,21 @@ public class MileagePolicyService {
         LocalDate validFrom = request.validFrom() != null ? request.validFrom() : policy.getValidFrom();
         LocalDate validTo = request.clearValidTo() ? null
                 : request.validTo() != null ? request.validTo() : policy.getValidTo();
-        JsonNode duplicateRule = request.duplicateRule() != null ? request.duplicateRule() : policy.getDuplicateRule();
+        String duplicateRuleJson = request.duplicateRule() != null
+                ? writeJson(request.duplicateRule())
+                : (policy.getDuplicateRule() == null ? null : policy.getDuplicateRule().toString());
         String policyStatus = request.policyStatus() != null ? request.policyStatus() : policy.getPolicyStatus();
 
         validatePeriod(validFrom, validTo);
-        validateExtracurricularPoints(policy.getActivityType(), points);
+        validatePoints(points);
 
         int updatedRows = policyRepository.updatePolicy(
-                mileagePolicyId, points, maximumPoints, validFrom, validTo, writeJson(duplicateRule), policyStatus);
+                mileagePolicyId, points, maximumPoints, validFrom, validTo, duplicateRuleJson, policyStatus);
         if (updatedRows == 0) {
             throw new BusinessException(ErrorCode.MILEAGE_POLICY_NOT_FOUND);
         }
 
         return getDetail(mileagePolicyId);
-    }
-
-    private String resolveSemesterCode(String semesterCode) {
-        return (semesterCode == null || semesterCode.isBlank()) ? DEFAULT_SEMESTER_CODE : semesterCode;
     }
 
     // 적용 종료일(validTo)은 nullable(무기한)이라 있을 때만 검사한다.
@@ -145,12 +141,11 @@ public class MileagePolicyService {
         }
     }
 
-    private void validateExtracurricularPoints(MileageActivityType activityType, BigDecimal points) {
-        if (ExtracurricularMileagePolicyDefinition.isExtracurricular(activityType)
-                && (points == null || points.compareTo(BigDecimal.ZERO) <= 0)) {
+    private void validatePoints(BigDecimal points) {
+        if (points == null || points.compareTo(BigDecimal.ZERO) <= 0) {
             throw new BusinessException(
                     ErrorCode.INVALID_INPUT,
-                    "비교과 마일리지 정책의 포인트는 0보다 커야 합니다.");
+                    "마일리지 정책의 포인트는 0보다 커야 합니다.");
         }
     }
 
@@ -160,15 +155,12 @@ public class MileagePolicyService {
         return node == null ? null : node.toString();
     }
 
-    private Specification<MileagePolicy> buildFilter(Integer activityTypeId, Integer academicYear,
+    private Specification<MileagePolicy> buildFilter(Integer activityTypeId,
                                                        String semesterCode, String policyStatus) {
         return (root, query, cb) -> {
             var predicate = cb.conjunction();
             if (activityTypeId != null) {
                 predicate = cb.and(predicate, cb.equal(root.get("activityType").get("activityTypeId"), activityTypeId));
-            }
-            if (academicYear != null) {
-                predicate = cb.and(predicate, cb.equal(root.get("academicYear"), academicYear));
             }
             if (semesterCode != null) {
                 predicate = cb.and(predicate, cb.equal(root.get("semesterCode"), semesterCode));

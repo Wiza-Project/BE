@@ -46,7 +46,7 @@ public class CareerSecurityHelper {
      * }</pre>
      *
      * @param principal Spring Security 컨텍스트의 Principal 객체 (일반적으로 {@link AuthUser})
-     * @return 취창업지원과(D400) 소속 교직원이거나 ADMIN인 경우 {@code true}, 그 외 {@code false}
+     * @return 취창업지원과(D400) 소속 교직원이거나 ADMIN 총괄 관리자인 경우 {@code true}, 그 외 {@code false}
      */
     @Transactional(readOnly = true)
     public boolean isCareerStaff(Object principal) {

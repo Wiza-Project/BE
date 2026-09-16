@@ -29,11 +29,26 @@ public interface CounselingAssignmentRepository extends JpaRepository<Counseling
     Optional<CounselingAssignment> findByIdForUpdate(@Param("assignmentId") Integer assignmentId);
 
     /**
-     * 공개 상담 결과 최종 완료의 잠금 순서(회기 → 예약 → 배정)를 만들기 위한 ID 전용 조회다.
+     * 공개 상담 결과 최종 완료의 잠금 순서(예약 → 배정 → 회기)를 만들기 위한 ID 전용 조회다.
      * 배정과 예약의 관계는 생성 후 바뀌지 않는 불변값이므로 잠금 없이 읽어도 안전하고,
-     * 이 값으로 예약 행을 먼저 잠근 뒤 배정을 잠근다(예약 취소의 "예약 → 배정 변경" 순서와 맞춰
-     * 교착을 피하기 위함).
+     * 이 값으로 예약 행을 먼저 잠근 뒤 배정, 회기 순서로 잠근다(예약 취소의 "예약 → 배정 → 회기"
+     * 순서와 맞춰 교착을 피하기 위함).
      */
     @Query("select a.counselingReservation.counselingReservationId from CounselingAssignment a where a.counselingAssignmentId = :assignmentId")
     Optional<Integer> findReservationIdByAssignmentId(@Param("assignmentId") Integer assignmentId);
+
+    /**
+     * 승인 예약 취소 전용 잠금 조회다. 예약 행을 먼저 잠근 뒤(호출부에서) 이 조회로 활성 배정을
+     * 잠그고, 이어서 그 배정의 PLANNED 회기까지 잠그는 "예약 → 배정 → 회기" 순서를 만든다.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select a
+            from CounselingAssignment a
+            where a.counselingReservation.counselingReservationId = :reservationId
+              and a.endedAt is null
+            """)
+    Optional<CounselingAssignment> findActiveByReservationIdForUpdate(
+            @Param("reservationId") Integer reservationId
+    );
 }

@@ -8,10 +8,12 @@ import com.gnagnoohc.scms.domain.counsel.dto.request.CounselingReservationSchedu
 import com.gnagnoohc.scms.domain.counsel.entity.CounselingAssignment;
 import com.gnagnoohc.scms.domain.counsel.entity.CounselingReservation;
 import com.gnagnoohc.scms.domain.counsel.entity.CounselingSchedule;
+import com.gnagnoohc.scms.domain.counsel.entity.CounselingSession;
 import com.gnagnoohc.scms.domain.counsel.entity.CounselingType;
 import com.gnagnoohc.scms.domain.counsel.repository.CounselUserRepository;
 import com.gnagnoohc.scms.domain.counsel.repository.CounselingAssignmentRepository;
 import com.gnagnoohc.scms.domain.counsel.repository.CounselingReservationRepository;
+import com.gnagnoohc.scms.domain.counsel.repository.CounselingSessionRepository;
 import com.gnagnoohc.scms.domain.counsel.repository.CounselingTypeRepository;
 import com.gnagnoohc.scms.domain.user.entity.AppUser;
 import com.gnagnoohc.scms.domain.user.entity.UserConsent;
@@ -40,11 +42,16 @@ public class CounselingReservationService {
 
     private static final String DIRECT_ROUTE = "DIRECT";
     private static final String CENTER_ROUTE = "CENTER";
+    // 스트레스 결과 기반 상담 제안 수락 전용 상수(설계 2장 확정 정책). 제안한 상담사의 일정으로
+    // 제한하지 않고 활성 CS300 + DIRECT 유형 자체만 대상으로 삼는다.
+    private static final String STRESS_PROPOSAL_TYPE_CODE = "CS300";
+    private static final String STRESS_PROPOSAL_REQUEST_CONTENT = "스트레스 검사 결과 기반 상담 제안 수락";
 
     private final CounselUserRepository counselUserRepository;
     private final CounselingTypeRepository counselingTypeRepository;
     private final CounselingReservationRepository counselingReservationRepository;
     private final CounselingAssignmentRepository counselingAssignmentRepository;
+    private final CounselingSessionRepository counselingSessionRepository;
     private final ConsentVerifier consentVerifier;
     private final CounselingScheduleService counselingScheduleService;
 
@@ -92,6 +99,54 @@ public class CounselingReservationService {
         return CounselingReservationResponse.from(counselingReservationRepository.save(reservation));
     }
 
+    /**
+     * 스트레스 결과 기반 상담 제안 수락 전용 진입점이다. 패키지 범위로 제한해
+     * 같은 패키지의 CounselingProposalService만 호출할 수 있게 하고, 별도 공개 API로 만들지 않는다.
+     * 학생 행 잠금은 호출부가 이미 잡아 넘겨주므로 여기서는 다시 잠그지 않고 활성 상태만 재검증한다.
+     * 동의·일정 검증은 기존 학생 직접 예약(create)과 완전히 같은 경계(ConsentVerifier,
+     * getScheduleForReservation → CounselingScheduleService)를 그대로 재사용해, 검증 로직이 두
+     * 곳에서 따로 관리되다 조건이 갈라지는 것을 막는다. 신청 내용은 확정 문구로 고정하며 요청
+     * DTO로는 받지 않는다.
+     */
+    CounselingReservation createFromStressProposal(
+            AppUser lockedStudent,
+            Integer scheduleId,
+            Integer consentId,
+            Instant now
+    ) {
+        if (!isActiveStudent(lockedStudent)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        CounselingType counselingType = counselingTypeRepository
+                .findByTypeCodeAndApplicationRouteAndActiveTrue(STRESS_PROPOSAL_TYPE_CODE, DIRECT_ROUTE)
+                // CS300 + DIRECT 유형 자체가 없거나 비활성이면 학생에게 보여줄 수락 대상 일정이
+                // 애초에 존재할 수 없으므로, 기존 일정 불가 사유와 같은 SCHEDULE_NOT_AVAILABLE(S002)로 합친다.
+                .orElseThrow(() -> new BusinessException(ErrorCode.SCHEDULE_NOT_AVAILABLE));
+        Integer studentId = lockedStudent.getUserId();
+        UserConsent userConsent = consentVerifier.requireOwnedValidConsent(
+                consentId,
+                studentId,
+                ConsentModuleCode.COUNSELING,
+                ConsentType.PERSONAL_INFO,
+                now
+        );
+        CounselingSchedule counselingSchedule = getScheduleForReservation(
+                scheduleId,
+                counselingType,
+                studentId,
+                now,
+                null
+        );
+        CounselingReservation reservation = CounselingReservation.create(
+                counselingType,
+                counselingSchedule,
+                lockedStudent,
+                userConsent,
+                STRESS_PROPOSAL_REQUEST_CONTENT
+        );
+        return counselingReservationRepository.save(reservation);
+    }
+
     public PageResponse<CounselingReservationResponse> getReservations(
             Integer studentId,
             int page,
@@ -117,9 +172,15 @@ public class CounselingReservationService {
      * 아무 흔적도 남지 않는다(부분 반영 없음).
      * 취소 대상이 승인(APPROVED)까지 갔던 예약이면, 예약이 만든 배정도 그대로 활성 상태로 남아
      * "취소된 예약인데 활성 배정이 있다"는 모순이 생긴다. 이를 막기 위해 같은 트랜잭션 안에서
-     * 그 예약의 활성 배정을 함께 종료(ended_at 세팅)한다. reservation.cancel()이 상태를 CANCELED로
-     * 바꾸고 나면 "취소 직전에 APPROVED였는지" 더 이상 구분할 수 없으므로, wasApproved는 반드시
+     * 그 예약의 활성 배정을 잠그고, 그 배정 아래 아직 PLANNED인 회기를 모두 잠가 함께 자동
+     * 취소한 뒤 배정을 종료(ended_at 세팅)한다. COMPLETED·이미 CANCELED인 회기는 이 조회 대상에
+     * 아예 들지 않으므로 손대지 않는다. reservation.cancel()이 상태를 CANCELED로 바꾸고 나면
+     * "취소 직전에 APPROVED였는지" 더 이상 구분할 수 없으므로, wasApproved는 반드시
      * cancel() 호출 전에 읽어 둔다.
+     * 잠금 순서는 "예약(getReservationForUpdate) → 배정(findActiveByReservationIdForUpdate) →
+     * PLANNED 회기(findPlannedByAssignmentIdForUpdate)"로 고정한다. 상담사의 출결 완료도 같은
+     * 예약 행을 먼저 잠근 뒤 회기를 잠그도록 통일했으므로(CounselingSessionService.complete),
+     * 두 트랜잭션이 반대 순서로 잠가 교착하는 상황이 생기지 않는다.
      */
     @Transactional
     public CounselingReservationResponse cancel(
@@ -133,10 +194,13 @@ public class CounselingReservationService {
         reservation.cancel(request.cancellationReason(), now);
         if (wasApproved) {
             CounselingAssignment activeAssignment = counselingAssignmentRepository
-                    .findByCounselingReservationCounselingReservationIdAndEndedAtIsNull(reservationId)
+                    .findActiveByReservationIdForUpdate(reservationId)
                     // 승인된 예약에 활성 배정이 없는 것은 데이터 모순이므로 조용히 넘어가지 않고
                     // 예외로 트랜잭션 전체를 롤백시켜 잘못된 취소가 커밋되지 않게 한다.
                     .orElseThrow(() -> new BusinessException(ErrorCode.INTERNAL_ERROR));
+            counselingSessionRepository
+                    .findPlannedByAssignmentIdForUpdate(activeAssignment.getCounselingAssignmentId())
+                    .forEach(CounselingSession::cancelDueToReservationCancellation);
             activeAssignment.end(now);
         }
         return CounselingReservationResponse.from(reservation);

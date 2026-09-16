@@ -1,7 +1,7 @@
 package com.gnagnoohc.scms.domain.mileage.service;
 
+import com.gnagnoohc.scms.domain.competency.entity.AssessmentAttempt;
 import com.gnagnoohc.scms.domain.mileage.DTO.MileageTransactionHistoryResponse;
-import com.gnagnoohc.scms.domain.mileage.entity.ExternalActivityClaim;
 import com.gnagnoohc.scms.domain.mileage.entity.MileageActivityType;
 import com.gnagnoohc.scms.domain.mileage.entity.MileagePolicy;
 import com.gnagnoohc.scms.domain.mileage.entity.MileageTransaction;
@@ -12,6 +12,7 @@ import com.gnagnoohc.scms.global.common.dto.PageResponse;
 import com.gnagnoohc.scms.global.error.BusinessException;
 import com.gnagnoohc.scms.global.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -28,16 +29,35 @@ public class MileageTransactionHistoryService {
     private static final String POSTED = "POSTED";
 
     private final MileageTransactionRepository mileageTransactionRepository;
+    private final MileageAcademicPeriodService mileageAcademicPeriodService;
+    private final MileageSemesterCodeValidator mileageSemesterCodeValidator;
 
-    /** 학생 본인의 확정 적립 내역을 10건 단위로 조회한다. */
+    /**
+     * 학생 본인의 확정 적립 내역을 10건 단위로 조회한다.
+     * semesterCode가 null이면 학기 필터 없이 전체 이력을, 지정되면 현재 주기의 해당 학기 거래만 반환한다.
+     */
     public PageResponse<MileageTransactionHistoryResponse.ListItem> getEarnedTransactions(
             Integer studentId,
+            String semesterCode,
             Pageable pageable
     ) {
+        String normalizedSemesterCode = mileageSemesterCodeValidator.normalizeSemesterCodeIfPresent(semesterCode);
         PageRequest pageRequest = PageRequest.of(pageable.getPageNumber(), PAGE_SIZE);
+        Page<MileageTransactionRepository.TransactionHistoryProjection> page;
+        if (normalizedSemesterCode == null) {
+            page = mileageTransactionRepository.findAllEarnedTransactions(studentId, pageRequest);
+        } else {
+            MileageAcademicPeriodService.PeriodBounds periodBounds =
+                    mileageAcademicPeriodService.resolveCurrentPeriodBounds();
+            page = mileageTransactionRepository.findEarnedTransactions(
+                    studentId,
+                    periodBounds.startAt(),
+                    periodBounds.endAt(),
+                    normalizedSemesterCode,
+                    pageRequest);
+        }
         return PageResponse.from(
-                mileageTransactionRepository.findEarnedTransactions(studentId, pageRequest)
-                        .map(item -> new MileageTransactionHistoryResponse.ListItem(
+                page.map(item -> new MileageTransactionHistoryResponse.ListItem(
                                 item.getTransactionId(),
                                 item.getActivityName(),
                                 item.getSourceType(),
@@ -60,7 +80,6 @@ public class MileageTransactionHistoryService {
                         "마일리지 적립 내역을 찾을 수 없습니다."));
 
         ProgramApplication programApplication = resolveProgramApplication(transaction);
-        ExternalActivityClaim externalActivityClaim = resolveExternalActivityClaim(transaction);
         MileagePolicy policy = resolveMileagePolicy(transaction);
 
         return new MileageTransactionHistoryResponse.Detail(
@@ -72,10 +91,9 @@ public class MileageTransactionHistoryService {
                 transaction.getPostedAt() != null
                         ? transaction.getPostedAt()
                         : transaction.getCreatedAt(),
-                resolveSourceType(programApplication, externalActivityClaim),
+                resolveSourceType(transaction, programApplication),
                 toPolicyDetail(policy),
-                toProgramDetail(programApplication),
-                toExternalActivityDetail(externalActivityClaim));
+                toProgramDetail(programApplication));
     }
 
     private MileagePolicy resolveMileagePolicy(MileageTransaction transaction) {
@@ -96,24 +114,21 @@ public class MileageTransactionHistoryService {
                 : transaction.getReversalOfTransaction().getSourceProgramApplication();
     }
 
-    private ExternalActivityClaim resolveExternalActivityClaim(MileageTransaction transaction) {
-        if (transaction.getSourceExternalClaim() != null) {
-            return transaction.getSourceExternalClaim();
+    private AssessmentAttempt resolveAssessmentAttempt(MileageTransaction transaction) {
+        if (transaction.getSourceAssessmentAttempt() != null) {
+            return transaction.getSourceAssessmentAttempt();
         }
         return transaction.getReversalOfTransaction() == null
                 ? null
-                : transaction.getReversalOfTransaction().getSourceExternalClaim();
+                : transaction.getReversalOfTransaction().getSourceAssessmentAttempt();
     }
 
-    private String resolveSourceType(
-            ProgramApplication programApplication,
-            ExternalActivityClaim externalActivityClaim
-    ) {
+    private String resolveSourceType(MileageTransaction transaction, ProgramApplication programApplication) {
         if (programApplication != null) {
             return "EXTRACURRICULAR_PROGRAM";
         }
-        if (externalActivityClaim != null) {
-            return "EXTERNAL_ACTIVITY";
+        if (resolveAssessmentAttempt(transaction) != null) {
+            return "COMPETENCY_DIAGNOSIS";
         }
         return "OTHER";
     }
@@ -130,7 +145,6 @@ public class MileageTransactionHistoryService {
                 activityType == null ? null : activityType.getActivityName(),
                 activityType == null ? null : activityType.getCategoryCode(),
                 activityType == null ? null : activityType.getEarningRoute(),
-                policy.getAcademicYear(),
                 policy.getSemesterCode(),
                 policy.getPoints());
     }
@@ -150,27 +164,5 @@ public class MileageTransactionHistoryService {
                 application.getCompletionStatus(),
                 application.getCertificateNo(),
                 application.getCertificateIssuedAt());
-    }
-
-    private MileageTransactionHistoryResponse.ExternalActivityDetail toExternalActivityDetail(
-            ExternalActivityClaim claim
-    ) {
-        if (claim == null) {
-            return null;
-        }
-
-        MileageActivityType activityType = claim.getActivityType();
-        return new MileageTransactionHistoryResponse.ExternalActivityDetail(
-                claim.getExternalClaimId(),
-                claim.getActivityName(),
-                claim.getActivityDate(),
-                claim.getRequestedPoints(),
-                claim.getClaimStatus(),
-                claim.getReviewReason(),
-                activityType == null ? null : activityType.getActivityCode(),
-                activityType == null ? null : activityType.getActivityName(),
-                activityType == null ? null : activityType.getCategoryCode(),
-                activityType == null ? null : activityType.getEarningRoute(),
-                claim.getDetailData());
     }
 }

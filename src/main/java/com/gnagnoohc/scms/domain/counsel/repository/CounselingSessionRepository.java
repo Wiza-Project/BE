@@ -29,6 +29,57 @@ public interface CounselingSessionRepository extends JpaRepository<CounselingSes
     @Query("select s from CounselingSession s where s.counselingSessionId = :sessionId")
     Optional<CounselingSession> findByIdForUpdate(@Param("sessionId") Integer sessionId);
 
+    /**
+     * 승인 예약 취소가 활성 배정을 잠근 뒤 그 배정의 PLANNED 회기를 모두 잠가 자동 취소하는 데 쓴다.
+     * COMPLETED·이미 CANCELED인 회기는 조회 대상에서 빠지므로 건드리지 않는다.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select s
+            from CounselingSession s
+            where s.counselingAssignment.counselingAssignmentId = :assignmentId
+              and s.sessionStatus = 'PLANNED'
+            order by s.counselingSessionId
+            """)
+    List<CounselingSession> findPlannedByAssignmentIdForUpdate(
+            @Param("assignmentId") Integer assignmentId
+    );
+
+    /**
+     * 출결 완료가 잠금 순서를 "예약 → 회기"로 맞추기 위해, 회기 행을 잠그기 전에 그 회기가 속한
+     * 예약 ID만 먼저 읽는다. counselorId 조건으로 소유권을 함께 걸러 남의 회기 존재를 노출하지 않는다.
+     */
+    @Query("""
+            select r.counselingReservationId
+            from CounselingSession s
+            join s.counselingAssignment a
+            join a.counselingReservation r
+            where s.counselingSessionId = :sessionId
+              and a.counselor.userId = :counselorId
+            """)
+    Optional<Integer> findOwnedReservationIdBySessionId(
+            @Param("sessionId") Integer sessionId,
+            @Param("counselorId") Integer counselorId
+    );
+
+    /**
+     * 비공개 기록·공개 결과 저장 계열이 잠금 순서를 "배정 → 회기"(완료는 "예약 → 배정 → 회기")로
+     * 맞추기 위해, 회기 행을 잠그기 전에 그 회기가 속한 배정 ID만 먼저 읽는다. counselorId 조건으로
+     * 소유권을 함께 걸러 남의 회기 존재를 노출하지 않는다. 이 조회는 잠금 순서를 정하기 위한 식별
+     * 단계일 뿐이므로, 실제 소유권·유형·상태 검증은 잠근 엔티티에서 기존 규칙대로 다시 한다.
+     */
+    @Query("""
+            select a.counselingAssignmentId
+            from CounselingSession s
+            join s.counselingAssignment a
+            where s.counselingSessionId = :sessionId
+              and a.counselor.userId = :counselorId
+            """)
+    Optional<Integer> findOwnedAssignmentIdBySessionId(
+            @Param("sessionId") Integer sessionId,
+            @Param("counselorId") Integer counselorId
+    );
+
     /** 후속 회기 채번(MAX(sessionNo)+1)에 사용한다. 배정 행 잠금 이후에만 호출해야 정확하다. */
     @Query("select max(s.sessionNo) from CounselingSession s where s.counselingAssignment.counselingAssignmentId = :assignmentId")
     Optional<Integer> findMaxSessionNo(@Param("assignmentId") Integer assignmentId);

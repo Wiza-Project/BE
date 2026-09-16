@@ -14,4 +14,5 @@ public enum NotificationType {
     EVIDENCE_SUPPLEMENT_NEEDED,  // 증빙보완 필요
     WAITLIST_SLOT_OPENED,        // 대기 자리 발생
     APPLICATION_SUBMITTED,       // 지원/신청 접수완료 (채용공고/프로그램 등)
+    COUNSELING_PROPOSED,         // 스트레스 결과 기반 상담 제안 도착
 }

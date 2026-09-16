@@ -3,7 +3,10 @@ package com.gnagnoohc.scms.domain.counsel.controller;
 import com.gnagnoohc.scms.domain.counsel.dto.response.CounselingPrivateRecordResponse;
 import com.gnagnoohc.scms.domain.counsel.dto.request.CounselingPrivateRecordSaveRequest;
 import com.gnagnoohc.scms.domain.counsel.service.CounselingPrivateRecordService;
+import com.gnagnoohc.scms.global.common.audit.AuditResourceId;
+import com.gnagnoohc.scms.global.common.audit.AuditTrail;
 import com.gnagnoohc.scms.global.common.dto.ApiResponse;
+import com.gnagnoohc.scms.global.common.service.AuditAction;
 import com.gnagnoohc.scms.global.security.AuthUser;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -31,9 +34,10 @@ public class CounselorCounselingPrivateRecordController {
      * 비공개 기록을 조회한다. 현재 담당자뿐 아니라 배정이 끝난 과거 담당자도 자신이 맡았던
      * 회기라면 조회할 수 있다. 기록이 없으면 예외 없이 recordStatus=EMPTY로 응답한다.
      */
+    @AuditTrail(resourceType = "COUNSELING_SESSION", action = AuditAction.READ)
     @GetMapping("/counseling-sessions/{sessionId}/private-record")
     public ApiResponse<CounselingPrivateRecordResponse> getRecord(
-            @PathVariable Integer sessionId,
+            @AuditResourceId @PathVariable Integer sessionId,
             @AuthenticationPrincipal AuthUser authUser
     ) {
         return ApiResponse.ok(counselingPrivateRecordService.getRecord(sessionId, authUser.getId()));

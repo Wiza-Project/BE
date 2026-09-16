@@ -32,28 +32,21 @@ public class CounselingPrivateRecordService {
 
     /**
      * 조회는 현재 활성 배정 담당자뿐 아니라 과거(종료된) 배정 담당자도 허용한다 — 자신이 작성한
-     * 기록의 사후 열람은 막을 이유가 없기 때문이다. 접근 사유(ACTIVE_ASSIGNMENT_WORK /
-     * PAST_ASSIGNMENT_DOCUMENTATION)는 감사로그용으로만 쓰고 응답에는 포함하지 않는다.
+     * 기록의 사후 열람은 막을 이유가 없기 때문이다. 공통 감사 인프라가 접근 사유를 받지 않으므로
+     * 활성 배정과 과거 배정을 감사 로그에서 별도로 구분하지 않는다.
      */
     public CounselingPrivateRecordResponse getRecord(Integer sessionId, Integer counselorId) {
-        // TODO(common-audit): requireScope 실패(활성·역할·유형 범위 포함) 시에도 READ_PRIVATE_RECORD 실패 —
-        // actorUserId=counselorId, resourceType=COUNSELING_SESSION, resourceId=sessionId,
-        // actionCode=READ_PRIVATE_RECORD, actionResult=FAILURE. privateContent 전달 금지.
+        // 감사 로그(COUNSELING_SESSION/READ)는 컨트롤러의 @AuditTrail+@AuditResourceId(AOP)가
+        // 이 메서드의 정상 반환을 SUCCESS로, 아래에서 던지는 예외를 FAILURE로 자동 기록한다.
+        // 서비스에서 별도로 감사 호출을 추가하지 않는다.
         CounselManagementAccessPolicy.Scope scope = counselManagementAccessPolicy.requireScope(counselorId);
-        // TODO(common-audit): READ_PRIVATE_RECORD 실패 — actorUserId=counselorId, resourceType=COUNSELING_SESSION,
-        // resourceId=sessionId, actionCode=READ_PRIVATE_RECORD, actionResult=FAILURE. privateContent 전달 금지.
         CounselingSession session = counselingSessionRepository.findById(sessionId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SESSION_NOT_FOUND));
         if (!session.getCounselingAssignment().isOwnedBy(counselorId)) {
-            // TODO(common-audit): READ_PRIVATE_RECORD 실패 — actorUserId=counselorId, resourceType=COUNSELING_SESSION,
-            // resourceId=sessionId, actionCode=READ_PRIVATE_RECORD, actionResult=FAILURE. privateContent 전달 금지.
             throw new BusinessException(ErrorCode.SESSION_NOT_FOUND);
         }
         // 원문(privateContent)을 읽기 전에 유형 범위부터 확인한다. 걸리면 아래 조회를 아예 하지 않는다.
         ensureTypeInScope(scope, session);
-
-        // 감사로그의 accessReason 값. active면 현재 담당자의 업무 조회, 아니면 과거 담당자의 기록 열람이다.
-        boolean active = session.getCounselingAssignment().isActive();
 
         Instant now = Instant.now();
         CounselingPrivateRecord record = counselingPrivateRecordRepository
@@ -61,14 +54,7 @@ public class CounselingPrivateRecordService {
                 .orElse(null);
         boolean canSaveDraft = canSaveDraft(session, record, now);
         boolean canConfirm = canConfirm(session, record, now);
-        CounselingPrivateRecordResponse response = CounselingPrivateRecordResponse.from(
-                sessionId, record, canSaveDraft, canConfirm
-        );
-
-        // TODO(common-audit): READ_PRIVATE_RECORD 성공 — actorUserId=counselorId, resourceType=COUNSELING_SESSION,
-        // resourceId=sessionId, actionCode=READ_PRIVATE_RECORD, actionResult=SUCCESS,
-        // accessReason=(active?ACTIVE_ASSIGNMENT_WORK:PAST_ASSIGNMENT_DOCUMENTATION). privateContent 전달 금지.
-        return response;
+        return CounselingPrivateRecordResponse.from(sessionId, record, canSaveDraft, canConfirm);
     }
 
     /**
@@ -78,14 +64,16 @@ public class CounselingPrivateRecordService {
     @Transactional
     public CounselingPrivateRecordResponse saveDraft(Integer sessionId, String privateContent, Integer counselorId) {
         CounselManagementAccessPolicy.Scope scope = counselManagementAccessPolicy.requireScope(counselorId);
-        CounselingSession session = counselingSessionRepository.findByIdForUpdate(sessionId)
+        // 예약 취소가 "예약 → 배정 → 회기" 순서로 잠그므로, 이 메서드도 회기보다 배정을 먼저 잠가야
+        // 두 트랜잭션이 반대 순서로 자원을 기다리다 교착되지 않는다. 잠금 없는 스칼라 조회로 배정 ID를
+        // 먼저 식별한 뒤(권한 확인 완료로 간주하지 않음) 배정 → 회기 순서로 잠그고, 잠근 엔티티에서
+        // 소유권·유형·상태를 기존과 같은 순서·에러코드로 다시 검증한다.
+        Integer assignmentId = counselingSessionRepository
+                .findOwnedAssignmentIdBySessionId(sessionId, counselorId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SESSION_NOT_FOUND));
-        // 배정 종료(예약 취소)가 예약 행만 잠그고 이 회기 행과는 다른 행이라 직렬화되지 않는다.
-        // 배정 행도 잠가야 "활성 여부를 확인한 시점"이 커밋까지 유효함을 보장한다. session.getCounselingAssignment()의
-        // isOwnedBy/isActive를 먼저 호출하면 프록시가 초기화돼 이 잠금으로도 필드가 갱신되지 않을 수 있으므로,
-        // 이 잠금 조회가 배정에 대한 첫 접근이어야 한다(CounselingSessionService.complete()와 같은 패턴).
-        Integer assignmentId = session.getCounselingAssignment().getCounselingAssignmentId();
         CounselingAssignment assignment = counselingAssignmentRepository.findByIdForUpdate(assignmentId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.SESSION_NOT_FOUND));
+        CounselingSession session = counselingSessionRepository.findByIdForUpdate(sessionId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SESSION_NOT_FOUND));
         if (!assignment.isOwnedBy(counselorId)) {
             throw new BusinessException(ErrorCode.SESSION_NOT_FOUND);
