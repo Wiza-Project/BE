@@ -29,6 +29,10 @@ jobs:
         run: ./gradlew clean build -x test
 
       - name: Test
+        env:
+          OPENAI_API_KEY: dummy-test-key-for-ci
+          GEMINI_API_KEY: dummy-test-key-for-ci
+          API_KEY: dummy-test-key-for-ci
         run: ./gradlew test
   # 공통 보안 사항 [.github repo]의 yml 호출 용도. 절대 삭제하지 마세요.
   security-scan:
