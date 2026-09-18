@@ -35,7 +35,7 @@ dependencies {
 	implementation 'org.springframework.ai:spring-ai-starter-model-ollama'
 //	implementation 'org.springframework.ai:spring-ai-starter-model-ollama'
 //	LLM 전용 OpenAI 모델 VER
-//	implementation 'org.springframework.ai:spring-ai-starter-model-openai'
+	implementation 'org.springframework.ai:spring-ai-starter-model-openai'
 //  LLM 전용 Google Gemini (Google GenAI) 모델 VER
 //	implementation 'org.springframework.ai:spring-ai-starter-model-google-genai'
 
