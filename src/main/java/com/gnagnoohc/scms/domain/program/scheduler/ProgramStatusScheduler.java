@@ -42,10 +42,10 @@ public class ProgramStatusScheduler {
          */
         int completionJudged = applicationRepository.judgeCompletion(now);
         /**
-         * 방금 COMPLETED로 판정된 신청 건마다 ProgramCompletionJudgedEvent를 발행한다. 이 발행은 이 메서드의
-         * @Transactional 트랜잭션 안에서 동기로 일어나므로, 마일리지 도메인이 같은 트랜잭션 안에서 처리하는
-         * 리스너를 구독시키면 "판정 + 이수증 발급(judgeCompletion 안에서 이미 원자적으로 처리됨) + 마일리지
-         * 반영"이 하나의 트랜잭션으로 묶인다. mileage 패키지를 직접 호출하지 않는 이유는
+         * 방금 COMPLETED로 판정된 신청 건마다 ProgramCompletionJudgedEvent를 발행한다. 판정 + 이수증 발급은
+         * judgeCompletion 안에서 이미 원자적으로 처리되므로 이 트랜잭션 커밋 시점에 확정된다. 마일리지 적립
+         * 리스너는 AFTER_COMMIT + 자체 트랜잭션으로 분리돼 best-effort로 처리된다(적립 실패가 판정을 롤백하지
+         * 않음, 누락분은 마일리지 스케줄러 배치가 회수). mileage 패키지를 직접 호출하지 않는 이유는
          * domain/program/package-info.java의 설계 메모(도메인 간 양방향 직접 의존 방지) 참고.
          */
         if (completionJudged > 0) {

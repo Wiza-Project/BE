@@ -108,6 +108,18 @@ public class JobPreferenceService {
 
         preference.update(ncsCode, regionCode, requestDTO.getPreferredEmploymentType(), requestDTO.getMinimumSalary());
         log.info("[JobPreferenceService] 학생 취업 희망조건 저장 완료. studentUserId: {}", studentUserId);
+
+        // [임베딩용(잡매칭)] 희망 직무가 지정된 경우 해당 NCS 직무 벡터를 student_profile에 동기화하는 로직
+//        if (ncsCode != null) {
+//            studentProfileService.syncStudentEmbeddingFromNcs(studentUserId, ncsCode.getCode());
+//        }
+
+        // null safe하게 항상 동기화 메서드를 호출, 희망 직무 해제 시 벡터 미초기화 해결
+        studentProfileService.syncStudentEmbeddingFromNcs(
+                studentUserId,
+                ncsCode != null ? ncsCode.getCode() : null
+        );
+
         return mapToResponseDTO(preference);
     }
 

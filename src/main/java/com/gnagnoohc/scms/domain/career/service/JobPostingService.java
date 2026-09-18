@@ -21,13 +21,16 @@ import com.gnagnoohc.scms.global.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -103,6 +106,36 @@ public class JobPostingService {
     }
 
     /**
+     *0907 [학생 메인 슬라이더용] 게시 완료 및 접수 진행 중인 최신 공고 상위 10건 조회
+     */
+//    public List<JobPostingSummaryResponseDTO> getLatestJobPostingsForSlider() {
+//        Pageable topTen = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "jobPostingId"));
+////        Page<JobPosting> postingPage = jobPostingRepository.searchStudentPostings(null, topTen);
+//
+//        // null 대신 빈 검색 조건 DTO 전달하여 NPE 방지
+//        Page<JobPosting> postingPage = jobPostingRepository.searchStudentPostings(
+//                new JobPostingSearchConditionDTO(),
+//                topTen
+//        );
+//        return postingPage.getContent().stream()
+//                .map(this::convertToSummaryDTO)
+//                .toList();
+//    }
+
+    /**
+     * [학생 메인 슬라이더용] 게시 완료 및 접수 진행 중인 마감 임박 공고 상위 10건 조회
+     */
+    public List<JobPostingSummaryResponseDTO> getLatestJobPostingsForSlider() {
+        List<JobPosting> activePostings = jobPostingRepository
+                .findDefaultActivePostingsWithDetails(Instant.now());
+
+        return activePostings.stream()
+                .limit(10)
+                .map(this::convertToSummaryDTO)
+                .toList();
+    }
+
+    /**
      * [교직원용] 채용공고 전체 및 검수 목록 다중 조건 검색/페이징 조회
      *
      * @param cond     검색 필터 파라미터 DTO (검수 상태, 공고 구분 등)
@@ -137,6 +170,11 @@ public class JobPostingService {
     public Integer createJobPosting(JobPostingCreateRequestDTO requestDTO) {
         CompanyAccount companyAccount = companyAccountRepository.findById(requestDTO.getCompanyAccountId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.COMPANY_ACCOUNT_NOT_FOUND));
+
+        // 미인증 기업 차단 검증
+        if (!"VERIFIED".equalsIgnoreCase(companyAccount.getVerificationStatus())) {
+            throw new BusinessException(ErrorCode.COMPANY_ACCOUNT_NOT_FOUND, "인증 심사가 완료(승인)된 협약 기업만 채용공고를 등록할 수 있습니다.");
+        }
 
         CommonCode ncsCode = careerBindingHelper.findValidCommonCodeOrNull(requestDTO.getNcsCodeId());
         CommonCode regionCode = careerBindingHelper.findValidRegionCodeOrNull(requestDTO.getRegionCodeId());
@@ -173,7 +211,7 @@ public class JobPostingService {
     }
 
     /**
-     * [교직원/관리자 전용] 채용공고 포스터(이미지 및 PDF) 단독 업로드 처리
+     * [교직원/관리자 전용] 채용공고 포스터(파일 첨부) 단독 업로드 처리
      * 공통모듈에서 설계한 파일 첨부 모듈 적용
      */
     @Transactional
@@ -269,6 +307,34 @@ public class JobPostingService {
 
         jobPosting.review(targetStatus, requestDTO.getRejectionReason(), reviewerUserId);
         log.info("[JobPostingService] 채용공고 검수 처리 완료. ID: {}, 상태: {}, 검수자 ID: {}", jobPostingId, targetStatus, reviewerUserId);
+    }
+
+    /**
+     * [교직원 전용] 채용공고 게시 상태 직접 변경 (게시/마감)
+     *
+     * @param jobPostingId  공고 식별자 (PK)
+     * @param postingStatus 변경할 게시 상태 ('PUBLISHED' 또는 'CLOSED')
+     */
+    @Transactional
+    public void updatePostingStatus(Integer jobPostingId, String postingStatus) {
+        JobPosting jobPosting = jobPostingRepository.findById(jobPostingId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.JOB_POSTING_NOT_FOUND));
+
+//        if ("PUBLISHED".equalsIgnoreCase(postingStatus)) {
+//            jobPosting.review("APPROVED", null, null);
+//        } else if ("CLOSED".equalsIgnoreCase(postingStatus)) {
+//            jobPosting.review("CLOSED", null, null);
+//        } else if ("DRAFT".equalsIgnoreCase(postingStatus)) {
+//            jobPosting.review("REQUESTED", null, null);
+//        } else {
+//            throw new BusinessException(ErrorCode.INVALID_INPUT, "유효하지 않은 게시 상태입니다.");
+//        }
+        try {
+            jobPosting.updatePostingStatusOnly(postingStatus);
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, e.getMessage());
+        }
+        log.info("[JobPostingService] 채용공고 게시 상태 변경 완료. ID: {}, 상태: {}", jobPostingId, postingStatus);
     }
 
     /**
