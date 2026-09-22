@@ -1,4 +1,4 @@
-package com.gnagnoohc.scms.domain.career.dto.ai;
+package com.gnagnoohc.scms.domain.career.dto.posting;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;

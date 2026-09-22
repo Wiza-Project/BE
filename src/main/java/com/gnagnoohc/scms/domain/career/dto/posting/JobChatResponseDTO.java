@@ -1,4 +1,4 @@
-package com.gnagnoohc.scms.domain.career.dto.ai;
+package com.gnagnoohc.scms.domain.career.dto.posting;
 
 import java.util.List;
 

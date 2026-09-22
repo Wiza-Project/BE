@@ -1,4 +1,4 @@
-package com.gnagnoohc.scms.domain.career.dto.ai;
+package com.gnagnoohc.scms.domain.career.dto.posting;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonSetter;
