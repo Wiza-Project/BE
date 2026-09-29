@@ -22,6 +22,7 @@ public class PortfolioCreateRequestDTO {
     @Schema(description = "포트폴리오 본문 (자유 JSON 구조)")
     private Map<String, Object> contentData;
 
-    @Schema(description = "AI 도구 활용 여부 (저장만 하며 AI 기능은 구현하지 않음)", example = "false")
+    @Schema(description = "AI 초안 생성 기능",
+            example = "false")
     private boolean aiAssistanceUsed;
 }

@@ -19,4 +19,8 @@ public class ResumeUpdateRequestDTO {
 
     @Valid
     private ResumeContentDTO contentData;
+
+    @Schema(description = "AI 초안 생성 기능(POST /api/students/me/career-ai/assist)의 결과를 반영해 저장하면 true.",
+            example = "false")
+    private boolean aiAssistanceUsed;
 }

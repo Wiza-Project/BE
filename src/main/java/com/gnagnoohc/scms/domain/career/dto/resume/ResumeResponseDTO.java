@@ -10,6 +10,7 @@ public record ResumeResponseDTO(
         String documentTitle,
         Integer versionNo,
         ResumeContentDTO contentData,
+        boolean aiAssistanceUsed,
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt
 ) {
