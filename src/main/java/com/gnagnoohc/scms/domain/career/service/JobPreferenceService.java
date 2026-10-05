@@ -84,8 +84,8 @@ public class JobPreferenceService {
 
         // PostgreSQL ON CONFLICT DO NOTHING을 통한 원자적 초기 row 확보 (JPA 트랜잭션 롤백 오염 방지_코드래빗 리뷰 적용)
         Instant now = Instant.now();
-        String sql = "INSERT INTO job_preference (student_id, ncs_code_id, preferred_region_code_id, preferred_employment_type, minimum_salary, created_at, updated_at) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?) " +
+        String sql = "INSERT INTO job_preference (student_id, ncs_code_id, preferred_region_code_id, preferred_employment_type, minimum_salary, preferred_posting_type, job_keyword, created_at, updated_at) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) " +
                 "ON CONFLICT (student_id) DO NOTHING";
 
         Integer ncsCodeId = ncsCode != null ? ncsCode.getCodeId() : null;
@@ -98,6 +98,8 @@ public class JobPreferenceService {
                 regionCodeId,
                 requestDTO.getPreferredEmploymentType(),
                 requestDTO.getMinimumSalary(),
+                requestDTO.getPreferredPostingType(),
+                requestDTO.getJobKeyword(),
                 now,
                 now
         );
@@ -106,19 +108,27 @@ public class JobPreferenceService {
         JobPreference preference = jobPreferenceRepository.findByStudent_UserId(studentUserId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.INTERNAL_ERROR, "희망조건 저장 중 오류가 발생했습니다."));
 
-        preference.update(ncsCode, regionCode, requestDTO.getPreferredEmploymentType(), requestDTO.getMinimumSalary());
+        preference.update(
+                ncsCode,
+                regionCode,
+                requestDTO.getPreferredEmploymentType(),
+                requestDTO.getMinimumSalary(),
+                requestDTO.getPreferredPostingType(),
+                requestDTO.getJobKeyword()
+        );
         log.info("[JobPreferenceService] 학생 취업 희망조건 저장 완료. studentUserId: {}", studentUserId);
 
         // [임베딩용(잡매칭)] 희망 직무가 지정된 경우 해당 NCS 직무 벡터를 student_profile에 동기화하는 로직
 //        if (ncsCode != null) {
 //            studentProfileService.syncStudentEmbeddingFromNcs(studentUserId, ncsCode.getCode());
 //        }
+        // 0910 하이브리드랭킹엔진적용테스트 - 학생 프로필 벡터 동기화 연결
+        if (ncsCode != null && ncsCode.getCode() != null) {
+            studentProfileService.syncStudentEmbeddingFromNcs(studentUserId, ncsCode.getCode());
+        }
 
-        // null safe하게 항상 동기화 메서드를 호출, 희망 직무 해제 시 벡터 미초기화 해결
-        studentProfileService.syncStudentEmbeddingFromNcs(
-                studentUserId,
-                ncsCode != null ? ncsCode.getCode() : null
-        );
+        log.info("[JobPreferenceService] 학생 취업 희망조건 저장 완료. studentUserId: {}", studentUserId);
+
 
         return mapToResponseDTO(preference);
     }
@@ -142,6 +152,8 @@ public class JobPreferenceService {
                 .preferredRegionName(jp.getRegionCode() != null ? jp.getRegionCode().getCodeName() : null)
                 .preferredEmploymentType(jp.getPreferredEmploymentType())
                 .minimumSalary(jp.getMinimumSalary())
+                .preferredPostingType(jp.getPreferredPostingType())
+                .jobKeyword(jp.getJobKeyword())
                 .updatedAt(DateTimeUtils.toKstOffsetDateTime(jp.getUpdatedAt()))
                 .build();
     }

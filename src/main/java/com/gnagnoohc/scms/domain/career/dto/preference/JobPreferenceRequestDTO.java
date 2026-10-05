@@ -37,4 +37,10 @@ public class JobPreferenceRequestDTO {
     @PositiveOrZero(message = "희망 최소 연봉은 0 이상이어야 합니다.")
     @Schema(description = "희망 최소 연봉 (만원 단위 또는 원 단위)", example = "35000000.00")
     private BigDecimal minimumSalary;
+
+    @Schema(description = "선호 채용 구분 (RECOMMENDED, GENERAL 등)", example = "RECOMMENDED")
+    private String preferredPostingType;
+
+    @Schema(description = "희망 직무 키워드", example = "안드로이드")
+    private String jobKeyword;
 }
