@@ -114,6 +114,35 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, Integer>
     List<JobPosting> findDefaultActivePostingsWithDetails(@Param("now") Instant now);
 
     /**
+     * 자연어 채용공고 채팅용 후보 조회.
+     * 기존 벡터/하이브리드 추천과 분리하여, LLM이 추출한 조건만 DB 필터로 사용한다.
+     */
+    @Query("""
+            SELECT DISTINCT jp FROM JobPosting jp
+            JOIN FETCH jp.companyAccount ca
+            LEFT JOIN FETCH jp.ncsCode nc
+            LEFT JOIN FETCH jp.regionCode rc
+            WHERE jp.postingStatus = 'PUBLISHED'
+              AND (jp.applicationEndsAt IS NULL OR jp.applicationEndsAt >= :now)
+              AND (:region = '' OR LOWER(rc.codeName) LIKE CONCAT('%', :region, '%'))
+              AND (:ncs = '' OR LOWER(nc.codeName) LIKE CONCAT('%', :ncs, '%'))
+              AND (:employmentType = '' OR LOWER(jp.employmentType) LIKE CONCAT('%', :employmentType, '%'))
+              AND (:keyword = ''
+                   OR LOWER(jp.postingTitle) LIKE CONCAT('%', :keyword, '%')
+                   OR LOWER(jp.jobDescription) LIKE CONCAT('%', :keyword, '%')
+                   OR LOWER(ca.companyName) LIKE CONCAT('%', :keyword, '%'))
+            ORDER BY jp.applicationEndsAt ASC NULLS LAST, jp.jobPostingId DESC
+            """)
+    List<JobPosting> findChatCandidates(
+            @Param("region") String region,
+            @Param("ncs") String ncs,
+            @Param("employmentType") String employmentType,
+            @Param("keyword") String keyword,
+            @Param("now") Instant now,
+            org.springframework.data.domain.Pageable pageable
+    );
+
+    /**
      * [스케줄러용] 마감 일시 지난 게시 공고 일괄 마감(CLOSED) 처리
      */
     @Modifying(clearAutomatically = true)
