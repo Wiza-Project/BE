@@ -4,7 +4,8 @@
 spring:
   ai:
     model:
-      chat: openai
+      chat: google-genai
+#     chat: openai
       embedding: ollama
 #    ollama:
 #      base-url: http://localhost:11434
@@ -12,19 +13,19 @@ spring:
 #        pull-model-strategy: never
 #      embedding:
 #        model: nomic-embed-text
-    openai:
-      api-key: YOUR_API_KEY
-      embedding:
-        enabled: false
-      chat:
-        options:
-          model: gpt-4o-mini
+#    openai:
+#      api-key: YOUR_API_KEY
+#      embedding:
+#        enabled: false
+#      chat:
+#        options:
+#          model: gpt-4o-mini
     google:
-          genai:
-            api-key: YOUR_API_KEY
-            chat:
-              options:
-                model: gemini-3.5-flash
+      genai:
+        api-key: YOUR_API_KEY
+        chat:
+          options:
+            model: gemini-3.5-flash
   datasource:
     driver-class-name: org.postgresql.Driver
     url: jdbc:postgresql://localhost:YOUR_DB_PORT_ENV/YOUR_DB_NAME_ENV
