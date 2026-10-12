@@ -61,6 +61,14 @@ public class JobPreference extends BaseTimeEntity {
     @Column(name = "minimum_salary", nullable = true, precision = 14, scale = 2)
     private BigDecimal minimumSalary;
 
+    // 선호 채용 구분 (RECOMMENDED: 교내추천채용, GENERAL: 일반채용)
+    @Column(name = "preferred_posting_type", length = 30)
+    private String preferredPostingType;
+
+    // 희망 직무 키워드
+    @Column(name = "job_keyword", length = 100)
+    private String jobKeyword;
+
     /**
      * 학생 취업 희망조건 신규 생성을 위한 빌더 생성자
      *
@@ -101,11 +109,14 @@ public class JobPreference extends BaseTimeEntity {
      * @param minimumSalary           변경할 희망 최소 연봉 (nullable)
      */
     public void update(CommonCode ncsCode, CommonCode regionCode,
-                       String preferredEmploymentType, BigDecimal minimumSalary) {
+                       String preferredEmploymentType, BigDecimal minimumSalary,
+                       String preferredPostingType, String jobKeyword) {
         this.ncsCode = ncsCode;
         this.regionCode = regionCode;
         this.preferredEmploymentType = preferredEmploymentType;
         this.minimumSalary = minimumSalary;
+        this.preferredPostingType = preferredPostingType;
+        this.jobKeyword = jobKeyword;
     }
 
 }
