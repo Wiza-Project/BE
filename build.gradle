@@ -29,8 +29,14 @@ repositories {
 
 dependencies {
 	// ── AI ────────────────────────────────────────────────────────
+// TODO: LOCAL, 배포 모두 pgvector 의존성 추가 필요
 //	implementation 'org.springframework.ai:spring-ai-starter-vector-store-pgvector'
+//	직접 테스트코드로 실행 원할 경우 로컬 한정으로 올라마 모델 설치 - 의존성 추가 필요, develop에선 무조건 주석 처리해야하니 push 전 필수로 확인
 //	implementation 'org.springframework.ai:spring-ai-starter-model-ollama'
+//	LLM 전용 OpenAI 모델 VER
+	implementation 'org.springframework.ai:spring-ai-starter-model-openai'
+//  LLM 전용 Google Gemini (Google GenAI) 모델 VER
+//	implementation 'org.springframework.ai:spring-ai-starter-model-google-genai'
 
 	// ── docker ────────────────────────────────────────────────────────
 	runtimeOnly 'org.springframework.boot:spring-boot-docker-compose'
@@ -38,6 +44,10 @@ dependencies {
 	// ── Web ────────────────────────────────────────────────────────
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
+
+	// ── AOP (감사 어노테이션) ────────────────────────────────-
+	implementation 'org.springframework:spring-aop'
+	implementation 'org.aspectj:aspectjweaver'
 
 	// ── JPA ────────────────────────────────────────────────────────
 	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
@@ -62,10 +72,8 @@ dependencies {
 	// 2.x는 Spring Boot 3용, 3.x부터 Boot 4를 지원합니다. 버전을 반드시 맞추세요.
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3'
 
-	// ── 통계/엑셀 (P5100 취업통계조사 생성, 운영현황 다운로드) ──────
-	// 해당 기능 착수 시 주석을 해제
-	// mvnrepository.com 에서 최신 버전을 확인한 뒤 버전을 맞추세요.
-	// implementation 'org.apache.poi:poi-ooxml:5.4.0'
+	// ── 통계/엑셀 (P5100 취업통계조사 생성, 운영현황 다운로드 / WP-102 진단문항 엑셀 업로드) ──
+	implementation 'org.apache.poi:poi-ooxml:5.4.0'
 
 	// ── 수료증 PDF 출력 (P1200) ────────────────────────────────────
 	// implementation 'com.github.librepdf:openpdf:2.0.3'
@@ -102,7 +110,7 @@ tasks.withType(JavaCompile).configureEach {
 sourceSets {
 	main {
 		java {
-			srcDirs += generatedDir
+			srcDirs += [ generatedDir.get().asFile ]
 		}
 	}
 }

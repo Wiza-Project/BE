@@ -1,6 +1,7 @@
 package com.gnagnoohc.scms.domain.program.entity;
 
 import com.gnagnoohc.scms.domain.user.entity.AppUser;
+import com.gnagnoohc.scms.domain.user.entity.UserConsent;
 import com.gnagnoohc.scms.global.common.entity.BaseTimeEntity;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -18,6 +19,7 @@ public class ProgramApplication extends BaseTimeEntity {
     @Column(name = "application_id", nullable = false) private Integer applicationId;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "program_id", nullable = false) private ExtracurricularProgram program;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "student_id", nullable = false) private AppUser student;
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "user_consent_id") private UserConsent userConsent;
     @Column(name = "application_status", nullable = false, length = 20) private String applicationStatus = "APPLIED";
     @Column(name = "waitlist_order") private Integer waitlistOrder;
     @Column(name = "processed_by") private Integer processedBy;

@@ -12,7 +12,10 @@ import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 import java.time.Instant;
 
-@Entity @Getter @Table(name = "extracurricular_program")
+@Entity @Getter
+@Table(name = "extracurricular_program", uniqueConstraints = @UniqueConstraint(
+        name = "uq_extracurricular_program_file_group_id",
+        columnNames = "file_group_id"))
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ExtracurricularProgram extends BaseTimeEntity {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -31,6 +34,7 @@ public class ExtracurricularProgram extends BaseTimeEntity {
     @Column(name = "operation_ends_at", nullable = false) private Instant operationEndsAt;
     @Column(name = "capacity", nullable = false) private Integer capacity;
     @Column(name = "completion_rate", nullable = false, precision = 5, scale = 2) private BigDecimal completionRate = new BigDecimal("80");
-    @Column(name = "program_status", nullable = false, length = 20) private String programStatus = "DRAFT";
+    @Enumerated(EnumType.STRING)
+    @Column(name = "program_status", nullable = false, length = 20) private ProgramStatus programStatus = ProgramStatus.DRAFT;
     @Column(name = "updated_by") private Integer updatedBy;
 }

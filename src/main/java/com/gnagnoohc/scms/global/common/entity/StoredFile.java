@@ -2,6 +2,7 @@ package com.gnagnoohc.scms.global.common.entity;
 
 import jakarta.persistence.*;
 import lombok.AccessLevel;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -22,4 +23,16 @@ public class StoredFile {
     @Column(name = "file_size", nullable = false) private Long fileSize;
     @Column(name = "uploaded_at", nullable = false) private Instant uploadedAt = Instant.now();
     @Column(name = "created_by", nullable = false) private Integer createdBy;
+
+    /** 신규 저장 시에만 사용하는 전용 빌더 생성자 (PK/업로드시각 기본값은 빌더 제외). */
+    @Builder
+    public StoredFile(FileGroup fileGroup, String originalFileName, String storageKey,
+                       String contentType, Long fileSize, Integer createdBy) {
+        this.fileGroup = fileGroup;
+        this.originalFileName = originalFileName;
+        this.storageKey = storageKey;
+        this.contentType = contentType;
+        this.fileSize = fileSize;
+        this.createdBy = createdBy;
+    }
 }

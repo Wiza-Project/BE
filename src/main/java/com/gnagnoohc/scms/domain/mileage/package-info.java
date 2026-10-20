@@ -15,7 +15,6 @@
  * <ul>
  *   <li>[ ] MileageItem (마일리지항목) — 항목명, 배점, 적용 학기, 자동/수동 여부</li>
  *   <li>[ ] MileageRecord (마일리지실적) — 학생, 항목, 점수, {@code ApprovalStatus}, 증빙파일</li>
- *   <li>[ ] MileageScholarship — 지급 대상 선발, 지급 이력</li>
  *   <li>[ ] <b>적립 경로가 2개입니다.</b>
  *           (1) 비교과 이수 시 자동 적립 — program 도메인의 이벤트를 구독
  *           (2) 학생이 직접 신청 → 승인 — 증빙 파일 업로드 필요

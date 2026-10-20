@@ -24,4 +24,14 @@ public record ApiResponse<T>(
     public static ApiResponse<Void> fail(String code, String message) {
         return new ApiResponse<>(false, null, code, message);
     }
+
+    /**
+     * 실패 응답이더라도 부가 정보를 함께 내려줘야 하는 경우(예: 로그인 실패 시 잔여 시도
+     * 횟수)를 위한 오버로드입니다. data 가 null이면 위 {@link #fail(String, String)} 과
+     * 완전히 동일한 응답 바디가 나갑니다(NON_NULL 직렬화 설정 때문에 data 필드 자체가
+     * 생략됩니다).
+     */
+    public static <T> ApiResponse<T> fail(String code, String message, T data) {
+        return new ApiResponse<>(false, data, code, message);
+    }
 }

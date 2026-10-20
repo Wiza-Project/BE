@@ -20,4 +20,29 @@ public class Competency extends BaseTimeEntity {
     @Column(name = "display_order", nullable = false) private Integer displayOrder;
     @Column(name = "is_active", nullable = false) private boolean active = true;
     @Column(name = "created_by", nullable = false) private Integer createdBy;
+
+    public static Competency createTop(String competencyCode, String competencyName, String englishName,
+                                        String description, Integer displayOrder, Integer createdBy) {
+        Competency competency = new Competency();
+        competency.competencyCode = competencyCode;
+        competency.competencyName = competencyName;
+        competency.englishName = englishName;
+        competency.description = description;
+        competency.displayOrder = displayOrder;
+        competency.createdBy = createdBy;
+        return competency;
+    }
+
+    public void changeDisplayOrder(Integer displayOrder) {
+        this.displayOrder = displayOrder;
+    }
+
+    // 삭제는 지원하지 않음 — 응답 이력 보존을 위해 비활성 처리만 함
+    public void activate() {
+        this.active = true;
+    }
+
+    public void deactivate() {
+        this.active = false;
+    }
 }

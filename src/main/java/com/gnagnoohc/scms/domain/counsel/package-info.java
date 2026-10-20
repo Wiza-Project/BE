@@ -15,7 +15,7 @@
  * <h3>구현 체크리스트</h3>
  * <ul>
  *   <li>[ ] CounselType (상담기준정보) — 상담종류, 검사종류</li>
- *   <li>[ ] Counselor (상담사정보) — User(COUNSELOR) 와 1:1</li>
+ *   <li>[ ] Counselor (상담사정보) — User(ST200 역할)과 1:1</li>
  *   <li>[ ] CounselSchedule (상담일정) — 상담사가 여는 슬롯. 날짜 + 시작/종료 시각</li>
  *   <li>[ ] CounselReservation (상담예약) — 학생 예약, 상담사 확정</li>
  *   <li>[ ] CounselResult (상담결과) — <b>민감정보</b></li>

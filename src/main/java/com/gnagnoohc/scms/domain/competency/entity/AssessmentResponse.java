@@ -20,4 +20,20 @@ public class AssessmentResponse {
     @Column(name = "selected_value", nullable = false, precision = 10, scale = 2) private BigDecimal selectedValue;
     @Column(name = "saved_at", nullable = false) private Instant savedAt = Instant.now();
     @Column(name = "created_by", nullable = false) private Integer createdBy;
+
+    public static AssessmentResponse create(AssessmentAttempt attempt, AssessmentQuestion question,
+                                              BigDecimal selectedValue, Integer createdBy) {
+        AssessmentResponse response = new AssessmentResponse();
+        response.attempt = attempt;
+        response.question = question;
+        response.selectedValue = selectedValue;
+        response.createdBy = createdBy;
+        return response;
+    }
+
+    // 같은 문항에 재응답(중도저장 갱신)할 때 값과 저장 시각만 갱신한다.
+    public void updateSelectedValue(BigDecimal selectedValue) {
+        this.selectedValue = selectedValue;
+        this.savedAt = Instant.now();
+    }
 }
