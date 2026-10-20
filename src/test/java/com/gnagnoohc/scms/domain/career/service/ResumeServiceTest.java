@@ -66,7 +66,7 @@ class ResumeServiceTest {
     void updateResume_whenTargetIsNotLatestVersion_rejectsUpdate() throws Exception {
         AppUser student = newInstance(AppUser.class);
         CareerDocument oldVersion = CareerDocument.createResume(student, 1, "이전 제목", null, false);
-CareerDocument latestVersion = CareerDocument.createResume(student, 2, "최신 제목", null, false);
+        CareerDocument latestVersion = CareerDocument.createResume(student, 2, "최신 제목", null, false);
         ReflectionTestUtils.setField(oldVersion, "careerDocumentId", 10);
         ReflectionTestUtils.setField(latestVersion, "careerDocumentId", 20);
         ResumeUpdateRequestDTO request = new ResumeUpdateRequestDTO();
@@ -101,7 +101,7 @@ CareerDocument latestVersion = CareerDocument.createResume(student, 2, "최신 �
     @Test
     void updateResume_locksStudentBeforeCheckingLatestVersion() throws Exception {
         AppUser student = newInstance(AppUser.class);
-        CareerDocument document = CareerDocument.createResume(student, 1, "이력서", null);
+        CareerDocument document = CareerDocument.createResume(student, 1, "이력서", null, false);
         ReflectionTestUtils.setField(document, "careerDocumentId", 10);
         setAuditTimes(document);
         ResumeUpdateRequestDTO request = new ResumeUpdateRequestDTO();
@@ -120,8 +120,8 @@ CareerDocument latestVersion = CareerDocument.createResume(student, 2, "최신 �
     @Test
     void createNextVersion_locksSameStudentBeforeCreatingSnapshot() throws Exception {
         AppUser student = newInstance(AppUser.class);
-        CareerDocument base = CareerDocument.createResume(student, 1, "이력서", null);
-        CareerDocument saved = CareerDocument.createResume(student, 2, "이력서", null);
+        CareerDocument base = CareerDocument.createResume(student, 1, "이력서", null, false);
+        CareerDocument saved = CareerDocument.createResume(student, 2, "이력서", null, false);
         ReflectionTestUtils.setField(base, "careerDocumentId", 10);
         ReflectionTestUtils.setField(saved, "careerDocumentId", 20);
         setAuditTimes(saved);
