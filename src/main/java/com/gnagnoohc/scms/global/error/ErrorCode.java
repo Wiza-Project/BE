@@ -208,6 +208,12 @@ public enum ErrorCode {
     RESUME_NOT_FOUND(HttpStatus.NOT_FOUND, "J017", "이력서를 찾을 수 없습니다."),
     RESUME_ALREADY_EXISTS(HttpStatus.CONFLICT, "J018", "이미 작성된 이력서가 있습니다. 버전 관리 기능을 이용해주세요."),
     RESUME_NOT_LATEST_VERSION(HttpStatus.CONFLICT, "J019", "최신 이력서 버전만 수정할 수 있습니다."),
+    // career-ai 기능 관련 에러코드
+    CAREER_AI_NOT_CONFIGURED(HttpStatus.SERVICE_UNAVAILABLE, "J020", "AI 작성 보조 기능이 아직 설정되지 않았습니다."),
+    CAREER_AI_PROVIDER_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "J021", "AI 응답 생성에 실패했습니다. 잠시 후 다시 시도해주세요."),
+    CAREER_AI_TASK_MISMATCH(HttpStatus.BAD_REQUEST, "J022", "선택한 문서 유형에서 지원하지 않는 작업입니다."),
+    CAREER_AI_RATE_LIMIT_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS, "J023", "AI 작성 보조 요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요."),
+    CAREER_AI_CONCURRENT_REQUEST(HttpStatus.TOO_MANY_REQUESTS, "J024", "이미 처리 중인 AI 작성 보조 요청이 있습니다. 완료 후 다시 시도해주세요."),
     // ── 알림 ──────────────────────────────────────────────────────
     NOTIFICATION_NOT_FOUND(HttpStatus.NOT_FOUND, "N001", "알림을 찾을 수 없습니다."),
 

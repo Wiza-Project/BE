@@ -63,7 +63,7 @@ public class ResumeService {
             throw new BusinessException(ErrorCode.RESUME_ALREADY_EXISTS);
         }
         return saveNewVersion(student, 1, request.getDocumentTitle(), request.getContentData(),
-                ErrorCode.RESUME_ALREADY_EXISTS);
+                request.isAiAssistanceUsed(), ErrorCode.RESUME_ALREADY_EXISTS);
     }
 
     /** 임시 저장은 최신 버전만 제자리에서 갱신한다. 과거 버전은 변경하지 않는다. */
@@ -77,7 +77,7 @@ public class ResumeService {
         if (!latestDocument.getCareerDocumentId().equals(careerDocumentId)) {
             throw new BusinessException(ErrorCode.RESUME_NOT_LATEST_VERSION);
         }
-        document.updateContent(request.getDocumentTitle(), toJson(request.getContentData()), false);
+        document.updateContent(request.getDocumentTitle(), toJson(request.getContentData()), request.isAiAssistanceUsed());
         return toResponse(document);
     }
 
@@ -104,10 +104,10 @@ public class ResumeService {
     }
 
     private ResumeResponseDTO saveNewVersion(AppUser student, int versionNo, String title, ResumeContentDTO contentData,
-                                             ErrorCode conflictErrorCode) {
+                                             boolean aiAssistanceUsed, ErrorCode conflictErrorCode) {
         try {
             return toResponse(careerDocumentRepository.saveAndFlush(
-                    CareerDocument.createResume(student, versionNo, title, toJson(contentData))));
+                    CareerDocument.createResume(student, versionNo, title, toJson(contentData), aiAssistanceUsed)));
         } catch (DataIntegrityViolationException exception) {
             throwVersionConflictOrRethrow(exception, conflictErrorCode);
             throw exception;
@@ -147,6 +147,7 @@ public class ResumeService {
                 .documentTitle(document.getDocumentTitle())
                 .versionNo(document.getVersionNo())
                 .contentData(toContent(document.getContentData()))
+                .aiAssistanceUsed(document.isAiAssistanceUsed())
                 .createdAt(DateTimeUtils.toKstOffsetDateTime(document.getCreatedAt()))
                 .updatedAt(DateTimeUtils.toKstOffsetDateTime(document.getUpdatedAt()))
                 .build();
