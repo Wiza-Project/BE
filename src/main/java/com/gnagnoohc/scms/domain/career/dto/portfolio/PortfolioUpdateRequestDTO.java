@@ -22,6 +22,7 @@ public class PortfolioUpdateRequestDTO {
     @Schema(description = "포트폴리오 본문 (자유 JSON 구조)")
     private Map<String, Object> contentData;
 
-    @Schema(description = "AI 도구 활용 여부 (저장만 하며 AI 기능은 구현하지 않음)", example = "false")
+    @Schema(description = "AI 초안 생성 기능(POST /api/students/me/career-ai/assist)의 결과를 반영해 저장하면 true.",
+            example = "false")
     private boolean aiAssistanceUsed;
 }

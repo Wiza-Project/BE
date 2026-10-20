@@ -5,20 +5,22 @@ spring:
     active: local
   config:
     import: optional:classpath:application-secret.yml
+  ai:
+    model:
+      chat: google-genai
+      embedding: ollama
 
   jpa:
     hibernate:
-      ddl-auto: validate      # 운영 안전값. 로컬 프로필에서만 update
+      ddl-auto: validate
     properties:
       hibernate:
         format_sql: true
         default_batch_fetch_size: 100
-    open-in-view: false       # 지연로딩 예외를 서비스 계층에서 잡기 위함
+    open-in-view: false
 
   servlet:
     multipart:
-      # 포트폴리오/이력서/증빙자료 업로드 고려. FileStorageService(공용 파일 저장 유틸)가
-      # 별도 크기 상한을 두지 않고 이 값에 의존하므로, 여길 바꾸면 전체 업로드 상한이 바뀐다.
       max-file-size: 20MB
       max-request-size: 60MB
 
@@ -28,7 +30,7 @@ spring:
     time-zone: Asia/Seoul
 
 server:
-  port: ${SERVER_PORT:9999}  # .env에 SERVER_PORT 사용자 지정하거나, 없으면 기본값 9999 사용
+  port: ${SERVER_PORT:9999}
   servlet:
     encoding:
       charset: UTF-8
@@ -38,9 +40,8 @@ app:
   cors:
     allowed-origins: http://localhost:5173
   jwt:
-    access-token-validity-seconds: 1800       # 30분
-    refresh-token-validity-seconds: 1209600   # 14일
-    # secret 은 application-secret.yml 에 작성
+    access-token-validity-seconds: 1800
+    refresh-token-validity-seconds: 1209600
   file:
     upload-dir: ${user.home}/scms-uploads
   career:
@@ -62,4 +63,4 @@ management:
 logging:
   level:
     com.gnagnoohc.scms: debug
-    org.hibernate.orm.jdbc.bind: trace   # 쿼리 파라미터 확인 (개발용)
+    org.hibernate.orm.jdbc.bind: trace
