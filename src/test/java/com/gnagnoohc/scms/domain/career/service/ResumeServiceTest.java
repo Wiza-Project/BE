@@ -65,8 +65,8 @@ class ResumeServiceTest {
     @Test
     void updateResume_whenTargetIsNotLatestVersion_rejectsUpdate() throws Exception {
         AppUser student = newInstance(AppUser.class);
-        CareerDocument oldVersion = CareerDocument.createResume(student, 1, "이전 제목", null);
-        CareerDocument latestVersion = CareerDocument.createResume(student, 2, "최신 제목", null);
+        CareerDocument oldVersion = CareerDocument.createResume(student, 1, "이전 제목", null, false);
+CareerDocument latestVersion = CareerDocument.createResume(student, 2, "최신 제목", null, false);
         ReflectionTestUtils.setField(oldVersion, "careerDocumentId", 10);
         ReflectionTestUtils.setField(latestVersion, "careerDocumentId", 20);
         ResumeUpdateRequestDTO request = new ResumeUpdateRequestDTO();
